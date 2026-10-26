@@ -1,6 +1,6 @@
 # Lapi on OCI Always Free
 
-Lapi runs on its own OCI resources, separate from Aegis, using only Always Free shapes.
+Lapi runs on its own OCI resources in a dedicated compartment, using only Always Free shapes.
 
 | Resource | Name | Size |
 | --- | --- | --- |

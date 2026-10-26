@@ -7,7 +7,7 @@
       "title": "Lapi: new name and separate deployment",
       "changes": [
         "The application is now Lapi: sign-in page, logo, header, Agent, About, code folders, Python packages, settings and environment names all use Lapi.",
-        "Lapi runs on its own Always Free OCI resources with its own Autonomous Database, separate from Aegis."
+        "Lapi runs on its own Always Free OCI resources: a dedicated compartment, network, server and Autonomous Database."
       ]
     },
     {

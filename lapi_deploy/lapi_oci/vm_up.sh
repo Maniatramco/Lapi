@@ -29,8 +29,6 @@ if [ ! -s "$S/lapi.env" ]; then
     echo "ALLOWED_ORIGINS=http://$IP"
   } > "$S/lapi.env"
 fi
-# Keys were renamed from AEGIS_ to LAPI_ in the rebrand; migrate an existing file.
-sed -i 's/^AEGIS_/LAPI_/' "$S/lapi.env"
 # Containers run as uid 10001; the 700 secrets folder still guards the host.
 chmod 644 "$S/lapi.env" "$S/tns/tnsnames.ora" "$S/adb_admin_password" "$S/app_db_password"
 chmod 755 "$S/tns"

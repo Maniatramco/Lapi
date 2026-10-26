@@ -2,7 +2,7 @@
 
 Secure data lakehouse and AI platform: dataset onboarding, document extraction and review, and a grounded Lapi Agent with hybrid retrieval, reranking and cited answers.
 
-**Working branch: `lapi_sprint1`. Current version: `v26.1.13.0`.** Lapi started from Aegis Sprint 1 (v26.1.12.18); the inherited Aegis README is kept in [`lapi_docs/lapi-history/`](lapi_docs/lapi-history/) and its release history at the end of `CHANGELOG.md`.
+**Working branch: `lapi_sprint1`. Current version: `v26.1.13.0`.**
 
 ## Repository layout
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Provision Lapi on OCI Always Free, fully separate from Aegis.
+# Provision Lapi on OCI Always Free, in its own compartment.
 # Run in OCI Cloud Shell (it is already signed in as you):
 #   bash <(curl -fsSL https://raw.githubusercontent.com/Maniatramco/Lapi/lapi_sprint1/lapi_deploy/lapi_oci/provision.sh)
 #
@@ -75,7 +75,7 @@ echo "Capacity check passed."
 # ---------------------------------------------------------- 2. compartment
 say "2/7 Lapi compartment"
 if [ -z "$C" ]; then
-  C=$(oci iam compartment create -c "$T" --name lapi --description "Lapi app (separate from Aegis)" \
+  C=$(oci iam compartment create -c "$T" --name lapi --description "Lapi application" \
         --freeform-tags '{"app":"lapi"}' --wait-for-state ACTIVE | jq -r .data.id)
   echo "Created compartment lapi; waiting 60s for it to propagate"; sleep 60
 else echo "Reusing compartment lapi"; fi
