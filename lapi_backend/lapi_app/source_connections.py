@@ -372,7 +372,7 @@ def install(app, auth, api):
                 except Exception:
                     raise HTTPException(503, 'Knowledge publication could not finish. Indexed copies are preserved; retry shortly.') from None
             try:
-                entities = core.local_store.json(knowledge._manifest_ref(knowledge.embedding_snapshot(actor, cfg['dataset_id'])))['entities']
+                entities = knowledge.manifest(knowledge.embedding_snapshot(actor, cfg['dataset_id']))['entities']
             except FileNotFoundError:
                 entities = {}
             published = [record.id for record in indexed if (entities.get(record.id, {}).get('revision_stamp') or entities.get(record.id, {}).get('stamp')) == knowledge.entity_stamp(record)]

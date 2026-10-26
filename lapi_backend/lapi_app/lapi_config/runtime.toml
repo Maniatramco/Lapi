@@ -43,6 +43,9 @@ LAPI_EXTRACTION_CHUNKS_PER_FIELD = 5
 LAPI_EXTRACTION_NEIGHBOR_CHUNKS = 1
 LAPI_EXTRACTION_FULL_CONTEXT_CHARS = 12000
 LAPI_EXTRACTION_MAX_EVIDENCE_CHARS = 200000
+# Embed once into the unified knowledge index. true also writes and reads the
+# retired per-document chunk index, for parity checks only.
+LAPI_LEGACY_CHUNK_INDEX = false
 
 [reranker]
 LAPI_RERANKER = "none" # "local" is required for production chat/extraction

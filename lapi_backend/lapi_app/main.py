@@ -166,8 +166,12 @@ def ready():
         if settings()['search_provider']=='oci':providers.oci_vector().test_connection()
         from . import reranker
         if reranker.enabled():reranker.load()
-        return {'status':'ready','database':True,'vector_store':True,'reranker':reranker.status()}
     except Exception:raise HTTPException(503,'Database, vector store or configured reranker unavailable')
+    # One knowledge base: report collection count and orphan rows (alert above zero).
+    from . import knowledge
+    try:index=knowledge.health()
+    except Exception:index={'error':'Knowledge catalog unavailable','alert':True}
+    return {'status':'ready','database':True,'vector_store':True,'reranker':reranker.status(),'knowledge':index}
 @app.get('/api/overview')
 def overview(owner=Depends(auth)):
     docs=records(owner,'document')
@@ -244,6 +248,8 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
     kb_id=dataset_id or kb_id
     if not kb_id:raise HTTPException(409,'Create or choose a dataset and map its embedding model before uploading.')
     dataset=get_record(kb_id,owner,'knowledge_base');snapshot=snapshot or routing.execution_snapshot(dataset,'embedding')
+    from . import knowledge
+    knowledge.require_writable(snapshot)
     if len(files)>20:raise HTTPException(400,'Upload at most 20 files at once')
     external_check(allow_external,True,snapshot['settings']);result=[];jobs=[]
     if not files:raise HTTPException(400,'Choose at least one file')
@@ -350,6 +356,8 @@ class Consent(BaseModel):allow_external:bool=False
 @lifecycle_guard()
 def reindex(id:str,body:Consent,owner=Depends(auth)):
     doc=get_record(id,owner,'document');dataset,_=routing.documents_scope(owner,doc.parent_id,[id]);snapshot=routing.execution_snapshot(dataset,'embedding');external_check(body.allow_external,True,snapshot['settings'])
+    from . import knowledge
+    knowledge.require_writable(snapshot)
     with document_lock('submit-'+id):
         with Session.begin() as s:
             if s.scalar(select(Job).where(Job.target_id==id,Job.status.in_(['queued','running']))):raise HTTPException(409,'An indexing job is already active')
@@ -371,6 +379,8 @@ def reextract_document(id:str,body:ReextractDocument,owner=Depends(auth)):
             try:store.put(f'documents/{id}/versions/v{doc.version}/{suffix}',store.get('documents/'+id+'/'+suffix))
             except FileNotFoundError:pass
         dataset,_=routing.documents_scope(owner,doc.parent_id,[id]);snapshot=routing.execution_snapshot(dataset,'embedding');external_check(body.allow_external,True,snapshot['settings'])
+        from . import knowledge
+        knowledge.require_writable(snapshot)
         with Session.begin() as s:
             r=s.get(Record,id);r.version=revision;r.status='queued';r.error=''
         result=job_repr(enqueue(owner,'index',id,body.allow_external,snapshot))
@@ -1065,7 +1075,7 @@ def diagnose_retrieval(body:MessageInput,owner=Depends(auth)):
     try:
         with execution_context(snapshot):hits=providers.search(body.text,owner,ready,settings()['top_k'],diagnostics=reranking)
     except Exception:raise HTTPException(502,'Retrieval failed; verify the selected provider and matching index configuration')
-    return {'matches':hits,'count':len(hits),'duration_ms':round((time.monotonic()-started)*1000),'scoped_documents':len(docs),'ready_documents':len(ready),'embedding_fingerprint':providers.fingerprint(snapshot['settings']),'top_k':snapshot['settings']['top_k'],'provider':snapshot['settings']['search_provider'],'reranking':reranking,'note':'Vector scores and reranker logits are not probabilities. With reranking enabled, results are sorted by rerank_score; score retains the original vector similarity. Only permitted ready documents and canonical stored excerpts are returned.'}
+    return {'matches':hits,'count':len(hits),'duration_ms':round((time.monotonic()-started)*1000),'scoped_documents':len(docs),'ready_documents':len(ready),'embedding_fingerprint':providers.fingerprint(snapshot['settings']),'top_k':snapshot['settings']['top_k'],'provider':snapshot['settings']['search_provider'],'reranking':reranking,'note':'Vector scores and reranker logits are not probabilities. Retrieval is hybrid over the unified knowledge index: score is the vector and keyword fusion score and vector_score the vector similarity. With reranking enabled, results are sorted by rerank_score. Only permitted ready documents and canonical stored excerpts are returned.'}
 
 class ProfileInput(BaseModel):
     name:str=Field(min_length=1,max_length=120)
@@ -1187,6 +1197,8 @@ agent_onboarding.install(app, auth)
 
 from . import knowledge
 knowledge.install(app, auth)
+from . import workspace_defaults
+workspace_defaults.install(app, auth)
 
 from . import metadata_relationships
 metadata_relationships.install(app, auth)

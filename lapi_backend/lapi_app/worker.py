@@ -190,7 +190,7 @@ def process(jid,token):
             if job.kind=='index':
                 with document_lock('dataset-'+snapshot['dataset_id']):
                     dataset=routing.owned(snapshot['dataset_id'],job.owner,'knowledge_base')
-                    if routing.dataset_config(dataset).get('index_generation')!=snapshot['index_generation']:raise ValueError('Dataset embedding configuration changed. Submit a new reindex job.')
+                    if routing.generation(routing.dataset_config(dataset))!=snapshot['index_generation']:raise ValueError('Dataset embedding configuration changed. Submit a new reindex job.')
                     _process(jid,token,snapshot)
             else:
                 # Deletion holds this lock through its status commit. A claimed job
@@ -245,17 +245,25 @@ def _process(jid,token,snapshot):
             providers.oci_vector().upload_document(did,owner,kb,chunks,store,checkpoint=lambda:checkpoint(jid,token,50))
             dimensions=None
         else:
-            for i in range(0,len(chunks),32):
-                checkpoint(jid,token,35+int(45*i/len(chunks)))
-                vectors.extend(providers.embed([c['text'] for c in chunks[i:i+32]]))
-            checkpoint(jid,token,85)
+            # Embed once: chunks go only to the one unified knowledge index.
+            # The legacy per-document chunk index is retired (parity flag only).
+            from . import knowledge
+            checkpoint(jid,token,40)
             providers.delete_vectors(did)
             store.put_json('documents/'+did+'/index-execution.json',snapshot)
-            providers.put_vectors(did,owner,kb,chunks,vectors)
-            dimensions=len(vectors[0])
+            if runtime_config.get('LAPI_LEGACY_CHUNK_INDEX'):
+                for i in range(0,len(chunks),32):
+                    checkpoint(jid,token,40+int(20*i/len(chunks)))
+                    vectors.extend(providers.embed([c['text'] for c in chunks[i:i+32]]))
+                providers.put_vectors(did,owner,kb,chunks,vectors)
+            published=knowledge.publish_document(did,snapshot,checkpoint=lambda:checkpoint(jid,token,70))
+            dimensions=published['dimensions']
         try:checkpoint(jid,token,95)
         except InterruptedError:
             providers.delete_vectors(did)
+            if cfg['search_provider']!='oci':
+                from . import knowledge
+                knowledge.forget({did})
             raise
         store.put_json('documents/'+did+'/index-execution.json',snapshot)
         store.put_json('documents/'+did+'/index.json',{'dataset_id':snapshot['dataset_id'],'index_generation':snapshot['index_generation'],'model_selection':routing.public_selection(snapshot),'uses_ocr':bool(ocr.summary(pages)),'ocr_selection':routing.ocr_selection(snapshot),'search_provider':cfg['search_provider'],'fingerprint':providers.fingerprint(),'dimensions':dimensions,'chunk_count':len(chunks),'indexed_at':time.time(),'embedding_provider':cfg['embedding_provider'],'embedding_model':cfg['embedding_model'],'embedding_digest':cfg.get('_embedding_digest')})

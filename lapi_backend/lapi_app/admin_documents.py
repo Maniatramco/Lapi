@@ -103,24 +103,9 @@ def recorded_mapping_matches(row,index,configuration,models):
 
 
 def cleanup_knowledge(ids):
-    from . import providers
-    from qdrant_client.models import PointIdsList
-    root=core.local_store.path('knowledge/marker').parent
-    for path in root.glob('*/manifest.json'):
-        name=path.parent.name
-        with core.document_lock('unified-knowledge-'+name):
-            ref='knowledge/'+name+'/manifest.json';manifest=core.local_store.json(ref)
-            removed={key for key,value in manifest.get('points',{}).items() if
-                value.get('entity_id','').split(':',1)[0] in ids or references(value.get('document_ids',[]),ids) or value.get('extraction_id') in ids}
-            for entity in ids:removed.update(manifest.get('entities',{}).get(entity,{}).get('ids',[]))
-            if removed and core.settings()['search_provider'] in ('oracle','qdrant'):
-                q=providers.client()
-                if q.collection_exists(name):q.delete(name,PointIdsList(points=sorted(removed)),wait=True)
-            for entity in ids:manifest.get('entities',{}).pop(entity,None)
-            for point in removed:
-                manifest.get('points',{}).pop(point,None);manifest.get('vectors',{}).pop(point,None)
-            manifest['failures']=[entity for entity in manifest.get('failures',[]) if entity not in ids]
-            core.local_store.put_json(ref,manifest)
+    """Remove the records' points from the shared knowledge catalog and vector store."""
+    from . import knowledge
+    knowledge.forget(ids)
 
 
 def cleanup(id,actor,confirmation,expected_version,expected_impact):

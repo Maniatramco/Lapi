@@ -98,6 +98,8 @@ def client():
 def qdrant_client():
     return QdrantClient(url=os.getenv('QDRANT_URL','http://qdrant:6333'),api_key=os.getenv('QDRANT_API_KEY') or None,timeout=20)
 def put_vectors(document_id,owner,kb_id,chunks,vectors):
+    """Legacy per-document chunk index. Written only with LAPI_LEGACY_CHUNK_INDEX
+    (parity checks); move to delete/ once parity is confirmed in CI."""
     if settings()['search_provider']=='local':
         store.put_json('vectors/'+document_id+'.json',{'owner':owner,'kb_id':kb_id,'fingerprint':fingerprint(),'vectors':vectors,'ids':[c['id'] for c in chunks]});return
     from qdrant_client.models import Distance,VectorParams,PointStruct
@@ -154,6 +156,15 @@ def search(query,owner,documents,top_k,diagnostics=None):
 def _retrieve(query,owner,documents,top_k):
     if not documents:return []
     if settings()['search_provider']=='oci':return oci_vector().search(query,owner,documents,top_k,store)
+    # Embed once: document search and extraction read the unified knowledge
+    # index with hybrid vector + keyword retrieval. The legacy per-document
+    # chunk index remains only behind the parity flag until it is retired.
+    if not runtime_config.get('LAPI_LEGACY_CHUNK_INDEX'):
+        from . import knowledge
+        return knowledge.retrieve_chunks(query,documents,top_k)
+    return _legacy_retrieve(query,owner,documents,top_k)
+
+def _legacy_retrieve(query,owner,documents,top_k):
     v=embed([query],query=True)[0];allowed={d.id:d for d in documents};found=[]
     if settings()['search_provider']=='local':
         for d in documents:

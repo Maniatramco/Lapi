@@ -1,5 +1,10 @@
 """Read-only published vector view. SQL is used for access/revision guards,
 never answer facts. No canonical file hydration or query-time index writes.
+
+The view reads the one active knowledge collection. While that index is being
+rebuilt after a Default embedding change, records that are not reindexed yet
+are left out instead of failing the turn: `index_building` and `unpublished`
+tell the caller to say the index is still building.
 """
 import copy,json,time
 from contextlib import nullcontext
@@ -15,7 +20,7 @@ class PublishedKnowledge:
         with core.Session() as session:
             datasets=access.dataset_ids(actor,session)
             if dataset_id and dataset_id not in datasets:raise HTTPException(404,'Dataset access removed.')
-            models=set(session.scalars(select(relational.DatasetModel.model_id).where(relational.DatasetModel.dataset_id.in_(datasets),relational.DatasetModel.enabled==True)))
+            models=access.visible_models(datasets,session)
             records=list(session.scalars(select(core.Record).where(core.Record.kind.in_(knowledge.KINDS))))
             self.records={r.id:r for r in records if (r.kind not in ('agent_plan','agent_onboarding') or r.owner==actor and r.parent_id in datasets)
                 and not (r.kind=='agent_plan' and r.status=='query')
@@ -24,8 +29,13 @@ class PublishedKnowledge:
         if any(id not in self.records or self.records[id].kind!='document' or self.records[id].parent_id!=dataset_id for id in self.documents):
             raise HTTPException(400,'Selected document is outside the authorized dataset.')
         self.snapshot=knowledge.embedding_snapshot(actor,dataset_id)
-        try:self.manifest=core.local_store.json(knowledge._manifest_ref(self.snapshot))
-        except FileNotFoundError:raise HTTPException(409,'Knowledge is not published yet. Wait for indexing to finish, then retry.')
+        knowledge.require_active(self.snapshot['knowledge_collection'])
+        self.index=knowledge.index_status()
+        self.index_building=self.index['building'];self.unpublished=set()
+        try:self.manifest=knowledge.manifest(self.snapshot)
+        except FileNotFoundError:
+            if not self.index_building:raise HTTPException(409,'Knowledge is not published yet. Wait for indexing to finish, then retry.')
+            self.manifest={'entities':{},'points':{},'failures':[]}
 
     def candidate_ids(self,source_types,root_ids=None):
         types=set(source_types)
@@ -37,13 +47,15 @@ class PublishedKnowledge:
         for record in required:
             entry=self.manifest['entities'].get(record.id)
             if not entry or (entry.get('revision_stamp') or entry['stamp'])!=knowledge.entity_stamp(record):
+                # During a rebuild, answer only from records already reindexed.
+                if self.index_building:self.unpublished.add(record.id);continue
                 raise HTTPException(409,'Knowledge is updating for this scope. Retry after publication; I will not answer from an older revision.')
         permitted=[]
         for id,payload in self.manifest['points'].items():
             if payload['source_type'] not in types:continue
             root=payload['entity_id'].split(':',1)[0]
             if root_ids is not None and root not in root_ids:continue
-            if payload['source_type']!='application' and root not in self.records:continue
+            if payload['source_type']!='application' and (root not in self.records or root in self.unpublished):continue
             if payload.get('private') and payload.get('owner_id')!=self.actor:continue
             if self.dataset_id and payload.get('dataset_id') not in ('',self.dataset_id):continue
             if self.documents and payload['source_type'] in ('document','document_chunk','extraction'):
@@ -85,7 +97,8 @@ class PublishedKnowledge:
         if require_rerank and not active:
             raise providers.ProviderError('Chat reranking is unavailable. Enable the configured local reranker before answering.')
         if not permitted:
-            self.search_diagnostics={'mode':'hybrid','reranker_enabled':active,'eligible_points':0,'returned_entities':0}
+            self.search_diagnostics={'mode':'hybrid','reranker_enabled':active,'eligible_points':0,'returned_entities':0,
+                'index_building':self.index_building,'unpublished_records':len(self.unpublished)}
             return []
         points={id:self.manifest['points'][id] for id in permitted}
         candidates=min(runtime_config.get('LAPI_CHAT_SEARCH_CANDIDATES_MAX'),reranker.candidate_limit(limit) if active else max(runtime_config.get('LAPI_RERANK_CANDIDATES'),limit))
@@ -98,7 +111,7 @@ class PublishedKnowledge:
                     query_filter=Filter(must=[HasIdCondition(has_id=permitted)]),limit=candidates).points
                 vector_ids=[str(p.id) for p in hits if str(p.id) in points]
             else:
-                vectors=self.manifest.get('vectors',{})
+                vectors=knowledge.catalog.vectors(self.snapshot['knowledge_collection'],permitted)
                 vector_ids=sorted(permitted,key=lambda id:sum(a*b for a,b in zip(vector,vectors.get(id,[]))),reverse=True)[:candidates]
             entities=fuse(vector_ids,keywords,points,candidates)
             fetched=self.fetch([id for id in permitted if points[id]['entity_id'] in entities])
@@ -111,9 +124,15 @@ class PublishedKnowledge:
         except reranker.RerankerError as exc:raise providers.ProviderError(str(exc)) from exc
         self.search_diagnostics={'mode':'hybrid','keyword_candidates':len(keywords),'vector_candidates':len(vector_ids),
             'fused_candidates':len(entities),'eligible_points':len(permitted),'reranker_enabled':active,'reranker_model':reranker.MODEL_ID if active else None,
-            'rerank_ms':round((time.monotonic()-started)*1000,2) if active else 0,'returned_entities':len(ranked)}
+            'rerank_ms':round((time.monotonic()-started)*1000,2) if active else 0,'returned_entities':len(ranked),
+            'index_building':self.index_building,'unpublished_records':len(self.unpublished)}
         order={r['entity_id']:i for i,r in enumerate(ranked)}
         return sorted([p for p in fetched if p['payload']['entity_id'] in order],key=lambda p:(order[p['payload']['entity_id']],p['payload']['part']))
+
+def index_notice(view):
+    """User-facing sentence while the knowledge index rebuilds, else None."""
+    if not getattr(view,'index_building',False):return None
+    return view.index.get('message') or 'The knowledge index is still building. Answers use only documents that are already reindexed.'
 
 def assemble(points):
     groups={}
