@@ -27,11 +27,11 @@ frontend() {
   docker run --rm -v "$APP":/src:ro node:22-bookworm-slim bash -c '
     mkdir /w && cd /src && tar --exclude=node_modules --exclude=.git -cf - . | (cd /w && tar -xf -)
     cd /w/lapi_frontend && npm ci --no-audit --no-fund >/dev/null 2>&1 || { echo "npm ci failed"; exit 2; }
-    npm run test:unit 2>&1 | tail -n 25; u=${PIPESTATUS[0]}
+    npm run test:unit > /tmp/unit.log 2>&1; u=$?; grep -n -A30 "^ *not ok" /tmp/unit.log | grep -v "^[0-9]*-\s*$" | head -n 120; tail -n 25 /tmp/unit.log
     npm run typecheck 2>&1 | tail -n 15; t=${PIPESTATUS[0]}
     echo "UNIT=$u TYPECHECK=$t"; [ $u -eq 0 ] && [ $t -eq 0 ]' > "$LOGS/frontend.log" 2>&1
   local rc=$?
-  echo "FRONTEND $COMMIT exit=$rc"; grep -E "^# (pass|fail)|not ok|error TS|UNIT=|npm ci failed" "$LOGS/frontend.log" | cut -c1-150 | head -25
+  echo "FRONTEND $COMMIT exit=$rc"; grep -E "^# (pass|fail)|not ok|error TS|UNIT=|npm ci failed" "$LOGS/frontend.log" | cut -c1-150 | head -25; echo "Details: $LOGS/frontend.log"
 }
 
 case "$WHAT" in

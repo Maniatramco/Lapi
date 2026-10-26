@@ -243,7 +243,7 @@ def install_routes(app, auth):
     def parameter_schema(protocol: str, category: Literal['embedding', 'chat', 'extraction'], chat_format: str = 'generic',
             embedding_format: str = 'titan', model: str = '', owner=Depends(auth)):
         if protocol not in ConnectionInput.model_fields['protocol'].annotation.__args__:
-            raise HTTPException(400, 'Unknown model protocol.')
+            raise HTTPException(422, 'Unknown model protocol.')
         return model_parameters.parameter_schema(protocol, category, {'chat_format': chat_format[:30], 'embedding_format': embedding_format[:30]}, model[:200])
 
     @app.get('/api/model-registrations/{id}/parameter-history')
