@@ -176,7 +176,8 @@ def run(body,owner,main,callback=None,cancelled=None):
     record=owned_chat(body.conversation_id,owner) if body.conversation_id else None
     # New threads have a fresh ID, not an Agent checkpoint or plan ID.
     id=record.id if record else core.uid()
-    with core.document_lock('dataset-chat-'+id),token_usage.collect() as usage:
+    datasets=sorted(set(body.dataset_ids or []))
+    with core.document_lock('dataset-chat-'+id),token_usage.scope(owner=owner,dataset_id=datasets[0] if len(datasets)==1 else None,conversation_id=record.id if record else None,stage='chat'),token_usage.collect() as usage:
         message=answer(body,owner,snapshot,main,progress,sources_update,core.store.json(record.ref).get('messages',[]) if record else None)
         check()
         with progress.step('Saving dataset chat response'):
@@ -185,11 +186,13 @@ def run(body,owner,main,callback=None,cancelled=None):
             data=core.store.json(record.ref) if record else {'dataset_ids':sorted(set(body.dataset_ids)),
                 'document_ids':None if body.document_ids is None else sorted(set(body.document_ids)),'messages':[]}
             data['messages'] += [{'id':core.uid(),'role':'user','text':body.text,'summary':body.summary,'created_at':time.time()},message]
+            token_usage.annotate(message_id=message.get('id'))
             message['token_usage']=token_usage.summary(usage)
             if record:
                 core.store.put_json(record.ref,data)
                 with core.Session.begin() as session:session.get(core.Record,record.id).updated_at=time.time()
             else:record=routing.create('dataset_chat',owner,body.text[:120],data)
+            token_usage.annotate(conversation_id=record.id)
         progress.complete();message['answer_workflow']=progress.snapshot();core.store.put_json(record.ref,data)
     return {'conversation_id':record.id,'message':message}
 

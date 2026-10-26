@@ -22,7 +22,7 @@ def complete(cfg, messages, tools, on_token=None):
         return cache(request, connection) if cache else request
     wire = agent_context.fit(messages, cfg, budget, build,
         'tool_selection' if cfg.get('_agent_require_tool') else 'answer')
-    usage_call = token_usage.attempt()
+    usage_call = token_usage.attempt(protocol=connection.c['protocol'], parameters={'max_output_tokens': budget, **extra})
     try:
         result, usage = adapter.agent_complete(connection, wire)
         token_usage.record(usage, connection.c['protocol'], usage_call)

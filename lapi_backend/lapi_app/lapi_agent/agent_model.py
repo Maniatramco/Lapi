@@ -74,7 +74,7 @@ def schema_decision(messages, tools, cfg, required_tool=False, on_token=None, st
         payload={'model':cfg['model'], 'messages':wire,
             'stream':False, 'think':False, 'format':schema, 'options':options,
             **keep}
-        usage_call=token_usage.attempt()
+        usage_call=token_usage.attempt(protocol='ollama',parameters=payload.get('options'))
         if on_token:
             from .agent_stream import qwen_request
             data=qwen_request(payload,cfg['timeout'],on_token)
@@ -401,7 +401,7 @@ def complete(messages, tools, on_token=None):
             payload={'model': ollama_provider.local_model_name(cfg['model']),
                 'messages': messages, 'tools': tools, 'stream': False, 'think': False,
                 'options': options, **keep}
-            usage_call=token_usage.attempt()
+            usage_call=token_usage.attempt(protocol='ollama',parameters=payload.get('options'))
             if on_token:
                 from .agent_stream import native_request
                 data=native_request(protocol,payload,cfg,on_token)
@@ -455,7 +455,7 @@ def complete(messages, tools, on_token=None):
             payload['prompt_cache_key']=cfg['_prompt_cache_key'][:64]
         if any(t.get('function', {}).get('strict') for t in wire_tools):
             payload['parallel_tool_calls'] = False
-        usage_call=token_usage.attempt()
+        usage_call=token_usage.attempt(protocol=protocol,parameters={key:value for key,value in payload.items() if key not in ('model','messages','tools')})
         if on_token:
             from .agent_stream import native_request
             data=native_request(protocol,payload,cfg,on_token)

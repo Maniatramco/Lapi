@@ -1,7 +1,8 @@
 "use client";
 import {ActionButton} from "./action-button";
 import { useEffect, useState } from "react";
-import { Check, Layers, Search, X, Pencil } from "lucide-react";
+import { Check, Layers, Search, X, Pencil, Coins } from "lucide-react";
+import { ModelPrices } from "./model-prices";
 import "./model-configuration.css";
 import { type ParameterSchema, type ParameterValues, type StageValues, cleanStages, formatValue, parseModelParameters, schemaPath, sourceLabel, supportedModelParameters, testStages, valuesError } from "./model-parameters";
 import { ParameterForm, ParameterHistory } from "./model-parameter-form";
@@ -49,6 +50,7 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
   const [editing, setEditing] = useState<Entity | null>(null);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [prices, setPrices] = useState<Entity | null>(null);
   const [test, setTest] = useState<Entity | null>(null);
   const [testing, setTesting] = useState(false);
   const [providerChoices, setProviderChoices] = useState<ProviderChoice[]>([]);
@@ -134,13 +136,15 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
             <td className="registration-tokens" title={m.capabilities[0]==='embedding'?'Input tokens':'Context tokens'}>{m.context_limit?.toLocaleString()||'—'}</td>
             <td className="registration-tokens" title={m.capabilities[0]==='embedding'?'Not applicable to embeddings':'Maximum output tokens'}>{m.capabilities[0]==='embedding'?'—':m.max_output_tokens?.toLocaleString()||'—'}</td>
             <td><span className={`pill ${m.enabled?'green':'amber'}`}>{m.enabled?'Enabled':'Disabled'}</span></td>
-            <td><button className="btn icon registration-edit" disabled={busy || !defaults} title={`Edit ${m.name}`} aria-label={`Edit ${m.name}`} onClick={()=>start(m)}><Pencil size={15}/></button></td>
+            <td><button className="btn icon registration-edit" disabled={busy || !defaults} title={`Edit ${m.name}`} aria-label={`Edit ${m.name}`} onClick={()=>start(m)}><Pencil size={15}/></button><button className="btn icon registration-edit" title={`Prices for ${m.name}`} aria-label={`Prices for ${m.name}`} aria-pressed={prices?.id===m.id} onClick={()=>setPrices(prices?.id===m.id?null:m)}><Coins size={15}/></button></td>
           </tr>)}{!visible.length&&<tr><td colSpan={8} className="registration-table-empty">No models match your search.</td></tr>}</tbody>
         </table>
       </div>}
       {!models.length && <div className="empty"><Layers size={30} /><h3>Start with your models</h3><p>Register an Embedding, Chat, and Extraction model. Each dataset needs all three categories.</p></div>}
       <div className="registration-footer"><ActionButton className="btn" onClick={onMapping} label="Open Model Mapping" action="mapping"/></div>
-    </section> : <section className="panel registration-form-panel">
+    </section> : null}
+    {!open && prices && models.some(m => m.id === prices.id) && <ModelPrices key={prices.id} model={prices} api={api} onClose={() => setPrices(null)} />}
+    {open && <section className="panel registration-form-panel">
       <form onSubmit={e => { e.preventDefault(); if (!test) return; run(async () => { const saved = await api(`/model-registrations${editing ? "/" + editing.id : ""}`, editing ? "PUT" : "POST", payload()); onSaved(saved); close(); }); }}>
         <div className="panel-head"><h2>{editing ? "Edit model" : "Register model"}</h2><button title="Cancel model registration" className="btn icon" type="button" aria-label="Cancel model registration" disabled={busy} onClick={close}><X size={16} /></button></div>
         {form.connection.protocol === "anthropic" && <div className="notice"><Layers size={17} /><div>Direct Claude for Agent and Dataset Knowledge Chat. After testing and saving, enable it in Model Mapping, Save & Apply, then select it in chat. Keep your existing Embedding and Extraction models.</div></div>}

@@ -1,4 +1,5 @@
 from ...validation import ConnectionError
+from ....lapi_agent import token_usage
 import json
 from urllib.parse import quote
 from .agent import payload as agent_payload, complete as agent_complete
@@ -35,6 +36,7 @@ def path(connection, operation):
 
 def generate(connection, instruction, text, schema, output_tokens, extra):
     data = connection.post(connection.vertex_path('generateContent'), {'systemInstruction': {'parts': [{'text': instruction}]}, 'contents': [{'role': 'user', 'parts': [{'text': text}]}], 'generationConfig': {'maxOutputTokens': output_tokens, **extra, **({'responseMimeType': 'application/json'} if schema else {})}}, connection.vertex_headers())
+    token_usage.report(data, 'vertex')
     candidate = data['candidates'][0]
     if candidate.get('finishReason') != 'STOP':
         raise ConnectionError('Model returned an incomplete or refused response.')
@@ -47,5 +49,11 @@ def embed(connection, texts, query, dim, extra):
     # Some publisher models accept a single input per predict call.
     for text in texts:
         data = connection.post(connection.vertex_path('predict'), {'instances': [{'content': text, 'task_type': 'RETRIEVAL_QUERY' if query else 'RETRIEVAL_DOCUMENT'}], 'parameters': {'autoTruncate': False, **({'outputDimensionality': dim} if dim else {})}}, connection.vertex_headers())
+        try:
+            tokens = data['predictions'][0]['embeddings']['statistics']['token_count']
+        except Exception:
+            tokens = None
+        tokens = int(tokens) if isinstance(tokens, (int, float)) and not isinstance(tokens, bool) and tokens >= 0 and float(tokens).is_integer() else None
+        token_usage.report({'usageMetadata': {'promptTokenCount': tokens}} if tokens is not None else {}, 'vertex', embedding=True, query=query)
         vectors.append(data['predictions'][0]['embeddings']['values'])
     return vectors

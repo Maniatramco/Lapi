@@ -1,4 +1,5 @@
 from ...validation import ConnectionError
+from ....lapi_agent import token_usage
 from .agent import payload as agent_payload, complete as agent_complete
 def client(connection):
     try:
@@ -27,6 +28,16 @@ def serving_mode(connection, models):
     return models.DedicatedServingMode(endpoint_id=connection.model) if connection.model.startswith('ocid1.generativeaiendpoint.') else models.OnDemandServingMode(model_id=connection.model)
 
 
+def report_usage(response, embedding=False, query=False):
+    usage = getattr(response, 'usage', None)
+    try:
+        import oci
+        value = {'usage': oci.util.to_dict(usage)} if usage is not None else {}
+    except Exception:
+        value = {}
+    token_usage.report(value, 'oci', embedding=embedding, query=query)
+
+
 def generate(connection, instruction, text, schema, output_tokens, extra):
     from oci.generative_ai_inference import models
     if connection.c.get('chat_format') == 'cohere':
@@ -34,6 +45,7 @@ def generate(connection, instruction, text, schema, output_tokens, extra):
     else:
         request = models.GenericChatRequest(messages=[models.SystemMessage(content=[models.TextContent(text=instruction)]), models.UserMessage(content=[models.TextContent(text=text)])], max_tokens=output_tokens, is_stream=False, **extra)
     data = connection.oci_client().chat(models.ChatDetails(compartment_id=connection.c['compartment_id'], serving_mode=connection.oci_serving_mode(models), chat_request=request)).data.chat_response
+    report_usage(data)
     if connection.c.get('chat_format') == 'cohere':
         if getattr(data, 'finish_reason', None) not in ('COMPLETE', 'STOP'):
             raise ConnectionError('Model returned an incomplete or refused response.')
@@ -49,5 +61,7 @@ def generate(connection, instruction, text, schema, output_tokens, extra):
 def embed(connection, texts, query, dim, extra):
     from oci.generative_ai_inference import models
     request = models.EmbedTextDetails(compartment_id=connection.c['compartment_id'], serving_mode=connection.oci_serving_mode(models), inputs=texts, input_type='SEARCH_QUERY' if query else 'SEARCH_DOCUMENT', truncate='NONE', **({'output_dimensions': dim} if dim else {}))
-    vectors = connection.oci_client().embed_text(request).data.embeddings
+    result = connection.oci_client().embed_text(request).data
+    report_usage(result, embedding=True, query=query)
+    vectors = result.embeddings
     return vectors

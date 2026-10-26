@@ -76,6 +76,15 @@
 .agent-workspace .agent-v2-sources{margin-top:8px;font-size:13px;color:#4a5577}
 .agent-workspace .agent-v2-sources summary{cursor:pointer;font-weight:600;color:#1d2d6b}
 .agent-workspace .agent-token-usage{font-size:12px;color:#616b85}
+.agent-token-details summary{cursor:pointer;width:fit-content;list-style-position:inside}
+.agent-token-details summary:focus-visible{outline:2px solid #2563eb;outline-offset:2px;border-radius:4px}
+.agent-token-steps{margin-top:8px;max-width:100%;overflow-x:auto;border:1px solid #e3e9f4;border-radius:8px;background:#fff}
+.agent-token-steps table{width:100%;border-collapse:collapse;font-size:12px;min-width:560px}
+.agent-token-steps th,.agent-token-steps td{padding:6px 8px;text-align:right;white-space:nowrap;border-top:1px solid #eef2f9;color:#33415c}
+.agent-token-steps thead th{border-top:0;background:#f6f8fd;color:#5b6782;font-weight:600}
+.agent-token-steps th:first-child,.agent-token-steps td.agent-token-model{text-align:left}
+.agent-token-steps td.agent-token-model{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.agent-token-note{margin:0;padding:6px 8px;font-size:11px;color:#5b6782;border-top:1px solid #eef2f9}
 .agent-workspace .agent-v2-speaker strong{font-size:14px;color:#0e1630}
 .agent-workspace .agent-v2-tools>li{border-radius:14px;border-color:#e1e6f1}
 .agent-workspace .agent-v2-tools>li[data-status=running],.agent-workspace .agent-v2-tools>li[data-status=waiting]{border-color:#9db2ee;background:#f6f8ff}

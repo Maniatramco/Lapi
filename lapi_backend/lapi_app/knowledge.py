@@ -230,7 +230,8 @@ def sync(actor, dataset_id='', max_points=None, application_only=False):
         app_stamp = digest([PUBLICATION_VERSION,GUIDE])
         if entities.get('application', {}).get('stamp') != app_stamp: pending.append(('application', app_stamp, application_sources()))
         upserted = 0; removed = []
-        with core.execution_context(snapshot):
+        from .lapi_agent import token_usage
+        with core.execution_context(snapshot), token_usage.scope(owner=actor, dataset_id=dataset_id or None, stage='reindex'):
             q = providers.client() if snapshot['settings']['search_provider'] in ('qdrant','oracle') else None
             if q and not q.collection_exists(name):
                 probe = providers.embed(['Lapi unified knowledge.'])[0]

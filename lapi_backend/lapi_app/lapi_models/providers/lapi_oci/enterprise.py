@@ -102,7 +102,12 @@ class OCIModelAdapter:
             raise OCIModelError('Configure an OCI-supported model identifier')
 
     def _response(self, **payload):
-        return output_text(self.client.request('POST', '/responses', json={'model': self.model, 'store': False, **payload}))
+        from ....lapi_agent import token_usage
+        call = token_usage.attempt(protocol='oci', provider_model=self.model,
+            parameters={k: v for k, v in payload.items() if k == 'max_output_tokens'})
+        data = self.client.request('POST', '/responses', json={'model': self.model, 'store': False, **payload})
+        token_usage.record(data, 'oci', call)
+        return output_text(data)
 
     def _chat_payload(self, question, sources, history=None):
         context = '\n\n'.join(f'[{i+1}] {s["document_name"]}\n{s["text"]}' for i, s in enumerate(sources))

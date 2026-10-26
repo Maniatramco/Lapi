@@ -7,6 +7,7 @@ from .... import core, runtime_config
 from ...cloud_ocr import provider, eligible
 from ...connection import ModelConnection
 from ...parameters import for_stage
+from ....lapi_agent import token_usage
 
 
 def configure(snapshot, limits):
@@ -57,7 +58,9 @@ def transcribe(image, cfg, instruction, schema):
                 {'type': 'text', 'text': 'Transcribe every visible line. Return only text and unreadable in the requested JSON.'},
                 {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(image).decode('ascii'), 'detail': 'high'}}]}],
             'response_format': {'type': 'json_schema', 'json_schema': {'name': 'page_transcription', 'strict': True, 'schema': schema}}}
+        call = token_usage.attempt(protocol=adapter.c['protocol'], parameters={'max_completion_tokens': cfg['output'], **extra})
         data = adapter.post('/chat/completions', payload)
+        token_usage.record(data, adapter.c['protocol'], call)
     choice = data['choices'][0]
     message = choice.get('message') or {}
     return {'done': choice.get('finish_reason') == 'stop' and not message.get('refusal'),

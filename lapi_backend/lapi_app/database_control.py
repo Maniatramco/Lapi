@@ -104,7 +104,7 @@ def probe(engine):
     tables=set(inspect(engine).get_table_names())
     expected=set(core.Base.metadata.tables)|{'lapi_knowledge_vectors'}
     return {'ok':True,'vector_supported':True,'tables_present':len(expected&tables),
-        'tables_required':13,'schema_ready':expected<=tables,
+        'tables_required':len(expected),'schema_ready':expected<=tables,
         'message':'Database connection and native vector search verified.'}
 
 def prepare(engine):
@@ -244,7 +244,7 @@ def public():
         'password_saved':bool(secret.get('password')),'wallet_password_saved':bool(secret.get('wallet_password')),
         'wallet_ready':all((wallet/name).is_file() for name in ('tnsnames.ora','ewallet.pem')),
         'vector_provider':vector_backend() or core.settings()['search_provider'],
-        'tables_required':13}
+        'tables_required':len(core.Base.metadata.tables)+1}
 
 def install(app,auth):
     from . import core,dataset_access as access

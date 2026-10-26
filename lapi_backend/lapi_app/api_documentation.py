@@ -92,6 +92,11 @@ NOTES = {
     'POST /api/model-registrations/test': 'Send a small synthetic probe using the same adapter as processing, with the parameter values in the form. Optional test_stages also run one short sample prompt per stage. The response lists the effective parameters sent per stage. This does not save the registration or transmit document content. Remote probes require consent and an enabled cloud deployment.',
     'GET /api/model-registrations/parameter-schema': 'Read the typed parameter schema for one provider and category: each field with type, range, provider default and help, the stages with their documented Lapi defaults and suggested starting values, or a notice when the provider accepts no sampling overrides.',
     'GET /api/model-registrations/{id}/parameter-history': 'Read the versioned parameter history of a registered model, newest first: author, time, the parameter set after each change and the field-level changes.',
+    'GET /api/model-registrations/{id}/prices': 'Administrator only: list the dated price versions (currency and price per 1M tokens for input, cached input read, cached input write, output and optional reasoning) of a registered model, and the version in force now.',
+    'POST /api/model-registrations/{id}/prices': 'Administrator only: add a price version with an effective date (default now). Usage already recorded keeps the price version that was in force at its call time, so a change never rewrites past costs.',
+    'GET /api/admin/token-usage': 'Administrator only: provider-reported tokens and approximate cost from one row per model call, filtered by start/end date (YYYY-MM-DD, UTC), dataset_id, model_id, owner_id and stage, with group_by dataset, model, day or user. Costs are per currency and never added across currencies; calls without a report or a price are counted, not priced.',
+    'GET /api/admin/token-usage/export': 'Administrator only: download the filtered per-call token usage rows as CSV with approximate cost, Not reported or Price not set per row.',
+    'GET /api/token-usage/conversations/{id}': 'Your own provider-reported token totals and approximate cost for one conversation.',
     'GET /api/local-models': 'List models installed in the configured local Ollama service. This call does not install or download anything.',
     'GET /api/documents': 'List documents in assigned datasets, optionally scoped by dataset_id or the older kb_id parameter, with processing and reindex status.',
     'POST /api/documents/upload': 'Upload up to 20 PDF, DOCX, UTF-8 TXT, or JSON files using multipart form data: repeated files fields plus dataset_id. Per-file size uses max_upload_mb from deployment settings. Originals are stored, document records are created, and indexing jobs are queued. Upload acceptance is not indexing completion; follow /api/jobs.',
@@ -185,7 +190,7 @@ GROUPS = {
     'extractions': 'Extraction & review', 'jobs': 'Jobs & workflow',
     'index': 'Index & search', 'settings': 'Settings & connections',
     'overview': 'Workspace & services', 'capabilities': 'Workspace & services',
-    'documentation': 'Workspace & services', 'skills': 'Chat', 'me': 'Chat',
+    'documentation': 'Workspace & services', 'skills': 'Chat', 'me': 'Chat', 'token-usage': 'Token usage',
 }
 PUBLIC = {'GET /health', 'GET /ready', 'GET /api/auth/status', 'POST /api/auth/setup',
           'POST /api/auth/login', 'POST /api/auth/recovery/prepare', 'POST /api/auth/recovery/reset'}

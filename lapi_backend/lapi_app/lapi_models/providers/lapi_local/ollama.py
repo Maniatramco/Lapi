@@ -7,6 +7,7 @@ import time
 import logging
 import httpx
 from .... import runtime_config
+from ....lapi_agent import token_usage
 from jsonschema import validate
 
 def base_url():
@@ -137,7 +138,9 @@ def chat(model,question,sources,history,timeout):
     qwen_prefix(model,messages)
     from ...parameters import default_stage
     with default_stage('chat'):payload={'model':local_model_name(model),'messages':messages,'stream':False,'think':False,'options':generation_options(messages,4096),**request_parameters()}
+    call=token_usage.attempt(protocol='ollama',provider_model=model)
     data=request('/api/chat',payload,timeout)
+    token_usage.record(data,'ollama',call)
     text=data.get('message',{}).get('content','')
     if (model=='qwen3' or model.startswith('qwen3:')) and isinstance(text,str) and '</think>' in text:
         text=text.split('</think>',1)[1].strip()
@@ -149,7 +152,9 @@ def general_chat(model,instruction,text,timeout):
     qwen_prefix(model,messages)
     from ...parameters import default_stage
     with default_stage('chat'):payload={'model':local_model_name(model),'messages':messages,'stream':False,'think':False,'options':generation_options(messages,4096),**request_parameters()}
+    call=token_usage.attempt(protocol='ollama',provider_model=model)
     data=request('/api/chat',payload,timeout)
+    token_usage.record(data,'ollama',call)
     result=data.get('message',{}).get('content','')
     if isinstance(result,str) and '</think>' in result:result=result.split('</think>',1)[1].strip()
     if not data.get('done') or data.get('done_reason')=='length' or not isinstance(result,str) or not result.strip():raise OllamaError('Local Ollama returned an empty or incomplete answer.')
@@ -162,6 +167,7 @@ async def general_chat_stream(model,instruction,text,timeout):
     with default_stage('chat'):payload={'model':local_model_name(model),'messages':messages,'stream':True,'think':False,'options':generation_options(messages,4096),**request_parameters()}
     completed=False;answer='';prefix='';started=False;thinking=False
     qwen=model=='qwen3' or model.startswith('qwen3:')
+    call=token_usage.attempt(protocol='ollama',provider_model=model)
     try:
         async with httpx.AsyncClient(timeout=timeout,follow_redirects=False,trust_env=False) as client:
             async with client.stream('POST',base_url()+'/api/chat',json=payload) as response:
@@ -191,6 +197,7 @@ async def general_chat_stream(model,instruction,text,timeout):
                         started=True
                     if piece:answer+=piece;yield piece
                     if event.get('done'):
+                        token_usage.record(event,'ollama',call)
                         if event.get('done_reason')=='length':raise OllamaError('Local Ollama returned an incomplete answer.')
                         completed=True;break
         if not completed or not answer.strip():raise OllamaError('Local Ollama returned an empty or incomplete answer.')
@@ -208,8 +215,10 @@ def extract(model,text,schema,timeout,instruction=None):
     with default_stage('extraction'):
         options=generation_options(messages,4096)
         keep=request_parameters()
+    call=token_usage.attempt(protocol='ollama',provider_model=model)
     data=request('/api/chat',{'model':local_model_name(model),'messages':messages,
         'stream':False,'think':False,'format':schema,'options':options,**keep},timeout)
+    token_usage.record(data,'ollama',call)
     if data.get('done_reason')=='length':
         raise OllamaError(f'Local Ollama extraction reached its output limit ({options["num_predict"]:,} tokens). Increase Max output tokens and, if needed, Context limit in Model Registration, or use a smaller template, then retry. Partial JSON was not saved as a completed result.')
     if not data.get('done'):raise OllamaError('Local Ollama extraction was incomplete. Check the model service, then retry.')
@@ -219,7 +228,7 @@ def extract(model,text,schema,timeout,instruction=None):
     except Exception as exc:raise OllamaError('Local Ollama extraction did not match the requested schema.') from exc
     return result
 
-def embed(model,texts,timeout):
+def embed(model,texts,timeout,query=False):
     if not texts:return []
     if any(not isinstance(t,str) or not t.strip() for t in texts):raise OllamaError('Embedding input cannot be empty.')
     from .... import core
@@ -230,7 +239,9 @@ def embed(model,texts,timeout):
         for text in texts:check_budget(cfg,text,embedding=True)
     except ValueError as exc:raise OllamaError(str(exc)) from exc
     dim=(cfg.get('embedding_connection') or {}).get('dimensions')
+    call=token_usage.attempt(protocol='ollama',provider_model=model,embedding=True,query=query)
     data=request('/api/embed',{'model':local_model_name(model),'input':texts,'truncate':False,**({'dimensions':dim} if dim else {}),**({'options':{'num_gpu':0}} if runtime_config.get('LAPI_INFERENCE_DEVICE')=='cpu' else {}),**request_parameters(embedding=True)},timeout)
+    token_usage.record(data,'ollama',call,embedding=True)
     vectors=data.get('embeddings')
     if not isinstance(vectors,list) or len(vectors)!=len(texts):raise OllamaError('Local Ollama returned an invalid embedding count.')
     result=[];dimension=None

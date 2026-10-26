@@ -157,12 +157,15 @@ def transcribe(image, cfg):
         except Exception:
             raise OcrError(label + ' OCR request failed. Check model access, saved API credentials, quota and service availability. No partial page was indexed.') from None
     else:
+        from .lapi_agent import token_usage
+        usage_call = token_usage.attempt(protocol='ollama', provider_model=cfg['model'], parameters={'num_predict': cfg['output'], 'num_ctx': cfg['context']})
         result = call(cfg, '/api/chat', {'model': cfg['model'], 'stream': False, 'format': 'json',
         'messages': [{'role': 'system', 'content': INSTRUCTION}, {'role': 'user',
         'content': 'Transcribe every visible line, in reading order. Your JSON MUST have exactly these two keys: {"text":"full transcription as one string with newline characters", "unreadable":false}. Do not use document fields as keys. Set unreadable true if any text is unclear.',
         'images': [base64.b64encode(image).decode('ascii')]}],
         'options': {**OLLAMA_OCR_OPTIONS, 'num_ctx': cfg['context'], 'num_predict': cfg['output'], 'num_batch':cfg['batch'],
                     **({'num_gpu':0} if runtime_config.get('LAPI_OCR_FORCE_CPU') else {})}, 'keep_alive': runtime_config.get('LAPI_OCR_KEEP_ALIVE')})
+        token_usage.record(result, 'ollama', usage_call)
     if not result.get('done') or result.get('done_reason') == 'length':
         raise OcrError('OCR output was incomplete. Increase LAPI_OCR_MAX_TOKENS and LAPI_OCR_CONTEXT or split the page, then retry. Partial text was not indexed.')
     try:

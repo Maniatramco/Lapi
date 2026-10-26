@@ -8,6 +8,7 @@ from .. import runtime_config
 from .parameters import check_budget, validate_parameters, ParameterError, for_stage, current_stage
 from .validation import ConnectionError, PROTOCOLS, AUTH_MODES, validate_endpoint, validate_connection, validate_credentials, credentials
 from .provider_registry import provider
+from ..lapi_agent import token_usage
 
 class ModelConnection:
     def __init__(self, cfg, embedding=False, credentials_override=None):
@@ -70,7 +71,8 @@ class ModelConnection:
             check_budget(self.cfg,[instruction,text],output_tokens=output_tokens)
             # Stage parameters: stage -> model -> documented Lapi default.
             extra=for_stage(self.cfg,'extraction' if schema else current_stage('chat'),p,self.c)
-            result = provider(self.c).generate(self, instruction, text, schema, output_tokens, extra)
+            with token_usage.pending(protocol=p, parameters={'max_output_tokens': output_tokens, **extra}):
+                result = provider(self.c).generate(self, instruction, text, schema, output_tokens, extra)
             if not isinstance(result, str) or not result.strip():
                 raise ConnectionError('Model returned an empty answer.')
             if schema:
@@ -100,7 +102,8 @@ class ModelConnection:
         try:
             for text in texts:check_budget(self.cfg,text,embedding=True)
             extra=validate_parameters(self.cfg.get('embedding_extra_parameters',{}),p,'embedding',self.c)
-            vectors = provider(self.c).embed(self, texts, query, dim, extra)
+            with token_usage.pending(protocol=p, embedding=True, query=query, parameters={**extra, **({'dimensions': dim} if dim else {})}):
+                vectors = provider(self.c).embed(self, texts, query, dim, extra)
             if len(vectors) != len(texts):
                 raise ConnectionError('Model returned an invalid embedding count.')
             dimension = dim or (len(vectors[0]) if vectors else 0)

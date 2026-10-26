@@ -5,7 +5,7 @@ import './agent-setup.css';
 import {attachmentSize} from './agent-attachments';
 import {CitationPanel} from './citation-panel';
 import {extractionCitationId} from './citation-source';
-import {agentTokenUsage} from './agent-token-usage';
+import {agentTokenUsage,agentTokenSteps} from './agent-token-usage';
 type Entity=Record<string,any>;
 export function AgentRequest({text,attachments=[],pending=false}:{text:string;attachments:{name:string;size?:number}[];pending?:boolean}){
  return <div className={`agent-v2-request${pending?' agent-v2-pending':''}`}>
@@ -52,10 +52,24 @@ function InstructionProposal({proposal,api,onError}:{proposal:Entity;api:(path:s
   {state==='saved'?<p className="small" role="status">Saved. New answers in this dataset use these instructions.</p>:<div className="agent-setup-actions"><button className="btn primary" disabled={state==='saving'} onClick={()=>void save()}><Save size={15}/>Save instructions</button></div>}
  </div>;
 }
+/** Per-answer token line; tap to expand the per-call steps when the provider reported them. */
+export function AnswerTokenUsage({usage,status}:{usage:Entity|undefined;status:string}){
+ const line=agentTokenUsage(usage,status);
+ const steps=status==='streaming'?[]:agentTokenSteps(usage);
+ if(!steps.length)return <p className="small muted agent-token-usage" aria-label="Answer token usage" title={line.title}>{line.text}</p>;
+ return <details className="small muted agent-token-usage agent-token-details">
+  <summary aria-label={`Answer token usage: ${line.text}. Show each model call`} title={line.title}>{line.text}</summary>
+  <div className="agent-token-steps" role="region" aria-label="Model calls for this answer" tabIndex={0}>
+   <table><thead><tr><th scope="col">Step</th><th scope="col">Model</th><th scope="col">Input</th><th scope="col">Cached</th><th scope="col">Output</th><th scope="col">Reasoning</th><th scope="col">Time</th><th scope="col">Approx. cost</th></tr></thead>
+    <tbody>{steps.map((row,index)=><tr key={index}><th scope="row">{row.stage}</th><td className="agent-token-model" title={row.model}>{row.model}</td><td>{row.input}</td><td>{row.cached}</td><td>{row.output}</td><td>{row.reasoning}</td><td>{row.latency}</td><td>{row.cost}</td></tr>)}</tbody>
+   </table>
+   <p className="agent-token-note">Tokens as reported by each provider. Costs are approximate list-price estimates, not a bill.</p>
+  </div>
+ </details>;
+}
 export function AgentChatAnswer({message,api,onError,onReview,onRecovery,onFollowUp}:{message:Entity;api:(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;onError:(error:string)=>void;onReview?:(id:string)=>void;onRecovery?:(action:Entity)=>void;onFollowUp?:(question:string)=>void}){
  const [citation,setCitation]=useState<Entity|null>(null);
  const answerText=visibleAnswerText(message.text||'',message.review_actions||[]);
- const usage=agentTokenUsage(message.token_usage,message.status);
  const openCitation=(source:Entity)=>setCitation({...source,requested_fields:message.review_actions?.find((action:Entity)=>action.extraction_id===extractionCitationId(source))?.fields||[]});
  // Only result IDs recorded in the answer's sources/actions become Review links.
  const extractionIds=Array.from(new Set<string>([...(message.review_actions||[]).map((action:Entity)=>action.extraction_id),...(message.citations||[]).map(extractionCitationId)].filter((id:unknown):id is string=>typeof id==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))));
@@ -63,7 +77,7 @@ export function AgentChatAnswer({message,api,onError,onReview,onRecovery,onFollo
  return <div className="agent-v2-chat-answer" data-streaming={message.status==='streaming'}>
   {message.plan?.length>0&&<ol className="agent-plan" aria-label="Plan">{message.plan.map((step:Entity,index:number)=><li key={index} data-status={step.status}>{step.status==='done'?'✓':step.status==='skipped'?'–':'○'} {step.text}</li>)}</ol>}
   <AgentAnswerText text={answerText} citations={message.citations||[]} onCitation={openCitation} extractionIds={extractionIds} onReview={onReview}/>
-  <p className="small muted agent-token-usage" aria-label="Answer token usage" title={usage.title}>{usage.text}</p>
+  <AnswerTokenUsage usage={message.token_usage} status={message.status}/>
   {(route.answer_revised||message.skills_used?.length>0)&&<p className="small muted">{route.answer_revised?'Answer revised after the citation check. ':''}{message.skills_used?.length?`Skill: ${message.skills_used.join(', ')}`:''}</p>}
   {message.instruction_proposal&&<InstructionProposal proposal={message.instruction_proposal} api={api} onError={onError}/>}
   {message.citations?.some((source:Entity)=>source.ocr)&&<p className="small muted" role="status">Some sources use AI OCR. Verify names, numbers and tables against the originals.</p>}
