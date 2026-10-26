@@ -55,7 +55,8 @@ def selected(snapshot, body=None, goal_context=None):
     settings = snapshot.get('settings') or {}
     name = protocol(settings)
     if mode == 'agentic': return name in FUNCTION_CALLING or name == 'ollama'
-    return name in FUNCTION_CALLING and (settings.get('context_limit') or 0) >= setting('LAPI_AGENT_MIN_CONTEXT_TOKENS')
+    context = settings.get('context_limit') or setting('LAPI_DEFAULT_MODEL_CONTEXT_TOKENS')
+    return name in FUNCTION_CALLING and context >= setting('LAPI_AGENT_MIN_CONTEXT_TOKENS')
 
 
 def system_prompt():
@@ -245,7 +246,14 @@ class AgenticChat:
         tool_defs = definitions()
         for step in range(steps):
             with self.progress.step('Thinking' if step == 0 else 'Reviewing evidence'):
-                output = self.call(messages, tool_defs, 'agent_step')
+                try:
+                    output = self.call(messages, tool_defs, 'agent_step')
+                except providers.ProviderError as exc:
+                    # A malformed function call is a model slip, not an outage: retry once with feedback.
+                    if not re.search(r'invalid (?:function|tool) arguments|undeclared function', str(exc), re.I): raise
+                    messages.append({'role': 'user', 'content': 'Your last tool call did not match the tool schema (' + str(exc)[:200] +
+                                     '). Check the parameter names and types, then try again.'})
+                    output = self.call(messages, tool_defs, 'agent_step')
             calls = (output.get('calls') or [])[:self.max_calls]
             if not calls:
                 return output.get('text') or ''

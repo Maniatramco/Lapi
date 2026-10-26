@@ -29,6 +29,8 @@ x-backend: &backend
     LAPI_OLLAMA_ENDPOINT_HOSTS: ollama
     LAPI_ALLOW_MOCK: 'false'
     LAPI_AGENT_ENGINE: langgraph
+    # auto = agentic chat for cloud function-calling models (e.g. Gemini), router for the local model
+    LAPI_CHAT_MODE: ${LAPI_CHAT_MODE:-auto}
     LAPI_OCR_ENABLED: 'false'
     LANGSMITH_TRACING: 'false'
     API_INTERNAL_URL: http://api:8000
