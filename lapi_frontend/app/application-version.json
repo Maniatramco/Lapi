@@ -1,6 +1,20 @@
 {
-  "version": "26.1.13.6",
+  "version": "26.1.14.0",
   "releases": [
+    {
+      "version": "26.1.14.0",
+      "date": "2026-10-27",
+      "title": "Agentic chat, skills and memory",
+      "changes": [
+        "Lapi Agent can run as an agentic chat (LAPI_CHAT_MODE router, agentic or auto). With a cloud function-calling model such as Gemini it plans, calls several read tools in parallel, reads more evidence per step and answers in one loop; the local model keeps the routed chat.",
+        "Every factual sentence must cite a source read for this answer, and its numbers, dates and names must appear in that source. A failing answer is revised once; anything still unsupported is removed and the answer says how many statements were removed.",
+        "Follow-up questions understand earlier turns (text and citation IDs only), and answers show the agent's plan, source snippets and up to three suggested follow-up questions.",
+        "New Skills & memory page: built-in and custom skills (/skill), dataset answer instructions with versions (/instructions, /optimize with a Save card), model prompting guides, and a private memory note with 90-day question history that you can edit, switch off or clear.",
+        "Token usage is recorded for every model call with dated prices per model; each answer shows its tokens and approximate cost per step, and administrators get a Token usage report with CSV export.",
+        "Model Registration has a typed parameter form per stage (Chat answer, Tool steps, Extraction, Optimize) with documented Lapi defaults, suggested values, per-stage test prompts and a change history.",
+        "Claude and Bedrock prompt caching and an OpenAI prompt cache key keep the stable agent instructions cached between turns."
+      ]
+    },
     {
       "version": "26.1.13.6",
       "date": "2026-10-27",

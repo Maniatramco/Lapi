@@ -16,7 +16,7 @@ const schemas={
   stages:[{key:'chat',label:'Chat answer',help:'h',lapi_defaults:{},suggested:{temperature:0.2}},{key:'tool_step',label:'Tool steps',help:'h',lapi_defaults:{},suggested:{temperature:0}},{key:'optimize',label:'Optimize',help:'h',lapi_defaults:{},suggested:{temperature:0.3}}],model_lapi_defaults:{}},
 };
 function compile(file,react){const m=new Module(file,module);m.filename=file;m.paths=module.paths;const base=m.require.bind(m);
- m.require=id=>id==='react'?react:id==='lucide-react'?new Proxy({},{get:()=>()=>null}):id.endsWith('.css')?{}:id==='./summary-tiles'?{SummaryTiles:()=>null}:
+ m.require=id=>id==='react'?react:id==='lucide-react'?new Proxy({},{get:()=>()=>null}):id.endsWith('.css')?{}:id==='./summary-tiles'?{SummaryTiles:()=>null}:id==='./model-prices'?{ModelPrices:()=>null}:
   ['./action-button','./model-parameters','./model-parameter-form'].includes(id)?compile(path.resolve(app,id.slice(2)+(id==='./model-parameters'?'.ts':'.tsx')),react).exports:base(id);
  m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,file);return m;}
 const helpers=compile(path.resolve(app,'model-parameters.ts'),{}).exports;
