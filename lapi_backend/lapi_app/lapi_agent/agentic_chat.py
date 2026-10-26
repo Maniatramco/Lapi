@@ -149,7 +149,7 @@ class AgenticChat:
 
     # ---------------------------------------------------------------- model
     def call(self, messages, tool_defs, stage):
-        settings = dict(self.snapshot['settings'], _keep_history=True, _agent_stage=stage,
+        settings = dict(self.snapshot['settings'], _keep_history=True, _agent_stage=stage, _cache_prefix=True,
                         _prompt_cache_key='lapi-agent-' + (self.tools.body.dataset_id or 'workspace'))
         settings['max_output_tokens'] = min(settings.get('max_output_tokens') or 2048, setting('LAPI_CHAT_OUTPUT_TOKENS') * 4)
         self.compact(messages, settings)
@@ -206,11 +206,25 @@ class AgenticChat:
         parallel = (len(calls) > 1 and all(c['name'] in READS for c in calls)
                     and not any((c.get('arguments') or {}).get('dataset') for c in calls if isinstance(c.get('arguments'), dict)))
         label = ', '.join(dict.fromkeys(LABELS.get(c['name'], c['name']) for c in calls))
+        # Identical reads in one batch run once; the copies point at the first.
+        keys = [(c['name'], json.dumps(c.get('arguments') or {}, sort_keys=True, default=str)) for c in calls]
+        first = {}
+        for i, key in enumerate(keys): first.setdefault(key, i)
+        unique = [c for i, c in enumerate(calls) if first[keys[i]] == i]
         with self.progress.step(label[:120]):
-            if not parallel: return [self.execute(c) for c in calls]
-            with concurrent.futures.ThreadPoolExecutor(min(self.parallel, len(calls))) as pool:
-                futures = [pool.submit(contextvars.copy_context().run, self.execute, c) for c in calls]
-                return [f.result() for f in futures]
+            if not parallel or len(unique) == 1: results = [self.execute(c) for c in unique]
+            else:
+                with concurrent.futures.ThreadPoolExecutor(min(self.parallel, len(unique))) as pool:
+                    futures = [pool.submit(contextvars.copy_context().run, self.execute, c) for c in unique]
+                    results = [f.result() for f in futures]
+        by_call = dict(zip([id(c) for c in unique], results))
+        out = []
+        for i, c in enumerate(calls):
+            if first[keys[i]] == i: out.append(by_call[id(c)])
+            else:
+                earlier = json.loads(by_call[id(calls[first[keys[i]]])])
+                out.append(json.dumps(envelope(None, earlier.get('citations'), note='Identical to an earlier call this turn; use that result.')))
+        return out
 
     # ---------------------------------------------------------------- loop
     def prefetch(self, text):

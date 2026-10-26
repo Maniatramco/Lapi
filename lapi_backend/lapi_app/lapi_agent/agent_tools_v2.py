@@ -526,7 +526,7 @@ class AgentTools(Tools):
         if record.status != 'ready': return envelope({'name': record.name, 'status': record.status, 'error': record.error})
         value, items = self.extraction_items(record)
         available = list(dict.fromkeys(k for f, _ in items if isinstance(f, dict) for k in f))
-        unknown = sorted(set(fields or []) | {f['field'] for f in filters or []} - set(available))
+        unknown = sorted((set(fields or []) | {f['field'] for f in filters or []}) - set(available))
         if unknown:
             return envelope({'available_fields': available}, note='Unknown fields: ' + ', '.join(unknown) + '. Use available_fields.')
         selected = [i for i, (f, _) in enumerate(items) if isinstance(f, dict) and all(matches_result_filter(f, c) for c in filters or [])]

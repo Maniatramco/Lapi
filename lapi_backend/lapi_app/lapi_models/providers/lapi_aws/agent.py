@@ -3,6 +3,18 @@ import copy
 from ...validation import ConnectionError
 
 
+CACHE_MODELS = ('anthropic.claude', 'amazon.nova')
+
+
+def mark_cache(request, connection=None):
+    """Converse cachePoint after the stable system block (and tools) on models that support prompt caching."""
+    if not any(name in (request.get('modelId') or '') for name in CACHE_MODELS): return request
+    request = copy.deepcopy(request)
+    if request.get('system'): request['system'].insert(1, {'cachePoint': {'type': 'default'}})
+    if request.get('toolConfig'): request['toolConfig']['tools'].append({'cachePoint': {'type': 'default'}})
+    return request
+
+
 def payload(connection, messages, tools, budget, extra, required):
     system = []
     wire = []

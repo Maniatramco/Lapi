@@ -441,6 +441,10 @@ def complete(messages, tools, on_token=None):
             except ParameterError as exc:
                 raise providers.ProviderError(str(exc)) from exc
         if cfg.get('_agent_require_tool'):payload['tool_choice']='required'
+        # Agentic chat: the stable prefix (system prompt + tools) is identical
+        # across turns of a dataset; OpenAI routes it to the same prompt cache.
+        if cfg.get('_prompt_cache_key') and protocol=='openai' and 'prompt_cache_key' not in payload:
+            payload['prompt_cache_key']=cfg['_prompt_cache_key'][:64]
         if any(t.get('function', {}).get('strict') for t in wire_tools):
             payload['parallel_tool_calls'] = False
             if cfg.get('_agent_require_tool') and cfg['model'].startswith('gpt-4o'):

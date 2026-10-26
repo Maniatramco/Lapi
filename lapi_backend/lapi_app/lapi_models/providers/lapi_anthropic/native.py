@@ -4,6 +4,14 @@ from jsonschema import validate, ValidationError
 from ...validation import ConnectionError
 
 
+def mark_cache(request, connection=None):
+    """Cache tools + the first (stable) system block; later turns reuse that prefix."""
+    request = copy.deepcopy(request)
+    if request.get('tools'): request['tools'][-1]['cache_control'] = {'type': 'ephemeral'}
+    if request.get('system'): request['system'][0]['cache_control'] = {'type': 'ephemeral'}
+    return request
+
+
 def agent_payload(connection, messages, tools, budget, extra, required):
     system, wire = [], []
     for message in messages:

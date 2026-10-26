@@ -1,6 +1,6 @@
 from ...validation import ConnectionError
 import json
-from .agent import payload as agent_payload, complete as agent_complete
+from .agent import payload as agent_payload, complete as agent_complete, mark_cache
 
 def client(connection):
     try:

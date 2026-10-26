@@ -240,3 +240,16 @@ def test_step_limit_forces_a_final_answer_without_tools(system, monkeypatch):
                     {'text': "I couldn't find that in the documents.", 'calls': []})
     p = plan(s, d, text='Find something that does not exist anywhere')
     assert seen[-1]['tools'] == [] and p['model_calls'] == 3 and "couldn't find" in p['explanation']
+
+
+def test_stable_prefix_is_marked_for_provider_caching():
+    from lapi_app.lapi_models.providers.lapi_anthropic import native
+    from lapi_app.lapi_models.providers.lapi_aws import agent as converse
+    claude = native.mark_cache({'system': [{'type': 'text', 'text': 'rules'}, {'type': 'text', 'text': 'scope'}],
+                                'tools': [{'name': 'a'}, {'name': 'b'}], 'messages': []})
+    assert claude['system'][0]['cache_control'] == {'type': 'ephemeral'} and 'cache_control' not in claude['system'][1]
+    assert claude['tools'][-1]['cache_control'] == {'type': 'ephemeral'}
+    request = {'modelId': 'us.anthropic.claude-sonnet', 'system': [{'text': 'rules'}, {'text': 'scope'}], 'toolConfig': {'tools': [{'toolSpec': {}}]}}
+    marked = converse.mark_cache(request)
+    assert marked['system'][1] == {'cachePoint': {'type': 'default'}} and marked['toolConfig']['tools'][-1] == {'cachePoint': {'type': 'default'}}
+    assert converse.mark_cache(dict(request, modelId='meta.llama3')) == dict(request, modelId='meta.llama3')

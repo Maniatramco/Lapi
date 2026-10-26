@@ -11,8 +11,14 @@ def complete(cfg, messages, tools, on_token=None):
     adapter = provider(connection.c)
     budget = cfg.get('max_output_tokens') or 768
     extra = validate_parameters(cfg.get('extra_parameters', {}), connection.c['protocol'], 'chat', connection.c)
-    wire = agent_context.fit(messages, cfg, budget,
-        lambda inputs: adapter.agent_payload(connection, inputs, tools, budget, extra, bool(cfg.get('_agent_require_tool'))),
+    cache = getattr(adapter, 'mark_cache', None) if cfg.get('_cache_prefix') else None
+
+    def build(inputs):
+        request = adapter.agent_payload(connection, inputs, tools, budget, extra, bool(cfg.get('_agent_require_tool')))
+        # Agentic chat sends its stable prefix (system prompt, tools) first;
+        # providers with explicit caching mark where that prefix ends.
+        return cache(request, connection) if cache else request
+    wire = agent_context.fit(messages, cfg, budget, build,
         'tool_selection' if cfg.get('_agent_require_tool') else 'answer')
     usage_call = token_usage.attempt()
     try:
