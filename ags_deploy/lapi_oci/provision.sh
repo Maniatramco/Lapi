@@ -105,7 +105,7 @@ echo "Network ready (lapi-vcn 10.60.0.0/16, ports 22 and 80 open)"
 
 # ------------------------------------------------------------------- 4. VM
 say "4/7 Lapi VM (A1.Flex $OCPUS OCPU / $MEM GB, ${BOOT} GB boot)"
-[ -f "$STATE/lapi_ssh" ] || ssh-keygen -t ed25519 -N '' -C lapi -q -f "$STATE/lapi_ssh"
+[ -f "$STATE/lapi_ssh" ] || ssh-keygen -t rsa -b 4096 -N '' -C lapi -q -f "$STATE/lapi_ssh"
 cat > "$STATE/cloud-init.sh" <<CI
 #!/bin/bash
 set -e
