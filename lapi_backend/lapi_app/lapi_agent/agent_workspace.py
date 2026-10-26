@@ -57,6 +57,8 @@ class PlanInput(StrictInput):
     answer_scope: Literal['auto','documents'] = 'auto'
     stream_answers: bool = False
     agent_operation: Literal['onboard','upload','extract','reextract'] | None = None
+    # Agentic chat only: include earlier turns of this conversation (text and citation IDs) to resolve references.
+    use_memory: bool = True
 
     @model_validator(mode='after')
     def explicit_agent(self):

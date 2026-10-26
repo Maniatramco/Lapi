@@ -107,6 +107,12 @@ def conversation(owner, body, main):
 
 
 def run(owner, body, snapshot, main, on_delta=None, on_progress=None, goal_context=None,initial_progress=None):
+    # LAPI_CHAT_MODE agentic/auto: one tool-calling loop with sentence-level
+    # citation checks. Router mode (default), processing commands and confirmed
+    # goal continuations keep the graph below unchanged.
+    from . import agentic_chat
+    if agentic_chat.selected(snapshot, body, goal_context):
+        return agentic_chat.run(owner, body, snapshot, main, on_delta, on_progress, initial_progress)
     progress=AnswerProgress(on_progress,initial_progress)
     with progress.step('Checking workspace'):
         thread = conversation(owner, body, main)

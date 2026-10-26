@@ -14,7 +14,8 @@ from .. import runtime_config
 _observer=ContextVar('agent_context_observer',default=None)
 READS={'list_documents','list_datasets','list_prompts','get_dataset_status',
     'get_dataset_onboarding_status','get_model_configuration','get_application_info',
-    'get_workflow_status','read_prompt','find_extractions','read_extraction_results','search_documents','search_knowledge'}
+    'get_workflow_status','read_prompt','find_extractions','read_extraction_results','search_documents','search_knowledge',
+    'read_document_section','describe_results','aggregate_results','compare_records','search_my_history'}
 
 
 @contextmanager
@@ -50,7 +51,7 @@ def _deduplicate(messages):
 
 
 def fit(messages,cfg,output_tokens,serialize,stage):
-    """Exclude chat history, then remove optional examples until the wire fits.
+    """Exclude chat history (unless kept for agentic chat), then remove optional examples until the wire fits.
 
     `_context` tags are assigned only by server code. A user cannot authorize
     removing evidence or make text into a system message by supplying tags.
@@ -63,8 +64,12 @@ def fit(messages,cfg,output_tokens,serialize,stage):
         raise providers.ProviderError('Invalid model answer budget. Check Model Registration.')
     # User preference: chat text is never a knowledge source. Remove server-
     # marked past turns even when there is plenty of remaining context space.
-    history_units={m.get('_context',{}).get('unit') for m in messages if m.get('_context',{}).get('kind')=='history'}
-    current=[m for m in messages if m.get('_context',{}).get('kind')!='history']
+    # Agentic chat (cfg['_keep_history']) is the exception: its server-built
+    # history is text plus citation IDs, only resolves references, and is the
+    # first thing dropped (oldest turn first) when the wire does not fit.
+    keep=bool(cfg.get('_keep_history'))
+    history_units=set() if keep else {m.get('_context',{}).get('unit') for m in messages if m.get('_context',{}).get('kind')=='history'}
+    current=messages if keep else [m for m in messages if m.get('_context',{}).get('kind')!='history']
     packed,duplicates=_deduplicate(copy.deepcopy(current))
     groups=[]
     for kind in ('history','example'):
