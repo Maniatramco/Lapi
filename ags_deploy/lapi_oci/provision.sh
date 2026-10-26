@@ -154,7 +154,13 @@ if [ -z "$DB" ]; then
   rm -f "$STATE/adb-create.json"
   DB=$(sed -n '/^{/,$p' <<<"$out" | jq -r .data.id)
   umask 022
-else echo "Reusing lapidb"; fi
+else
+  echo "Reusing lapidb; waiting until it is AVAILABLE"
+  for n in $(seq 90); do
+    st=$(oci db autonomous-database get --autonomous-database-id "$DB" | jq -r '.data."lifecycle-state"')
+    [ "$st" = AVAILABLE ] && break; echo "  lapidb is $st"; sleep 20
+  done
+fi
 DSN=$(oci db autonomous-database get --autonomous-database-id "$DB" | jq -r '[.data."connection-strings".profiles[]
         | select(."consumer-group"=="LOW" and ."tls-authentication"=="SERVER" and .protocol=="TCPS")] | sort_by(."host-format" != "FQDN") | .[0].value')
 [ -n "$DSN" ] && [ "$DSN" != null ] || die "lapidb has no TLS connection string yet."
