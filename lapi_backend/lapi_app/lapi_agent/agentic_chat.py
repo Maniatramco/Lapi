@@ -113,7 +113,7 @@ class AgenticChat:
         self.trace = []; self.model_calls = 0; self.seen = {}; self.observed_bytes = 0
         self.max_steps = setting('LAPI_AGENT_MAX_STEPS'); self.max_calls = setting('LAPI_AGENT_MAX_CALLS_PER_STEP')
         self.budget = setting('LAPI_AGENT_OBSERVATION_BYTES'); self.parallel = setting('LAPI_AGENT_PARALLEL_READS')
-        self.validation = {'attempts': []}; self.ended = None; self.phase = 'answered'
+        self.validation = {'attempts': []}; self.ended = None; self.phase = 'answered'; self.repairing = False
 
     # ---------------------------------------------------------------- prompt
     def system(self):
@@ -156,7 +156,10 @@ class AgenticChat:
                         _prompt_cache_key='lapi-agent-' + (self.tools.body.dataset_id or 'workspace'))
         settings['max_output_tokens'] = min(settings.get('max_output_tokens') or 2048, setting('LAPI_CHAT_OUTPUT_TOKENS') * 4)
         self.compact(messages, settings)
-        with core.execution_context(dict(self.snapshot, settings=settings)):
+        from ..lapi_models import parameters
+        usage_stage = 'repair' if self.repairing else 'tool_step' if tool_defs else 'final_answer'
+        with core.execution_context(dict(self.snapshot, settings=settings)), token_usage.stage(usage_stage), \
+                parameters.use_stage('tool_step' if tool_defs else 'chat'):
             self.model_calls += 1
             return agent_model.complete(messages, tool_defs)
 
@@ -294,7 +297,9 @@ class AgenticChat:
             messages += [{'role': 'assistant', 'content': answer}, {'role': 'user', 'content': answer_check.feedback(problems)}]
             self.progress.steps.append({'id': str(len(self.progress.steps) + 1), 'label': 'Citation check: revising answer',
                                         'status': 'completed', 'started_at': time.time() * 1000, 'duration_ms': 0})
+            self.repairing = True
             repaired = self.loop(messages, 3)
+            self.repairing = False
             if self.ended: return self.ended_answer()
             repaired, more = split_follow_ups(answer_check.normalize(repaired or '', self.tools.sources))
             follow_ups = more or follow_ups
