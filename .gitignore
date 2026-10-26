@@ -49,3 +49,4 @@ lapi_frontend/screenshots/
 
 # Private target settings beside the main deployment entry point.
 /lapi_deploy/lapi-oci-inputs.json
+.claude/
