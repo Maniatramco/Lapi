@@ -1,7 +1,7 @@
 /* Landing overview: brand hero with an ask box, then dataset cards and sources. Asking moves to the roomy chat. */
 .notebook-dashboard[data-mode=landing]{height:auto;min-height:0}
 .dashboard-top{display:flex;flex-direction:column;gap:12px;flex-shrink:0}
-.notebook-dashboard[data-mode=landing] .dashboard-top{position:relative;overflow:hidden;border-radius:20px;padding:18px 26px 26px;color:#fff;background:linear-gradient(125deg,#0c1533 0%,#1d2d6b 32%,#3c52a8 62%,#6f82da 86%,#8f7fe2 100%);background-size:200% 200%;animation:dashboard-shift 18s ease-in-out infinite alternate}
+.notebook-dashboard[data-mode=landing] .dashboard-top{position:relative;overflow:hidden;border-radius:20px;padding:18px 26px 26px;color:#fff;background:linear-gradient(125deg,#1d4ed8 0%,#2563eb 32%,#60a5fa 62%,#93c5fd 86%,#fdba74 100%);background-size:200% 200%;animation:dashboard-shift 18s ease-in-out infinite alternate}
 .notebook-dashboard[data-mode=landing] .dashboard-top::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:44px 44px}
 .notebook-dashboard[data-mode=landing] .dashboard-top>*{position:relative}
 .notebook-dashboard[data-mode=landing] .notebook-heading h2{color:#dce4fa;font-size:13px!important;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
@@ -68,8 +68,8 @@ body .shell .notebook-dashboard[data-mode=landing] .dashboard-datasets .notebook
 /* Add Dataset Knowledge picker: brand header, expandable dataset cards, clear selection summary. */
 .dataset-knowledge-picker.picker-v2{width:min(720px,calc(100vw - 32px));max-height:88dvh;padding:0;border:0;border-radius:20px;overflow:hidden;display:flex;flex-direction:column;color:#0e1630;background:#fff;box-shadow:0 30px 90px #080e2866}
 .dataset-knowledge-picker.picker-v2:not([open]){display:none}
-.dataset-knowledge-picker.picker-v2::backdrop{background:#0c153399;backdrop-filter:blur(2px)}
-.picker-hero{position:relative;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 24px 20px;color:#fff;background:linear-gradient(125deg,#0c1533 0%,#1d2d6b 40%,#3c52a8 75%,#6f82da 100%)}
+.dataset-knowledge-picker.picker-v2::backdrop{background:#1d4ed899;backdrop-filter:blur(2px)}
+.picker-hero{position:relative;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 24px 20px;color:#fff;background:linear-gradient(125deg,#1d4ed8 0%,#2563eb 40%,#60a5fa 75%,#93c5fd 100%)}
 .picker-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:40px 40px}
 .picker-hero>*{position:relative}
 .picker-eyebrow{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#9be3ff}

@@ -1,0 +1,67 @@
+/* Lapi theme: white surfaces, blue primary, light orange accent.
+   Loaded last; the html prefix lets these rules win over component styles. */
+html:root{
+  --bg:#fbfcff;--ink:#14213d;--muted:#5b6782;--line:#e3e9f4;
+  --blue:#2563eb;--blue-strong:#1d4ed8;--blue-soft:#eaf1ff;--blue-line:#c7d7fb;
+  --orange:#fdba74;--orange-strong:#c2410c;--orange-soft:#fff4e8;--orange-line:#fed7aa;
+  --nav:#ffffff;
+  --lapi-band:radial-gradient(120% 160% at 100% 0%,rgba(253,186,116,.62) 0%,rgba(253,186,116,0) 46%),linear-gradient(120deg,#1e40af 0%,#2563eb 55%,#3b82f6 100%);
+}
+html body{background:var(--bg);color:var(--ink)}
+
+/* Sidebar: white with blue selection and an orange marker */
+html body .sidebar{background:#fff;color:var(--muted);border-right:1px solid var(--line);border-color:var(--line);box-shadow:4px 0 18px rgba(37,99,235,.04)}
+html body .sidebar .brand{color:var(--ink)}
+html body .sidebar .brand-sub,html body .sidebar .nav-footer{color:var(--muted)}
+html body .sidebar .nav-footer{border-color:var(--line)}
+html body .sidebar .nav-item{color:#33415c}
+html body .sidebar .nav-item:hover{background:var(--orange-soft);color:var(--ink)}
+html body .sidebar .nav-item.selected{position:relative;background:var(--blue-soft);color:var(--blue-strong);box-shadow:inset 3px 0 0 var(--orange)}
+html body .sidebar .admin-navigation{background:#f6f8fd;border-radius:8px}
+html body .brandmark{background:var(--blue)}
+html body .auth-brand{background:var(--lapi-band)}
+
+/* Header bands, hero cards and workflow tracks share one blue band with a warm glow */
+html body .page-band,
+html body .agent-welcome-hero,
+html body .add-knowledge-hero,
+html body .notebook-dashboard[data-mode=landing] .dashboard-top,
+html body .picker-hero,
+html body .about-version-card,
+html body .golden-workspace,
+html body .agent-activity-capsule,
+html body .agent-workspace .answer-workflow-expanded,
+html body .workflow-frame.brand-track{background:var(--lapi-band);box-shadow:0 10px 24px rgba(37,99,235,.16),inset 0 0 0 1px rgba(255,255,255,.12)}
+
+/* Live step: orange-ringed node; finished steps blue to light orange */
+html body .brand-step[data-status=completed] .brand-node{background:linear-gradient(140deg,#60a5fa,#fdba74);box-shadow:0 0 0 3px rgba(253,186,116,.25),0 6px 14px rgba(37,99,235,.3)}
+html body .brand-step[data-status=running] .brand-node{background:radial-gradient(circle,#3b82f6 0%,#1d4ed8 75%);box-shadow:0 0 0 3px rgba(253,186,116,.55)}
+html body .phase-step[data-status=running] .phase-node{background:linear-gradient(140deg,#2563eb,#1d4ed8);box-shadow:0 0 0 4px rgba(253,186,116,.45),0 6px 16px rgba(37,99,235,.28)}
+html body .phase-step[data-status=completed] .phase-node{background:linear-gradient(140deg,#2563eb,#60a5fa)}
+
+/* Agent: blue new-chat button and user bubble */
+html body .agent-rail-new{background:var(--blue);color:#fff}
+html body .agent-rail-new:hover:not(:disabled){background:var(--blue-strong);box-shadow:0 0 0 3px var(--orange-line)}
+html body .agent-workspace .agent-v2-user{background:var(--blue);color:#fff}
+
+/* Buttons and focus */
+html body .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+html body .btn.primary:hover:not(:disabled){background:var(--blue-strong);border-color:var(--blue-strong)}
+html body .btn:not(.primary):hover:not(:disabled){border-color:var(--orange);background:var(--orange-soft)}
+html body :focus-visible{outline-color:var(--blue)}
+
+/* Sign-in: light page, banner as a framed card, white form card */
+html body .login-shell{--login-edge:#ffffff;--login-accent:#2563eb;background:linear-gradient(125deg,#ffffff 0%,#eef4ff 38%,#fff4e8 72%,#ffe8d1 100%);background-size:200% 200%}
+html body .login-shell::before{background-image:linear-gradient(#2563eb0d 1px,transparent 1px),linear-gradient(90deg,#2563eb0d 1px,transparent 1px)}
+html body .login-glow{opacity:.35}
+html body .login-glow.cyan{background:#93c5fd}
+html body .login-glow.violet{background:#fdba74}
+html body .login-shell .login-story{background:transparent}
+html body .login-shell .login-story::after{display:none}
+html body .login-shell .login-illustration>.login-artwork{border-radius:22px;box-shadow:0 24px 60px rgba(29,78,216,.22),0 0 0 1px rgba(253,186,116,.35)}
+html body .login-shell .login-card{background:#ffffffeb;border:1px solid var(--orange-line);box-shadow:0 24px 64px rgba(37,99,235,.14),0 2px 0 var(--orange) inset}
+html body .login-shell .login-card .screen-heading{color:var(--ink)}
+html body .login-shell .login-submit.btn.primary{background:var(--blue);border-color:var(--blue);box-shadow:0 8px 22px rgba(37,99,235,.28)}
+html body .login-shell .login-submit.btn.primary:hover{background:var(--blue-strong);border-color:var(--blue-strong)}
+html body .login-pillars-label,html body .login-brand-tagline{color:var(--orange-strong)}
+html body .login-identity,html body .login-pillars{border-color:var(--orange-line)}

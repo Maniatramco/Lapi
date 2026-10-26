@@ -4,8 +4,8 @@
 
 /* Conversation rail */
 .agent-rail{display:flex;flex-direction:column;gap:12px;min-height:0;padding:16px;background:#fff;overflow:auto}
-.agent-rail-new{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:0;border-radius:12px;background:#0b1226;color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
-.agent-rail-new:hover:not(:disabled){background:#1d2d6b}.agent-rail-new:disabled{opacity:.55;cursor:default}
+.agent-rail-new{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:0;border-radius:12px;background:#1d4ed8;color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.agent-rail-new:hover:not(:disabled){background:#2563eb}.agent-rail-new:disabled{opacity:.55;cursor:default}
 .agent-workspace .agent-rail h2{margin:6px 4px 0;font-size:11px!important;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#616b85}
 .agent-rail-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .agent-rail-list button{width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:10px;background:none;color:#0e1630;font:inherit;font-size:14px;text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -19,7 +19,7 @@
 /* Welcome */
 .agent-workspace .agent-v2-welcome{align-items:stretch;text-align:left;gap:14px;max-width:880px;width:100%;margin:0 auto;padding:24px 28px}
 .agent-workspace .agent-v2-welcome>.lapi-agent-logo,.agent-workspace .agent-v2-welcome>svg:first-child{display:none}
-.agent-welcome-hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:18px;padding:26px;border-radius:20px;color:#fff;background:linear-gradient(125deg,#0c1533 0%,#1d2d6b 34%,#3c52a8 66%,#6f82da 90%,#8f7fe2 100%)}
+.agent-welcome-hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:18px;padding:26px;border-radius:20px;color:#fff;background:linear-gradient(125deg,#1d4ed8 0%,#2563eb 34%,#60a5fa 66%,#93c5fd 90%,#fdba74 100%)}
 .agent-welcome-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:44px 44px}
 .agent-welcome-hero>*{position:relative}
 .agent-workspace .agent-welcome-hero h2{margin:0;font-size:30px!important;font-weight:700;letter-spacing:-.02em;color:#fff}
@@ -68,7 +68,7 @@
 @media(prefers-reduced-motion:reduce){.agent-workflow-card{transition:none}}
 
 /* Answers as cards: navy question bubble, bordered answer, source chips. */
-.agent-workspace .agent-v2-user{background:#0b1226;color:#fff;border-radius:16px 16px 4px 16px;padding:12px 16px;font-size:15px;line-height:1.5;border:0}
+.agent-workspace .agent-v2-user{background:#1d4ed8;color:#fff;border-radius:16px 16px 4px 16px;padding:12px 16px;font-size:15px;line-height:1.5;border:0}
 .agent-workspace .agent-v2-response{gap:10px}
 .agent-workspace .agent-v2-chat-answer{padding:16px 18px;border-radius:4px 16px 16px 16px;background:#fff;border:1px solid #e1e6f1;font-size:15px;line-height:1.65;color:#0e1630;box-shadow:0 4px 14px #1728640a}
 .agent-workspace .agent-citation{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;margin:0 2px;border-radius:7px;background:#eaf0ff;color:#2f5bea;font-size:12px;font-weight:700;text-decoration:none;vertical-align:1px}

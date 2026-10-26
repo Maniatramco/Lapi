@@ -1,5 +1,5 @@
 /* Animated sign-in: the banner sits on its own edge navy; the form side blends navy into blue and violet and shifts slowly. All motion is horizontal. */
-body .login-shell{--login-edge:#01041e;--login-accent:#2f5bea;position:relative;overflow:hidden;display:block;min-height:100vh;padding:0;background:linear-gradient(125deg,#0c1533 0%,#1d2d6b 28%,#3c52a8 55%,#6f82da 80%,#8f7fe2 100%);background-size:200% 200%;animation:login-shift 18s ease-in-out infinite alternate}
+body .login-shell{--login-edge:#01041e;--login-accent:#2f5bea;position:relative;overflow:hidden;display:block;min-height:100vh;padding:0;background:linear-gradient(125deg,#1d4ed8 0%,#2563eb 28%,#60a5fa 55%,#93c5fd 80%,#fdba74 100%);background-size:200% 200%;animation:login-shift 18s ease-in-out infinite alternate}
 body .login-shell::before{content:"";position:absolute;inset:0;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:44px 44px;pointer-events:none}
 .login-ambient{position:absolute;inset:0;pointer-events:none}
 .login-glow{position:absolute;width:40%;height:50%;border-radius:50%;opacity:.45;filter:blur(130px)}

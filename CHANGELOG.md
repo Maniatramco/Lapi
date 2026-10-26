@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.13.1 - 27 October 2026
+
+Lapi colours: white, blue and light orange
+
+- Every screen uses the Lapi palette: white surfaces, blue for primary actions and headers, and light orange accents.
+- The sidebar is white with a blue selected item and an orange marker; page headers, workflow tracks and the Agent progress capsule use one blue band with a warm orange glow.
+- The sign-in page is light, with the banner shown as a framed card beside a white form.
+
+Colours are defined once in `lapi_frontend/app/lapi-theme.css`; remaining navy fills elsewhere were mapped to the blue scale.
+
 ## v26.1.13.0 - 27 October 2026
 
 Lapi: new name and separate deployment

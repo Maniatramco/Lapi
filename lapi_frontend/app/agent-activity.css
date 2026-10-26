@@ -8,7 +8,7 @@
 .agent-activity[data-task=onboard]{--task:#6f86ff;--glow:#c4cfff}.agent-activity[data-task=think],.agent-activity[data-task=save]{--task:#7f93ff;--glow:#8fe3ff}
 
 .agent-activity-capsule{position:relative;gap:10px;max-width:100%;padding:4px 12px 4px 4px;border-radius:999px;overflow:hidden;color:#fff;
- background:linear-gradient(115deg,#0b1226 0%,#16224f 55%,#2b2a78 100%);
+ background:linear-gradient(115deg,#1d4ed8 0%,#2563eb 55%,#3b82f6 100%);
  box-shadow:0 8px 22px rgba(22,34,79,.28),inset 0 0 0 1px rgba(255,255,255,.09)}
 .agent-activity-capsule::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.12) 50%,transparent 70%);transform:translateX(-100%);animation:aa-sheen 2.8s ease-in-out infinite;pointer-events:none}
 .agent-activity-capsule+strong{display:none}
@@ -33,7 +33,7 @@
 .aa-flow i:nth-child(2){animation-delay:.3s}.aa-flow i:nth-child(3){animation-delay:.6s}.aa-flow i:nth-child(4){animation-delay:.9s}.aa-flow i:nth-child(5){animation-delay:1.2s}
 
 .aa-task{position:relative;display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;border-radius:9px;color:#fff;
- background:linear-gradient(140deg,var(--task),color-mix(in srgb,var(--task) 55%,#16224f));
+ background:linear-gradient(140deg,var(--task),color-mix(in srgb,var(--task) 55%,#2563eb));
  box-shadow:0 0 0 1px rgba(255,255,255,.18),0 0 14px color-mix(in srgb,var(--task) 65%,transparent);animation:aa-work 1.4s ease-in-out infinite}
 
 /* Compact: ringed shield with a small step badge, for tool rows and status lines on light backgrounds. */

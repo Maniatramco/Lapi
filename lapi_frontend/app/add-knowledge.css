@@ -1,6 +1,6 @@
 /* Add new knowledge: connect storage, select documents, vectorize. Brand header matches sign-in and Dashboard. */
 .add-knowledge{display:flex;flex-direction:column;gap:16px;color:#0e1630;max-width:1180px;margin:0 auto;width:100%}
-.add-knowledge-hero{position:relative;overflow:hidden;border-radius:20px;padding:20px 26px 22px;color:#fff;background:linear-gradient(125deg,#0c1533 0%,#1d2d6b 32%,#3c52a8 62%,#6f82da 86%,#8f7fe2 100%);background-size:200% 200%;animation:knowledge-shift 18s ease-in-out infinite alternate}
+.add-knowledge-hero{position:relative;overflow:hidden;border-radius:20px;padding:20px 26px 22px;color:#fff;background:linear-gradient(125deg,#1d4ed8 0%,#2563eb 32%,#60a5fa 62%,#93c5fd 86%,#fdba74 100%);background-size:200% 200%;animation:knowledge-shift 18s ease-in-out infinite alternate}
 .add-knowledge-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(#ffffff0d 1px,transparent 1px),linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:44px 44px}
 .add-knowledge-hero>*{position:relative}
 .add-knowledge-back{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid #ffffff55;background:#ffffff1a;color:#fff;font:inherit;font-size:13px;cursor:pointer}
