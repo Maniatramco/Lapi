@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lapi">
+  <defs>
+    <linearGradient id="lp-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#lp-tile)"/>
+  <!-- P bowl (light orange) shares the stem with the L -->
+  <path d="M21 17.5H33a9.5 9.5 0 0 1 0 19H25" fill="none" stroke="#fdba74" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- L: one stem and a foot (white) -->
+  <path d="M21 16V46.5H44" fill="none" stroke="#ffffff" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- knowledge node inside the bowl -->
+  <circle cx="33" cy="27" r="2.6" fill="#ffffff"/>
+</svg>

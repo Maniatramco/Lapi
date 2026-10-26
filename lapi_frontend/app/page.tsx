@@ -733,7 +733,7 @@ export default function App() {
         </button>
         <div className="brand">
           <span className="brandmark">
-            <img src="/lapi-platform-logo.png" alt="" width={40} height={40} />
+            <img src="/lapi-mark.svg" alt="" width={40} height={40} />
           </span>
           <span className="brand-name">Lapi</span>
         </div>
@@ -761,7 +761,7 @@ export default function App() {
             >
               <Menu size={17} />
             </button>
-            <img className="header-logo" src="/lapi-platform-logo.png" alt="Lapi" width={40} height={40} /><span className="crumb-workspace">Workspace</span>
+            <img className="header-logo" src="/lapi-mark.svg" alt="Lapi" width={40} height={40} /><span className="crumb-workspace">Workspace</span>
             <ChevronRight size={13} />
             <h1 className="workspace-title">{viewLabel(view)}</h1>
           </div>

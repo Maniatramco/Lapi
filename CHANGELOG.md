@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.13.3 - 27 October 2026
+
+Lapi LP monogram
+
+- New Lapi LP monogram: the L and P share one stem, with a white L foot, a light-orange P bowl and a knowledge node, on a blue tile.
+- The monogram is the Lapi Agent icon everywhere (chat, workflow tracks, activity capsule) and is used in the header, sign-in card, password recovery, the sign-in banner and the browser tab icon.
+
+The mark is `lapi_frontend/public/lapi-mark.svg` (PNG copies at 180 and 512 px); the previous shield image was moved to `delete/`.
+
 ## v26.1.13.2 - 27 October 2026
 
 Connect · Vectorize · Ask sign-in banner

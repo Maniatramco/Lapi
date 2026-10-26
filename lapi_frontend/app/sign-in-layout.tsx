@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import Image from "next/image";
 import { LapiBanner } from "./lapi-banner";
 
 const PILLARS = ["Data from anywhere", "One unified knowledge base", "Answers with sources", "Secure by design", "Governed and compliant"];
@@ -11,7 +10,7 @@ export function SignInLayout({ children }: { children: ReactNode }) {
     <div className="login-layout">
       <section className="login-card" aria-labelledby="login-heading">
         <div className="login-identity">
-          <Image src="/lapi-platform-logo.png" alt="" width={48} height={48} />
+          <img src="/lapi-mark.svg" alt="" width={48} height={48} />
           <div><p className="login-brand-name">Lapi</p>
             <p className="login-brand-tagline">Connect · Vectorize · Ask</p></div>
         </div>

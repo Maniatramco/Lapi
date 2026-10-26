@@ -1,6 +1,15 @@
 {
-  "version": "26.1.13.2",
+  "version": "26.1.13.3",
   "releases": [
+    {
+      "version": "26.1.13.3",
+      "date": "2026-10-27",
+      "title": "Lapi LP monogram",
+      "changes": [
+        "New Lapi LP monogram: the L and P share one stem, with a white L foot, a light-orange P bowl and a knowledge node, on a blue tile.",
+        "The monogram is the Lapi Agent icon everywhere (chat, workflow tracks, activity capsule) and is used in the header, sign-in card, password recovery, the sign-in banner and the browser tab icon."
+      ]
+    },
     {
       "version": "26.1.13.2",
       "date": "2026-10-27",

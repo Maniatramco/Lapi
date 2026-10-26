@@ -95,7 +95,7 @@ export function LapiBanner({ className }: { className?: string }) {
     <circle cx="820" cy="90" r="190" fill="url(#lb-glow)" />
 
     {/* Identity */}
-    <image href="/lapi-platform-logo.png" x="408" y="44" width="90" height="90" />
+    <image href="/lapi-mark.svg" x="413" y="58" width="80" height="80" />
     <text x="453" y="250" textAnchor="middle" fontSize="118" fontWeight="800" letterSpacing="-4" fill={BLUE_DEEP}>Lapi</text>
     <text x="453" y="306" textAnchor="middle" fontSize="34" fontWeight="700" letterSpacing="1">
       <tspan fill={INK}>Connect</tspan><tspan fill={ORANGE_DEEP}> · </tspan><tspan fill={INK}>Vectorize</tspan><tspan fill={ORANGE_DEEP}> · </tspan><tspan fill={INK}>Ask</tspan>
