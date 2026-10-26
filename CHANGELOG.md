@@ -1,4 +1,20 @@
-# Aegis change history
+# Lapi change history
+
+The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
+
+Lapi started from Aegis Sprint 1 (`ags_sprint1` at `bb8b5d7`, v26.1.12.18). The Aegis release history up to that point is kept unchanged below, under Inherited Aegis history.
+
+## v26.1.13.0 - 27 October 2026
+
+Lapi: new name and separate deployment.
+
+- Every user-facing name is Lapi: sign-in page, logo and banner wordmark, header, Lapi Agent, About and help text.
+- Code, folders and settings are renamed: `ags_*` folders are `lapi_*`, the Python package is `lapi_app`, environment and runtime settings use the `LAPI_` prefix, the session cookie is `lapi_session`, and the Oracle application owner is `LAPI_OWNER`. The Oracle records table is now `lapi_items`.
+- Added `lapi_deploy/lapi_oci/`: provisioning for a separate `lapi` compartment, network, Ampere A1 VM and Always Free Autonomous Database, with tenancy-wide Always Free checks, and a Docker Compose deployment (web, api, worker, Qdrant, Ollama with local models, pinned local reranker).
+
+Validation: GitHub Actions CI on `lapi_sprint1` and a rebuild on the Lapi VM; see the commit's CI result. Not run: live sign-in, inference, upload or extraction.
+
+# Inherited Aegis history (unchanged)
 
 The application version and in-app feature history are maintained in `ags_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is confirmed separately by its deployment receipt.
 

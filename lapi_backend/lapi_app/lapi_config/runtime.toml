@@ -1,0 +1,145 @@
+# Lapi operational configuration -- edit this file, not Python constants.
+# No API keys, passwords or credential files belong here.
+# OCI runs with profile "oci"; local Oracle Docker uses "local".
+# Priority: saved per-model/dataset settings > explicit environment overrides
+# > selected profile > values below. Restart API AND worker after applying.
+schema_version = 1
+
+[chat]
+# Application ceilings; each registered model's smaller limits still apply.
+LAPI_CHAT_CONTEXT_TOKENS = 262144
+LAPI_CHAT_EVIDENCE_BYTES = 1000000 # UTF-8 bytes, not tokens
+LAPI_CHAT_OUTPUT_TOKENS = 1024
+LAPI_CHAT_AGENT_VECTOR_ONLY = true
+LAPI_CHAT_KNOWLEDGE_MAX_POINTS = 6000
+LAPI_CHAT_SEARCH_CANDIDATES_MAX = 50
+
+[agents]
+LAPI_AGENT_ENGINE = "langgraph"
+
+[local_inference]
+LAPI_OLLAMA_BATCH_SIZE = "" # empty selects the provider default
+LAPI_INFERENCE_DEVICE = "auto"
+
+[context]
+LAPI_CONTEXT_HEADROOM_TOKENS = 512
+
+[retrieval]
+# Saved dataset/model profiles continue to pin their indexing parameters.
+LAPI_CHUNK_SIZE = 1200 # characters
+LAPI_CHUNK_OVERLAP = 180 # characters
+LAPI_RETRIEVED_CHUNKS = 5
+LAPI_EXTRACTION_CHUNKS_PER_FIELD = 5
+LAPI_EXTRACTION_NEIGHBOR_CHUNKS = 1
+LAPI_EXTRACTION_FULL_CONTEXT_CHARS = 12000
+LAPI_EXTRACTION_MAX_EVIDENCE_CHARS = 200000
+
+[reranker]
+LAPI_RERANKER = "none" # "local" is required for production chat/extraction
+LAPI_RERANK_MODEL_DIR = ""
+LAPI_RERANK_CANDIDATES = 25
+LAPI_RERANK_BATCH_SIZE = 8
+LAPI_RERANK_CPU_THREADS = 4
+
+[models]
+# Defaults only. Existing registrations and their saved versions are preserved.
+LAPI_DEFAULT_MODEL_CONTEXT_TOKENS = 32768
+LAPI_DEFAULT_MODEL_OUTPUT_TOKENS = 4096
+LAPI_DEFAULT_EMBEDDING_INPUT_TOKENS = 8192
+LAPI_MODEL_REGISTRATION_TIMEOUT = 60 # seconds
+LAPI_TIMEOUT = 60 # seconds for unregistered/global providers
+
+[extraction]
+# Compact evidence is for local extraction; full source/results are retained.
+LAPI_EVIDENCE_ARRAY_ITEMS = 32
+LAPI_EVIDENCE_FIELD_LIMIT = 64
+LAPI_COMPACT_EVIDENCE_ITEMS = 8
+LAPI_COMPACT_EVIDENCE_QUOTE_CHARS = 160
+
+[worker]
+LAPI_WORKER_MAX_ATTEMPTS = 3
+LAPI_WORKER_LEASE_SECONDS = 900
+LAPI_WORKER_HEARTBEAT_SECONDS = 20
+LAPI_WORKER_POLL_SECONDS = 2
+LAPI_GOAL_MAX_ATTEMPTS = 3
+LAPI_GOAL_LEASE_SECONDS = 900
+
+[uploads]
+LAPI_MAX_UPLOAD_MB = 25
+
+[ocr]
+LAPI_OCR_ENABLED = true
+LAPI_OCR_TIMEOUT = 1200 # seconds
+LAPI_OCR_MAX_TOKENS = 3000
+LAPI_OCR_CONTEXT = 8192
+LAPI_OCR_INPUT_HEADROOM_TOKENS = 2048
+LAPI_OCR_DPI = 180
+LAPI_OCR_BATCH = 128
+LAPI_OCR_MODEL = "qwen2.5vl:3b"
+LAPI_OCR_URL = "" # empty uses the configured local Ollama URL
+LAPI_OCR_FORCE_CPU = false
+LAPI_OCR_KEEP_ALIVE = "0"
+# Dataset-mapped Gemini OCR still uses its pinned extraction registration.
+
+[profiles.local]
+LAPI_OLLAMA_BATCH_SIZE = "128"
+LAPI_RERANKER = "local"
+LAPI_RERANK_MODEL_DIR = "/data/models/reranker"
+LAPI_OCR_URL = "http://ollama:11434"
+LAPI_TIMEOUT = 1200
+
+[profiles.oci]
+LAPI_OLLAMA_BATCH_SIZE = "128"
+LAPI_RERANKER = "local"
+LAPI_RERANK_MODEL_DIR = "/data/models/reranker"
+LAPI_OCR_URL = "http://ollama:11434"
+LAPI_TIMEOUT = 1200
+
+# Validation ranges live here as well. Provider/model contract checks still apply.
+[bounds]
+LAPI_CHAT_CONTEXT_TOKENS = [1, 262144]
+LAPI_CHAT_EVIDENCE_BYTES = [1, 1000000]
+LAPI_CHAT_OUTPUT_TOKENS = [1, 16384]
+LAPI_CHAT_KNOWLEDGE_MAX_POINTS = [1, 100000]
+LAPI_CHAT_SEARCH_CANDIDATES_MAX = [1, 100]
+LAPI_CONTEXT_HEADROOM_TOKENS = [512, 8192]
+LAPI_CHUNK_SIZE = [200, 6000]
+LAPI_CHUNK_OVERLAP = [0, 2000]
+LAPI_RETRIEVED_CHUNKS = [1, 20]
+LAPI_EXTRACTION_CHUNKS_PER_FIELD = [1, 100]
+LAPI_EXTRACTION_NEIGHBOR_CHUNKS = [0, 10]
+LAPI_EXTRACTION_FULL_CONTEXT_CHARS = [1, 200000]
+LAPI_EXTRACTION_MAX_EVIDENCE_CHARS = [1, 1000000]
+LAPI_RERANK_CANDIDATES = [1, 100]
+LAPI_RERANK_BATCH_SIZE = [1, 128]
+LAPI_RERANK_CPU_THREADS = [1, 64]
+LAPI_DEFAULT_MODEL_CONTEXT_TOKENS = [1, 2097152]
+LAPI_DEFAULT_MODEL_OUTPUT_TOKENS = [1, 131072]
+LAPI_DEFAULT_EMBEDDING_INPUT_TOKENS = [1, 2097152]
+LAPI_MODEL_REGISTRATION_TIMEOUT = [5, 1800]
+LAPI_TIMEOUT = [5, 1800]
+LAPI_EVIDENCE_ARRAY_ITEMS = [1, 1000]
+LAPI_EVIDENCE_FIELD_LIMIT = [1, 1000]
+LAPI_COMPACT_EVIDENCE_ITEMS = [1, 64]
+LAPI_COMPACT_EVIDENCE_QUOTE_CHARS = [1, 2000]
+LAPI_WORKER_MAX_ATTEMPTS = [1, 10]
+LAPI_WORKER_LEASE_SECONDS = [60, 7200]
+LAPI_WORKER_HEARTBEAT_SECONDS = [1, 300]
+LAPI_WORKER_POLL_SECONDS = [1, 60]
+LAPI_GOAL_MAX_ATTEMPTS = [1, 10]
+LAPI_GOAL_LEASE_SECONDS = [60, 7200]
+LAPI_MAX_UPLOAD_MB = [1, 100]
+LAPI_OCR_TIMEOUT = [30, 3600]
+LAPI_OCR_MAX_TOKENS = [512, 8192]
+LAPI_OCR_CONTEXT = [2560, 32768]
+LAPI_OCR_INPUT_HEADROOM_TOKENS = [2048, 32768]
+LAPI_OCR_DPI = [100, 300]
+LAPI_OCR_BATCH = [32, 1024]
+
+[choices]
+LAPI_RERANKER = ["none", "local"]
+LAPI_AGENT_ENGINE = ["legacy", "langgraph"]
+LAPI_INFERENCE_DEVICE = ["auto", "cpu", "gpu", "cuda"]
+
+[numeric_strings]
+LAPI_OLLAMA_BATCH_SIZE = [1, 2048]

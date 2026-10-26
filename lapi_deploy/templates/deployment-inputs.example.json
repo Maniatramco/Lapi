@@ -1,0 +1,21 @@
+{
+  "DB_Object": "Y",
+  "DB_ReleaseFile": "lapi_database/release.json",
+  "DeployFrontend": "Y",
+  "DeployBackend": "Y",
+  "SourcePath": "",
+  "Ref": "lapi_sprint1",
+  "Kubeconfig": "C:\\lapi-target\\kubeconfig.yaml",
+  "Context": "",
+  "Namespace": "lapi-oci",
+  "Registry": "",
+  "RegistryNamespace": "",
+  "Platform": "",
+  "AppUrl": "",
+  "WalletPath": "",
+  "DatabaseOwner": "",
+  "DBAdminUser": "ADMIN",
+  "ServiceAlias": "",
+  "ExpectedService": "",
+  "ValidationReference": ""
+}

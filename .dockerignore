@@ -1,8 +1,8 @@
 .git
 .env
 .env.*
-!ags_local_use/.env.example
-!ags_local_use/.env.oracle.example
+!lapi_local_use/.env.example
+!lapi_local_use/.env.oracle.example
 secrets
 backups
 data
@@ -11,7 +11,7 @@ data
 **/.venv
 **/__pycache__
 **/.pytest_cache
-ags_runtime
+lapi_runtime
 delete
 .codex-remote-attachments
 output

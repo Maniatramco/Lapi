@@ -1,0 +1,12 @@
+# Self-hosted inference only. Supply explicit hostnames/URLs; no paid fallback.
+services:
+  api:
+    environment:
+      LAPI_OLLAMA_URL: ${LAPI_REMOTE_OLLAMA_URL:?Set your self-hosted Ollama endpoint}
+      LAPI_OCR_URL: ${LAPI_REMOTE_OCR_URL:?Set your self-hosted OCR endpoint}
+      LAPI_OLLAMA_ENDPOINT_HOSTS: ${LAPI_REMOTE_INFERENCE_HOSTS:?Approve the inference service hostnames}
+  worker:
+    environment:
+      LAPI_OLLAMA_URL: ${LAPI_REMOTE_OLLAMA_URL:?Set your self-hosted Ollama endpoint}
+      LAPI_OCR_URL: ${LAPI_REMOTE_OCR_URL:?Set your self-hosted OCR endpoint}
+      LAPI_OLLAMA_ENDPOINT_HOSTS: ${LAPI_REMOTE_INFERENCE_HOSTS:?Approve the inference service hostnames}

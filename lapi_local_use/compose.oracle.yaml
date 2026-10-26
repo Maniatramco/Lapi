@@ -1,0 +1,157 @@
+name: lapi-oracle
+
+x-backend: &backend
+  build:
+    context: ./lapi_backend
+    args:
+      INSTALL_ORACLE: 'true'
+      INSTALL_LOCAL_EMBEDDINGS: 'false'
+      INSTALL_CLOUD_MODELS: 'false'
+  restart: unless-stopped
+  environment:
+    DATABASE_PROVIDER: oracle
+    ORACLE_HOST: oracle
+    ORACLE_PORT: '1521'
+    ORACLE_SERVICE_NAME: FREEPDB1
+    ORACLE_USER: ${ORACLE_APP_USER:-LAPI_OWNER}
+    ORACLE_PASSWORD_FILE: /run/secrets/lapi_oracle_password
+    LAPI_STORAGE_ROOT: /data
+    LAPI_CONFIG_FILE: /etc/lapi/runtime.toml
+    LAPI_CONFIG_PROFILE: ${LAPI_CONFIG_PROFILE:-local}
+    LAPI_MASTER_KEY: ${LAPI_MASTER_KEY:?Generate the Oracle configuration first}
+    LAPI_BOOTSTRAP_TOKEN: ${LAPI_BOOTSTRAP_TOKEN:?Generate the Oracle configuration first}
+    QDRANT_URL: http://qdrant:6333
+    SEARCH_PROVIDER: qdrant
+    MODEL_PROVIDER: ${MODEL_PROVIDER:-ollama}
+    EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+    LAPI_MODEL: ${LAPI_MODEL:-qwen3:4b}
+    EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+    LAPI_OLLAMA_URL: ${LAPI_OLLAMA_URL:-http://ollama:11434}
+    LAPI_OLLAMA_ENDPOINT_HOSTS: ${LAPI_OLLAMA_ENDPOINT_HOSTS:-ollama}
+    LAPI_ALLOW_MOCK: ${LAPI_ALLOW_MOCK:-false}
+    LANGSMITH_TRACING: 'false'
+    API_INTERNAL_URL: http://api:8000
+    ALLOWED_ORIGINS: ${LAPI_PUBLIC_ORIGIN:-http://localhost:3003},http://localhost:${LAPI_PORT:-3003},http://127.0.0.1:${LAPI_PORT:-3003}
+  secrets: [lapi_oracle_password]
+  volumes:
+    - storage:/data
+    - ./lapi_backend/lapi_app/lapi_config/runtime.toml:/etc/lapi/runtime.toml:ro
+  networks: [private, outbound]
+  depends_on:
+    oracle:
+      condition: service_healthy
+    qdrant:
+      condition: service_started
+    ollama:
+      condition: service_healthy
+
+services:
+  web:
+    build: ./lapi_frontend
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      LAPI_DEPLOYMENT_TARGET: local
+      LAPI_API_LOCATION: local
+      LAPI_WORKER_LOCATION: local
+      LAPI_MODEL_LOCATION: ${LAPI_MODEL_LOCATION:-local}
+    ports:
+      - '${LAPI_BIND_ADDRESS:-127.0.0.1}:${LAPI_PORT:-3003}:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/auth/status').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+    networks: [private, edge]
+  api:
+    <<: *backend
+    command: uvicorn lapi_app.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready',timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 30
+      start_period: 30s
+  worker:
+    <<: *backend
+    command: python -m lapi_app.worker
+    depends_on:
+      api:
+        condition: service_healthy
+  oracle:
+    image: ${ORACLE_IMAGE:-container-registry.oracle.com/database/free:23.26.3.0}
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      ORACLE_APP_USER: ${ORACLE_APP_USER:-LAPI_OWNER}
+    secrets: [oracle_pwd, lapi_oracle_password, lapi_oracle_test_password]
+    volumes:
+      - oracle:/opt/oracle/oradata
+      - ./lapi_local_use/lapi_docker/lapi_oracle/lapi_startup:/opt/oracle/scripts/startup:ro
+      - ./lapi_local_use/lapi_docker/lapi_oracle/healthcheck.sh:/opt/oracle/checkLapiDB.sh:ro
+    healthcheck:
+      test: ['CMD', 'bash', '/opt/oracle/checkLapiDB.sh']
+      interval: 10s
+      timeout: 10s
+      retries: 90
+      start_period: 60s
+    networks: [private]
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    restart: unless-stopped
+    volumes: [qdrant:/qdrant/storage]
+    networks: [private]
+  ollama:
+    image: ollama/ollama:0.35.1
+    restart: unless-stopped
+    environment:
+      OLLAMA_NO_CLOUD: '1'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_CONTEXT_LENGTH: '4096'
+    volumes: [ollama:/root/.ollama]
+    healthcheck:
+      test: ['CMD', 'ollama', 'list']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [private, outbound]
+  oracle-test:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: lapi_testing/docker/Dockerfile.oracle-tests
+    environment:
+      DATABASE_PROVIDER: oracle
+      ORACLE_HOST: oracle
+      ORACLE_USER: LAPI_TEST
+      ORACLE_PASSWORD_FILE: /run/secrets/lapi_oracle_test_password
+      ORACLE_SERVICE_NAME: FREEPDB1
+      LAPI_STORAGE_ROOT: /tmp/lapi-oracle-test
+    secrets: [lapi_oracle_test_password]
+    depends_on:
+      oracle:
+        condition: service_healthy
+    command: python lapi_testing/scripts/oracle_check.py
+    networks: [private]
+
+volumes:
+  oracle:
+  storage:
+  qdrant:
+  ollama:
+secrets:
+  oracle_pwd:
+    file: ${LAPI_ORACLE_SECRET_DIR:-./secrets/oracle}/admin-password
+  lapi_oracle_password:
+    file: ${LAPI_ORACLE_SECRET_DIR:-./secrets/oracle}/app-password
+  lapi_oracle_test_password:
+    file: ${LAPI_ORACLE_SECRET_DIR:-./secrets/oracle}/test-password
+networks:
+  private:
+    internal: true
+  outbound: {}
+  edge: {}

@@ -1,0 +1,345 @@
+{
+  "version": "26.1.13.0",
+  "releases": [
+    {
+      "version": "26.1.13.0",
+      "date": "2026-10-27",
+      "title": "Lapi: new name and separate deployment",
+      "changes": [
+        "The application is now Lapi: sign-in page, logo, header, Agent, About, code folders, Python packages, settings and environment names all use Lapi.",
+        "Lapi runs on its own Always Free OCI resources with its own Autonomous Database, separate from Aegis."
+      ]
+    },
+    {
+      "version": "26.1.12.18",
+      "date": "2026-10-26",
+      "title": "One workflow track everywhere",
+      "changes": [
+        "Every workflow uses the navy phase track: Agent onboarding, tool steps and prompt progress, uploads, extraction and document processing, Files & processing, and storage and connection operations.",
+        "Each step keeps its name and status visible, finished steps fill the line, dots flow into the running step and the running step carries the Lapi shield; phones show a vertical list."
+      ]
+    },
+    {
+      "version": "26.1.12.17",
+      "date": "2026-10-26",
+      "title": "Agent workflow and dataset editing",
+      "changes": [
+        "While Lapi Agent works, a navy capsule shows the Lapi shield in a spinning ring with the current step, such as Searching knowledge or Writing the answer.",
+        "The answer workflow groups its steps into four phases: Understand request, Find evidence, Write answer and Check & save. It opens inline under the agent header as a navy phase track with the agent shield on the live phase; Show all steps keeps every actual step and its timing.",
+        "Edit any dataset from Datasets, or type /Manage in Lapi Agent: rename it, change its description or active state, its models, documents and prompts. In the Agent the dataset card stays in the conversation, and Upload or Extract start /Upload or /Extract there.",
+        "Administrators can rename and describe datasets without changing their models, documents, prompts or access."
+      ]
+    },
+    {
+      "version": "26.1.12.16",
+      "date": "2026-10-26",
+      "title": "Jobs monitoring",
+      "changes": [
+        "Jobs & activity becomes a monitoring view: running and queued work, failures that need attention, jobs completed in the last 24 hours and the average time per completed job.",
+        "Each job shows who started it, its dataset, when it started, how long it took and its progress. Administrators see usernames; other users see You or Another user.",
+        "Activity by person shows each person's running, failed and completed jobs; select a person, job type or search text to filter the list."
+      ]
+    },
+    {
+      "version": "26.1.12.15",
+      "date": "2026-10-26",
+      "title": "Redesigned workspace screens",
+      "changes": [
+        "Lapi Agent opens as a workspace: a conversation rail with recent chats, a wider thread and a context panel, with workflow cards to start Onboard, Upload, Extract or Re-extract.",
+        "Agent commands now start with / (/Onboard, /Upload, /Extract, /ReExtract); a leading @ is still understood. While work runs, the agent icon shows the live step: searching, reranking, writing, checking citations, uploading, indexing or extracting.",
+        "Every workspace screen opens with a brand page band and summary counts: Dataset, Prompt, Extract, Review, Jobs (now status tabs and cards), Model Registration, Model Mapping (with a dataset quick-pick that names missing models), Users and Files & processing.",
+        "Click any Need attention count or failed status to open a pop-up listing each affected file with its processing stages, the stored error, what to do next, Retry and links to the screen that fixes it. Administrator-only fixes tell other users to ask an administrator.",
+        "Buttons follow one compact standard across the workspace: the same size and shape, a brand-blue primary action, white secondary actions and red-outlined delete. New extraction moves from the top bar into the Extract and Review pages.",
+        "About shows the current version, a worked example from predefined prompts to reviewed fields and the golden copy, and a collapsible version history."
+      ]
+    },
+    {
+      "version": "26.1.12.14",
+      "date": "2026-10-26",
+      "title": "Dashboard landing and Add knowledge",
+      "changes": [
+        "Open Dashboard on a brand overview: greeting, an Ask box, summary counts from loaded accessible records, dataset cards and Sources. Asking gives the chat the full page; Back to overview keeps the conversation.",
+        "Quickly add or remove datasets from the Ask box, and choose individual files in a redesigned Add Dataset Knowledge picker. New knowledge in chat is announced with suggested questions; nothing runs until you ask.",
+        "Add new knowledge: any signed-in user can connect Amazon S3, Azure Blob Storage, OCI Object Storage, SharePoint or Google Drive to a dataset they can access, test it, browse and Vectorize up to 20 files. Connections are private to their owner; administrators see all.",
+        "Vectorize indexes copies with the dataset embedding model and publishes them to chat before showing Ready to ask. Extraction and review stay separate. Credentials are encrypted and never shown again; wrong details get specific guidance.",
+        "Read-only snapshots: cloud files are never changed, and later remote changes, deletions and permissions are not synchronized."
+      ]
+    },
+    {
+      "version": "26.1.12.13",
+      "date": "2026-10-26",
+      "title": "Animated sign-in",
+      "changes": [
+        "Show the unchanged Lapi banner on its own edge navy, with dots that travel along the banner's model and knowledge-source connector lines into the shield.",
+        "Blend the sign-in side from navy into blue and violet with a slow horizontal shift, drifting cyan and violet light and a frosted form card showing the Lapi shield, name and tagline.",
+        "Rotate the banner's five platform pillars beneath the form. All motion is horizontal and stops when the device requests reduced motion.",
+        "Place the sign-in form before the artwork in reading order and on mobile. Labels, autocomplete, focus, password visibility, recovery and authentication behavior are unchanged."
+      ]
+    },
+    {
+      "version": "26.1.12.12",
+      "date": "2026-10-24",
+      "title": "Reliable file catalog refresh",
+      "changes": [
+        "Show saved indexing and model mapping status without contacting model services while listing files.",
+        "Keep a slow file-list response visible by preventing overlapping timed refreshes.",
+        "Keep live model validation on retry and extraction submissions, and preserve complete document cleanup."
+      ]
+    },
+    {
+      "version": "26.1.12.11",
+      "date": "2026-10-24",
+      "title": "Admin files and processing",
+      "changes": [
+        "List application source files and their OCI/local storage, indexing, OCR and extraction status under Manage workspace.",
+        "Retry indexing and start new extractions with current dataset model mappings.",
+        "Preview permanent document deletion and remove related originals, revisions, OCR, indexes, result files and affected chats/workflows with resumable cleanup.",
+        "Include visible Save and New extraction buttons from the preceding prepared release."
+      ]
+    },
+    {
+      "version": "26.1.12.10",
+      "date": "2026-10-24",
+      "title": "Visible extraction and Save actions",
+      "changes": [
+        "Start a new extraction directly from the Extract screen with a labeled button.",
+        "Keep New extraction text visible on Review and on small screens.",
+        "Show labeled Save buttons in Model Mapping, model registration and settings instead of tick-only controls."
+      ]
+    },
+    {
+      "version": "26.1.12.9",
+      "date": "2026-10-24",
+      "title": "Rerun with current mapped models",
+      "changes": [
+        "Resolve current dataset models for each new Re-extract, prompt Resume and Reindex submission.",
+        "Rebuild scanned source indexes when the mapped OCR model changes before Review re-extraction.",
+        "Prevent historical retries from replaying outdated model mappings or damaging successful indexes/results.",
+        "Keep accepted jobs pinned and preserve earlier results and original files."
+      ]
+    },
+    {
+      "version": "26.1.12.8",
+      "date": "2026-10-24",
+      "title": "Cloud OCR page budgets",
+      "changes": [
+        "Use the selected OpenAI model's registered context limit for OCR.",
+        "Estimate GPT-4o and GPT-4o Mini image tokens with their cloud tile rules, preserving original pixels.",
+        "Keep cloud-only OCR selection and reject pages that exceed the registered model budget before inference."
+      ]
+    },
+    {
+      "version": "26.1.12.7",
+      "date": "2026-10-24",
+      "title": "Cloud-only dataset OCR",
+      "changes": [
+        "Offer only compatible OpenAI and Gemini OCR models in dataset Model Mapping.",
+        "Automatic OCR uses the compatible cloud extraction default, with no local model fallback.",
+        "Reject local OCR selections and give a clear cloud model selection message when scanned content needs OCR."
+      ]
+    },
+    {
+      "version": "26.1.12.6",
+      "date": "2026-10-24",
+      "title": "Choose OCR per dataset",
+      "changes": [
+        "Choose a compatible OpenAI or Gemini OCR model independently in Model Mapping, alongside Embedding, Chat and Extraction.",
+        "Keep Automatic provider routing or explicitly use the configured local OCR service.",
+        "Apply the choice to new indexing jobs, retain queued work and embedding settings, and reindex existing documents to read their images again."
+      ]
+    },
+    {
+      "version": "26.1.12.5",
+      "date": "2026-10-24",
+      "title": "OpenAI OCR for cloud datasets",
+      "changes": [
+        "Read scanned PDF pages and embedded Word images with the mapped GPT-4o or GPT-4o Mini extraction model.",
+        "Disclose OpenAI image transmission and pin the saved model and credential version for each job.",
+        "Keep embeddings separate, retain original documents and transcription checks, and report cloud failures without falling back to local Ollama."
+      ]
+    },
+    {
+      "version": "26.1.12.4",
+      "date": "2026-10-24",
+      "title": "Summarize selected dataset knowledge",
+      "changes": [
+        "Treat broad knowledge-base summaries as complete read-only questions scoped to the selected dataset or documents.",
+        "Route short summaries through the model instead of assuming a previous extraction answer.",
+        "Preserve hybrid retrieval, reranking, evidence citations and separate processing confirmations."
+      ]
+    },
+    {
+      "version": "26.1.12.3",
+      "date": "2026-10-24",
+      "title": "Multiple models per dataset",
+      "changes": [
+        "Enable several Chat and Extraction models per dataset while retaining one default for each role.",
+        "Keep enabled alternatives when a default changes; protect selected defaults from being disabled.",
+        "Preserve embedding selection, index generation and existing mapping concurrency checks."
+      ]
+    },
+    {
+      "version": "26.1.12.2",
+      "date": "2026-10-23",
+      "title": "Reliable Agent source routing",
+      "changes": [
+        "Use strict OpenAI and Azure routing arguments, with nullable optional values normalized before canonical validation.",
+        "Separate original document questions, semantic search and saved extraction filters so content questions retrieve indexed passages.",
+        "Keep dataset/topic names out of filename filters, preserve selected access scope, and retain hybrid search, reranking and citation validation."
+      ]
+    },
+    {
+      "version": "26.1.12.1",
+      "date": "2026-10-23",
+      "title": "OpenAI Agent routing compatibility",
+      "changes": [
+        "Fix OpenAI and Azure OpenAI Agent routing by declaring each route alternative as an object-shaped function.",
+        "Validate returned arguments against the selected branch and canonical route, and retain provider function names when continuing a tool conversation.",
+        "Preserve dataset access, hybrid retrieval, reranking, cited answer validation and existing model registrations."
+      ]
+    },
+    {
+      "version": "26.1.12.0",
+      "date": "2026-10-23",
+      "title": "Direct Claude for Agent chat",
+      "changes": [
+        "Register a direct Anthropic Claude Chat model using its API key, exact model ID and optional workspace ID.",
+        "Test native function calling before saving, map the model to datasets and select it for Agent or Dataset Knowledge Chat.",
+        "Preserve scoped knowledge retrieval, reranking, citation checks and existing Embedding, Extraction and processing models."
+      ]
+    },
+    {
+      "version": "26.1.11.0",
+      "date": "2026-10-23",
+      "title": "A roomier three-panel Dashboard",
+      "changes": [
+        "Arrange authorized datasets on the left, Dataset Knowledge Chat in the centre and Sources on the right.",
+        "Keep dataset and source panels visible when selecting knowledge; expand chat only when requested.",
+        "Use separate Datasets, Knowledge Chat and Sources views on smaller screens while preserving the conversation and draft."
+      ]
+    },
+    {
+      "version": "26.1.10.3",
+      "date": "2026-10-23",
+      "title": "Restore the light sign-in background",
+      "changes": [
+        "Keep the sign-in page white-toned with subtle blue and cyan background accents matching the supplied banner.",
+        "Preserve the banner image, removed duplicate sign-in branding and supplied shield throughout the application."
+      ]
+    },
+    {
+      "version": "26.1.10.2",
+      "date": "2026-10-23",
+      "title": "Use the supplied shield for Lapi Agent",
+      "changes": [
+        "Use the supplied Lapi shield wherever the shared Agent identity appears: navigation, welcome screens, chat replies, workflow guidance and the floating shortcut.",
+        "Archive the previous Agent artwork; preserve existing icon sizes, accessible labels, chat behavior and workflow status icons."
+      ]
+    },
+    {
+      "version": "26.1.10.1",
+      "date": "2026-10-23",
+      "title": "A blended sign-in background",
+      "changes": [
+        "Remove the repeated Lapi logo and tagline above the sign-in heading.",
+        "Match the sign-in page background to the supplied bannerâ€™s navy tones without changing, cropping, fading or blending the banner image."
+      ]
+    },
+    {
+      "version": "26.1.10.0",
+      "date": "2026-10-23",
+      "title": "Lapi platform branding",
+      "changes": [
+        "Use the supplied Lapi shield logo in the sign-in page, workspace header, navigation, password recovery and browser icon.",
+        "Display the supplied platform banner in full beside sign-in on desktop and below the form on mobile.",
+        "Archive the previous artwork and keep this frontend branding change independently reversible in Git."
+      ]
+    },
+    {
+      "version": "26.1.9.1",
+      "date": "2026-10-21",
+      "title": "A cleaner Dataset Knowledge Chat input",
+      "changes": [
+        "Remove the inner rectangular border, focus outline and background from the Dashboard chat input.",
+        "Keep the rounded outer composer focus indicator and existing keyboard, draft and chat behavior."
+      ]
+    },
+    {
+      "version": "26.1.9.0",
+      "date": "2026-10-19",
+      "title": "Explore metadata as a connected graph",
+      "changes": [
+        "Explore records and expand or collapse their saved connections in place, using the existing access-scoped metadata API.",
+        "Arrange the graph as a network or lineage; pin nodes to preserve their positions during automatic layout.",
+        "Highlight neighbouring records, filter entity types, toggle relationship labels, zoom with the wheel and inspect parallel links separately.",
+        "Keep mouse, touch and keyboard node movement, scoped counts and read-only processing boundaries. No Neo4j service or paid cloud feature is required."
+      ]
+    },
+    {
+      "version": "26.1.8.0",
+      "date": "2026-10-19",
+      "title": "Arrange metadata relationship nodes",
+      "changes": [
+        "Drag each category or record node independently with a mouse, touch or pen; connections and labels follow its position.",
+        "Pan the background, zoom, fit the arranged graph to the screen or restore its starting layout with the reset icon.",
+        "Use arrow keys to adjust a focused node, Shift for larger steps and Home to reset that node. Enter or Space opens its details.",
+        "Keep separate arrangements for scoped desktop and mobile views while the explorer is open, including across list switches and refresh. No metadata or model calls are changed."
+      ]
+    },
+    {
+      "version": "26.1.2.2",
+      "date": "2026-10-19",
+      "title": "Compact chat layout controls",
+      "changes": [
+        "Use icons for showing or hiding Sources and expanding or restoring the Dashboard chat layout.",
+        "Keep descriptive tooltips, accessible labels and larger mobile touch targets for the layout controls.",
+        "Preserve the selected knowledge, draft and conversation when changing the layout."
+      ]
+    },
+    {
+      "version": "26.1.2.1",
+      "date": "2026-10-19",
+      "title": "Give Dataset Knowledge Chat more room",
+      "changes": [
+        "Expand Dataset Knowledge Chat after indexed knowledge is included through the picker, dataset cards, checkboxes or drag and drop.",
+        "Collapse dataset cards, Sources and guidance around the conversation. Keep the knowledge summary and Add Dataset Knowledge available.",
+        "Inspect sources or restore the Dashboard without resetting the chat draft, selected knowledge or conversation. Focus the composer when chat opens; send no question automatically.",
+        "Fit the expanded conversation and composer within the desktop and mobile workspace."
+      ]
+    },
+    {
+      "version": "26.1.2.0",
+      "date": "2026-10-18",
+      "title": "Explore metadata relationships",
+      "changes": [
+        "Open Metadata Relationships from the Dashboard Knowledge Source header, on demand.",
+        "Explore access-scoped datasets, documents, saved extraction runs, prompt versions, review revisions and mapped models.",
+        "Inspect records and relationships with dataset selection, search, graph/list views, zoom, pan and mobile details.",
+        "Lapi blue and navy relationship graph on a light canvas, with matching controls and record details.",
+        "Read-only metadata inspection preserves Dashboard chat and processing workflows; no model calls, graph database or schema changes are required."
+      ]
+    },
+    {
+      "version": "26.1.1.0",
+      "date": "2026-10-17",
+      "title": "Dataset knowledge, within easy reach",
+      "changes": [
+        "Add Dataset Knowledge stays visible in a sticky toolbar while sources and chat scroll, including when Sources is collapsed.",
+        "Combine multiple datasets using the Include dataset checkboxes or the indexed-file picker.",
+        "Drag dataset cards into Sources to include their accessible indexed files, preserving other selected sources.",
+        "Find the current version and version-by-version feature history on the About screen."
+      ]
+    },
+    {
+      "version": "26.1.0.0",
+      "date": "2026-10-17",
+      "title": "Lapi baseline and Dashboard foundation",
+      "changes": [
+        "Document onboarding, uploads, model mappings, extraction, review and the original Lapi Agent.",
+        "Dashboard with dataset cards, permitted Unified Knowledge sources and a separate read-only Dataset Knowledge Chat.",
+        "Chat opens on demand. Greetings and self-contained general questions use the selected model without knowledge lookup; dataset questions retain retrieval, reranking and citations.",
+        "Compact Connections footer with model hosting details. Original Dataset onboarding remains in its existing workspace."
+      ]
+    }
+  ]
+}
