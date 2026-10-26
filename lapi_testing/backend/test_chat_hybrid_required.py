@@ -122,10 +122,10 @@ def test_chat_validation_and_legacy_validation_stay_separate():
 
 def test_guidance_only_publication_keeps_document_entries(system,monkeypatch):
     s=system;d=dataset(s);upload(s,d);snapshot,_=knowledge.sync(s.owner,d['id'])
-    before=core.local_store.json(knowledge._manifest_ref(snapshot))
+    before=knowledge.manifest(snapshot)
     monkeypatch.setattr(knowledge,'GUIDE',dict(knowledge.GUIDE,datasets=knowledge.GUIDE['datasets']+' Updated guidance.'))
     _,result=knowledge.sync(s.owner,d['id'],application_only=True)
-    after=core.local_store.json(knowledge._manifest_ref(snapshot))
+    after=knowledge.manifest(snapshot)
     assert result['removed']==0 and result['upserted']==len(knowledge.GUIDE)
     assert {k:v for k,v in before['points'].items() if v['source_type']!='application'}=={k:v for k,v in after['points'].items() if v['source_type']!='application'}
     assert 'onboarding alone does not upload' in knowledge.GUIDE['datasets'].lower()

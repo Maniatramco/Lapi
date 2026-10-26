@@ -184,7 +184,7 @@ def test_native_vector_count_alone_cannot_verify_an_altered_payload(system,monke
     from test_chat_agent import prepared
     s=system;d,doc,t,ex=prepared(s)
     snapshot,receipt=knowledge.sync(s.owner,d['id'])
-    manifest=core.local_store.json(knowledge._manifest_ref(snapshot));snapshot['settings']['search_provider']='oracle'
+    manifest=knowledge.manifest(snapshot);snapshot['settings']['search_provider']='oracle'
     def scroll(*args,**kw):
         ids=kw['scroll_filter'].must[0].has_id
         points=[SimpleNamespace(id=id,payload=dict(manifest['points'][id])) for id in ids]

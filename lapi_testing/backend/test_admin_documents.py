@@ -1,7 +1,7 @@
 """Real admin auth, current mappings and end-to-end scoped cleanup."""
 from sqlalchemy import select
 from lapi_app import core, worker, document_storage, knowledge
-from test_dataset_models import system, dataset, upload, template, post, mapping, model
+from test_dataset_models import system, dataset, upload, template, post, mapping, model, make_default
 from test_user_management import accounts, login
 
 def setup(accounts,system):
@@ -34,7 +34,10 @@ def test_listing_tracks_status_and_current_model_retry(accounts,system):
     assert row['requires_reindex'] is False
     emb=next(m for m in d['models'] if m['id']==d['embedding_model_id'])
     replacement=model(s,emb['connection_profile_id'],'Current embeddings',['embedding'])
-    mapping(s,d,mappings=d['mappings']+[{'model_id':replacement['id'],'enabled':True}],embedding_model_id=replacement['id'])
+    # A Default embedding change queues every document; cancel it to retry here.
+    assert make_default(s,replacement,acknowledge_index_rebuild=True,allow_external=True).status_code==200
+    queued=next(j for j in s.api.get('/api/jobs').json() if j['target_id']==doc['id'] and j['status']=='queued')
+    post(s,'/api/jobs/'+queued['id']+'/cancel')
     job=post(s,'/api/admin/documents/'+doc['id']+'/retry',{'allow_external':True})
     assert core.store.json('jobs/'+job['id']+'.json')['execution']['model_id']==replacement['id']
     assert worker.run_once()
@@ -86,8 +89,8 @@ def test_end_to_end_cleanup_is_scoped_to_document(accounts,system):
     assert s.api.get('/api/documents/'+other['id']).status_code==200
     assert s.api.get('/api/extractions/'+unrelated['id']).status_code==200
     with core.Session() as session:assert not session.scalar(select(core.Job).where(core.Job.target_id.in_([doc['id'],result['id']])))
-    for path in core.local_store.path('knowledge/marker').parent.glob('*/manifest.json'):
-        manifest=core.local_store.json(str(path.relative_to(core.DATA)).replace('\\','/'))
+    for name in knowledge.catalog.names():
+        manifest=knowledge.manifest(name)
         assert doc['id'] not in manifest['entities'] and result['id'] not in manifest['entities']
         assert not any(doc['id'] in p.get('document_ids',[]) for p in manifest['points'].values())
 

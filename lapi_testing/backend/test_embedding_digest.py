@@ -1,7 +1,7 @@
 """A tag changing its installed weights cannot reuse a previous vector space."""
 import pytest
 from lapi_app import core,providers,ollama_provider as ollama,worker
-from test_dataset_models import system,dataset,upload,conversation,message
+from test_dataset_models import system,dataset,upload,conversation,message,make_default
 
 def test_digest_changes_retrieval_requires_reindex_without_deleting_original(system,monkeypatch):
     s=system;current={'digest':'a'*64}
@@ -15,7 +15,11 @@ def test_digest_changes_retrieval_requires_reindex_without_deleting_original(sys
     assert s.api.get('/api/documents/'+did).json()['requires_reindex']
     assert message(s,conversation(s,d,[did])).status_code==409
     assert core.store.get('documents/'+did+'/original')==original
-    assert s.api.post('/api/documents/'+did+'/reindex',json={}).status_code==200;assert worker.run_once()
+    # New weights are a new embedding space: one document cannot be reindexed
+    # into a second collection. Re-applying the Default rebuilds the index.
+    refused=s.api.post('/api/documents/'+did+'/reindex',json={});assert refused.status_code==409 and 'Re-apply' in refused.text
+    emb=next(m for m in d['models'] if m['id']==d['embedding_model_id'])
+    assert make_default(s,emb,acknowledge_index_rebuild=True).status_code==200;assert worker.run_once()
     new=core.store.json('documents/'+did+'/index.json');assert new['fingerprint']!=old['fingerprint'] and new['embedding_digest']=='b'*64
     assert not s.api.get('/api/documents/'+did).json()['requires_reindex']
 

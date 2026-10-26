@@ -20,7 +20,7 @@ def test_unified_sources_are_real_versioned_and_do_not_index_chat_or_credentials
     routing.write_version(record,content)
     routing.create('conversation',s.owner,'Private discussion',{'messages':[{'text':'DO_NOT_INDEX_CHAT'}]},parent=d['id'])
     snapshot,receipt=knowledge.sync(s.owner,d['id'])
-    manifest=core.local_store.json(knowledge._manifest_ref(snapshot));text=json.dumps(manifest)
+    manifest=knowledge.manifest(snapshot);text=json.dumps(manifest)
     assert 'DO_NOT_INDEX_SECRET' not in text and 'DO_NOT_INDEX_CHAT' not in text
     assert {'dataset','document','document_chunk','extraction','prompt','model','application'}<={p['source_type'] for p in manifest['points'].values()}
     match=query(s,d,source_types=['dataset'])['matches'][0]
@@ -40,7 +40,7 @@ def test_scope_is_enforced_before_search_and_again_on_source_open(system):
 
 def test_updates_delete_old_points_and_canonical_reads_reject_stale_or_poisoned_payload(system):
     s=system;d=dataset(s,'Old name');match=query(s,d,source_types=['dataset'])['matches'][0]
-    payload=core.local_store.json(knowledge._manifest_ref(knowledge.embedding_snapshot(s.owner,d['id'])))['points'][match['knowledge_id']]
+    payload=knowledge.manifest(knowledge.embedding_snapshot(s.owner,d['id']))['points'][match['knowledge_id']]
     forged=dict(payload,text='Invented facts');assert knowledge.hydrate(s.owner,match['knowledge_id'],forged)['text']==match['text']
     record=routing.owned(d['id'],s.owner,'knowledge_base');data=core.store.json(record.ref);data['description']='New description';routing.write_version(record,data)
     assert knowledge.hydrate(s.owner,match['knowledge_id'],payload) is None

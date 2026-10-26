@@ -285,13 +285,15 @@ def test_reindex_prerequisite_failure_stops_extraction_and_allows_full_restart(s
     s=system;d=dataset(s);doc=upload(s,d)['documents'][0];t=template(s);stale_index(doc)
     planner(monkeypatch,proposal(('extract',)));p=plan(s,d,document_ids=[doc['id']],template_id=t['id'])
     response=call(s,p,0);assert response.status_code==200,response.text
-    original_embed=providers.embed
+    from lapi_app import knowledge
+    original_publish=knowledge.publish_document
     def fail(*args,**kwargs):raise providers.ProviderError('Embedding service unavailable')
-    monkeypatch.setattr(providers,'embed',fail);assert worker.run_once()
+    # Unchanged text reuses its vectors, so fail the unified index publication.
+    monkeypatch.setattr(knowledge,'publish_document',fail);assert worker.run_once()
     failed=s.api.get('/api/agent-v2/plans/'+p['id']).json()
     assert failed['calls'][0]['status']=='failed' and failed['calls'][1]['status']=='pending'
     assert s.api.get('/api/extractions').json()==[]
-    monkeypatch.setattr(providers,'embed',original_embed)
+    monkeypatch.setattr(knowledge,'publish_document',original_publish)
     restart=s.api.post('/api/agent-v2/plans/'+p['id']+'/restart',json={'confirmed':True})
     assert restart.status_code==200,restart.text
     assert worker.run_once();assert worker.run_once()

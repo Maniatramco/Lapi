@@ -87,14 +87,32 @@ def test_disabled_catalog_models_and_invalid_defaults_rejected(system):
     assert message(s,c,model_id=g['id']).status_code==409
     assert s.api.post('/api/models',json=body|{'capabilities':['embedding','chat']}).status_code==400
 
+def make_default(s,m,role='embedding',**values):
+    """Record a passing connection test for the model, then choose it as Default."""
+    from lapi_app import workspace_defaults
+    with core.Session() as db:record=db.get(core.Record,m['id'])
+    workspace_defaults.record_test(m['id'],routing.model_data(record).get('connection_profile_version'))
+    return s.api.put('/api/model-registrations/'+m['id']+'/default',json={'role':role}|values)
+
 def test_embedding_generation_changes_fail_closed_and_reindex(system):
     s=system;d=dataset(s);doc=upload(s,d)['documents'][0];c=conversation(s,d,[doc['id']]);emb=next(m for m in d['models'] if m['id']==d['embedding_model_id'])
     replacement=model(s,emb['connection_profile_id'],'Embedding two',['embedding'])
-    updated=mapping(s,d,mappings=d['mappings']+[{'model_id':replacement['id'],'enabled':True}],embedding_model_id=replacement['id'])
-    assert updated['index_generation']==2
-    assert s.api.get('/api/documents/'+doc['id']).json()['requires_reindex']
-    assert message(s,c).status_code==409
-    post(s,'/api/documents/'+doc['id']+'/reindex',{'allow_external':True});assert worker.run_once()
+    # Datasets no longer choose an embedding model; the workspace Default does.
+    config=s.api.get('/api/datasets/'+d['id']+'/models').json()
+    body={k:config[k] for k in ('mappings','default_chat_model_id','default_extraction_model_id')}
+    assert s.api.put('/api/datasets/'+d['id']+'/models',json=body|{'embedding_model_id':replacement['id'],'acknowledge_reindex':True}).status_code==400
+    refused=make_default(s,replacement);assert refused.status_code==409 and 'I understand' in refused.text
+    assert s.api.get('/api/datasets/'+d['id']).json()['embedding_model_id']==emb['id']
+    changed=make_default(s,replacement,acknowledge_index_rebuild=True,allow_external=True);assert changed.status_code==200,changed.text
+    assert changed.json()['embedding_model_id']==replacement['id'] and changed.json()['index']['total']==1
+    updated=s.api.get('/api/datasets/'+d['id']+'/models').json()
+    assert updated['index_generation']==2 and updated['embedding_model_id']==replacement['id']
+    # The old index is gone at once; chat answers only from reindexed documents.
+    assert s.api.get('/api/documents/'+doc['id']).json()['status']=='queued'
+    assert message(s,c).json()['message']['citations']==[]
+    assert worker.run_once()
+    status=s.api.get('/api/workspace/knowledge-index').json()
+    assert status['state']=='ready' and status['indexed']==1 and status['failed']==0
     assert not s.api.get('/api/documents/'+doc['id']).json()['requires_reindex']
     assert message(s,c).status_code==200
     assert core.store.json('documents/'+doc['id']+'/index.json')['index_generation']==2
@@ -102,10 +120,12 @@ def test_embedding_generation_changes_fail_closed_and_reindex(system):
 def test_stale_queued_index_cannot_publish(system):
     s=system;d=dataset(s);uploaded=upload(s,d,run=False);emb=next(m for m in d['models'] if m['id']==d['embedding_model_id'])
     replacement=model(s,emb['connection_profile_id'],'New embedding',['embedding'])
-    mapping(s,d,mappings=d['mappings']+[{'model_id':replacement['id'],'enabled':True}],embedding_model_id=replacement['id'])
-    assert worker.run_once()
-    job=next(j for j in s.api.get('/api/jobs').json() if j['id']==uploaded['jobs'][0]['id']);assert job['status']=='failed';assert 'changed' in job['error']
+    assert make_default(s,replacement,acknowledge_index_rebuild=True).status_code==200
+    job=next(j for j in s.api.get('/api/jobs').json() if j['id']==uploaded['jobs'][0]['id']);assert job['status']=='cancelled'
     with pytest.raises(FileNotFoundError):core.store.get('documents/'+uploaded['documents'][0]['id']+'/index.json')
+    assert worker.run_once()
+    index=core.store.json('documents/'+uploaded['documents'][0]['id']+'/index.json')
+    assert index['index_generation']==2 and index['model_selection']['model_id']==replacement['id']
 
 def test_profile_revision_and_globals_cannot_change_queued_extraction(system,monkeypatch):
     s=system;d=dataset(s);doc=upload(s,d)['documents'][0]

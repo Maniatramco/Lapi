@@ -58,17 +58,19 @@ def test_exact_thread_scope_and_agent_history_isolation(system,monkeypatch):
     assert s.api.get('/api/dataset-chat/conversations/'+legacy['id']).status_code==404
     assert s.api.post('/api/dataset-chat/messages',json=body(a,b,conversation_id=legacy['id'])).status_code==404
 
-def test_different_embedding_spaces_keep_own_citations(system,monkeypatch):
+def test_embedding_change_keeps_one_collection_and_citations(system,monkeypatch):
+    from test_dataset_models import make_default
     s=system;a,one,b,two=setup(s,monkeypatch)
     embedding=next(item for item in b['models'] if 'embedding' in item['capabilities']);original=providers.fingerprint
     monkeypatch.setattr(providers,'fingerprint',lambda cfg=None:original(cfg)+('-second' if (cfg or core.settings()).get('embedding_model')=='mock-embedding-second' else ''))
     replacement=model(s,embedding['connection_profile_id'],'Second embedding',caps=['embedding'],provider_model='mock-embedding-second')
-    mapping(s,b,mappings=b['mappings']+[{'model_id':replacement['id'],'enabled':True}],embedding_model_id=replacement['id'])
-    post(s,'/api/documents/'+two['id']+'/reindex',{'allow_external':True})
+    # One Default embedding model indexes every dataset: no second embedding space.
+    assert make_default(s,replacement,acknowledge_index_rebuild=True,allow_external=True).status_code==200
     for _ in range(10):
         if not worker.run_once():break
-    knowledge.sync(s.owner,b['id']);view=WorkspaceKnowledge(s.owner,[a['id'],b['id']],summary=True)
-    assert len({snapshot['knowledge_collection'] for snapshot in view.snapshots})==2
+    knowledge.sync(s.owner,a['id']);knowledge.sync(s.owner,b['id']);view=WorkspaceKnowledge(s.owner,[a['id'],b['id']],summary=True)
+    assert len({snapshot['knowledge_collection'] for snapshot in view.snapshots})==1
+    assert knowledge.catalog.names()==[view.snapshot['knowledge_collection']] and knowledge.health()['orphan_rows']==0
     records=assemble(view.search('Summarize invoice and policy knowledge',['dataset','document_chunk'],require_rerank=True))
     assert {record['_knowledge_dataset_id'] for record in records}=={a['id'],b['id']}
     for record in records:assert s.api.get('/api/knowledge/published-sources/'+record['knowledge_id'],params={'collection':record['_knowledge_collection'],'dataset_id':record['_knowledge_dataset_id']}).status_code==200

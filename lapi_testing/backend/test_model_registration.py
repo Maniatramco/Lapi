@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from lapi_app import core, providers, worker, dataset_models as routing, model_connections as connections
-from test_dataset_models import system, dataset, mapping, upload, conversation, message, template, post
+from test_dataset_models import system, dataset, mapping, upload, conversation, message, template, post, make_default
 
 
 def body(category='chat', protocol='azure-openai', **values):
@@ -43,6 +43,11 @@ def cloud_transport(monkeypatch, handler):
 
 
 def select(s, d, m, capability):
+    if capability == 'embedding':
+        # Datasets no longer choose an embedding model: change the workspace Default.
+        changed = make_default(s, m, acknowledge_index_rebuild=True, allow_external=True)
+        assert changed.status_code == 200, changed.text
+        return s.api.get('/api/datasets/'+d['id']+'/models').json()
     current = s.api.get('/api/datasets/'+d['id']+'/models').json()
     key = {'chat': 'default_chat_model_id', 'extraction': 'default_extraction_model_id', 'embedding': 'embedding_model_id'}[capability]
     return mapping(s, d, mappings=current['mappings']+[{'model_id': m['id'], 'enabled': True}], **{key: m['id']})
@@ -70,7 +75,9 @@ def test_three_mapping_categories_required_and_optimistic_save(system):
     s = system; d = dataset(s); current = s.api.get('/api/datasets/'+d['id']+'/models').json()
     assert current['models_complete']
     payload = {k: current[k] for k in ('mappings', 'embedding_model_id', 'default_chat_model_id', 'default_extraction_model_id')}
-    for key in ('embedding_model_id', 'default_chat_model_id', 'default_extraction_model_id'):
+    # Chat and Extraction need a dataset choice or a workspace Default; the
+    # embedding model is always the workspace Default.
+    for key in ('default_chat_model_id', 'default_extraction_model_id'):
         assert s.api.put('/api/datasets/'+d['id']+'/models', json=payload|{key: None}).status_code == 400
     saved = s.api.put('/api/datasets/'+d['id']+'/models', json=payload|{'expected_version': current['version']})
     assert saved.status_code == 200
@@ -152,15 +159,16 @@ def test_embedding_edit_requires_mapping_acknowledgement_and_reindex(system, mon
     old = core.store.get('documents/'+doc['id']+'/index.json')
     assert s.api.put('/api/model-registrations/'+m['id'], json=body('embedding', provider_model='new-embedding')).status_code == 200
     assert message(s, c).status_code == 409
-    current = s.api.get('/api/datasets/'+d['id']+'/models').json()
-    payload = {k: current[k] for k in ('mappings', 'embedding_model_id', 'default_chat_model_id', 'default_extraction_model_id')}
-    assert s.api.put('/api/datasets/'+d['id']+'/models', json=payload).status_code == 400
-    applied = s.api.put('/api/datasets/'+d['id']+'/models', json=payload|{'acknowledge_reindex': True})
-    assert applied.status_code == 200 and applied.json()['index_generation'] == selected['index_generation']+1
+    # Re-applying the edited Default deletes the index; it needs the acknowledgement.
+    refused = make_default(s, m, allow_external=True)
+    assert refused.status_code == 409 and 'I understand the knowledge index will be deleted and rebuilt' in refused.text
+    applied = make_default(s, m, acknowledge_index_rebuild=True, allow_external=True)
+    assert applied.status_code == 200, applied.text
+    assert s.api.get('/api/datasets/'+d['id']+'/models').json()['index_generation'] == selected['index_generation']+1
     assert core.store.get('documents/'+doc['id']+'/index.json') == old
     assert s.api.get('/api/documents/'+doc['id']).json()['requires_reindex']
     dimensions[0] = 4
-    post(s, '/api/documents/'+doc['id']+'/reindex', {'allow_external': True}); assert worker.run_once()
+    assert worker.run_once()  # The rebuild already queued every document.
     assert not s.api.get('/api/documents/'+doc['id']).json()['requires_reindex']
     assert core.store.json('documents/'+doc['id']+'/index.json')['dimensions'] == 4
     assert core.store.get('documents/'+doc['id']+'/original') == b'Invoice total 42. Alice is the owner.'
@@ -316,7 +324,8 @@ def test_registered_embeddings_cannot_be_ignored_by_managed_retrieval(system):
     payload = {k: current[k] for k in ('mappings', 'embedding_model_id', 'default_chat_model_id', 'default_extraction_model_id')}
     payload['mappings'].append({'model_id': model['id'], 'enabled': True})
     payload['embedding_model_id'] = model['id']
-    result = s.api.put('/api/datasets/'+d['id']+'/models', json=payload)
+    assert s.api.put('/api/datasets/'+d['id']+'/models', json=payload).status_code == 400
+    result = make_default(s, model, acknowledge_index_rebuild=True, allow_external=True)
     assert result.status_code == 400 and 'Local or Qdrant' in result.text
     assert s.api.get('/api/datasets/'+d['id']+'/models').json()['embedding_model_id'] == current['embedding_model_id']
 
@@ -407,8 +416,7 @@ def test_embedding_parameters_change_requires_remapping_and_reindex(system,monke
     assert s.api.put('/api/model-registrations/'+m['id'],json=body('embedding',context_limit=8192,extra_parameters={})).status_code==200
     with pytest.raises(Exception,match='Embedding model configuration changed'):
         routing.execution_snapshot(routing.owned(d['id'],s.owner,'knowledge_base'),'embedding')
-    current=s.api.get('/api/datasets/'+d['id']+'/models').json()
-    mapping(s,d,**{k:current[k] for k in ('mappings','embedding_model_id','default_chat_model_id','default_extraction_model_id')})
+    assert make_default(s,m,acknowledge_index_rebuild=True,allow_external=True).status_code==200
     new_cfg=routing.execution_snapshot(routing.owned(d['id'],s.owner,'knowledge_base'),'embedding')['settings']
     assert providers.fingerprint(new_cfg)!=old_fingerprint
     assert s.api.get('/api/documents/'+doc['id']).json()['requires_reindex']

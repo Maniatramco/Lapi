@@ -112,9 +112,12 @@ def test_worker_cancelled_index_cannot_publish(monkeypatch):
     with Session.begin() as s:
         s.add(Record(parent_id=dataset.id,id=did,kind='document',owner='alice',name='safe.txt',ref='documents/'+did+'/original',status='queued'))
         s.add(Job(id=jid,owner='alice',kind='index',target_id=did,status='running',lease_token='lease',lease_until=time.time()+900))
-    def interrupted(*args):
+    from lapi_app import knowledge
+    def interrupted(*args,**kwargs):
         with Session.begin() as s:s.get(Job,jid).status='cancelled'
-    monkeypatch.setattr(providers,'put_vectors',interrupted)
+        return {'dimensions':None}
+    # Embed once: indexing publishes only into the unified knowledge index.
+    monkeypatch.setattr(knowledge,'publish_document',interrupted)
     with pytest.raises(InterruptedError):process(jid,'lease')
     with Session() as s:assert s.get(Record,did).status!='ready'
 

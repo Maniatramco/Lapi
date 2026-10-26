@@ -1,4 +1,8 @@
-"""Changing embeddings rebuilds knowledge before a separate, durable rerun."""
+"""Stale indexes are rebuilt before a separate, durable rerun.
+
+A Default embedding change queues every document itself; these reruns cover
+indexes made stale by another pipeline change (OCR, chunking, digest).
+"""
 import pytest
 from sqlalchemy import select
 from lapi_app import core, main, worker, providers, dataset_models as routing
@@ -14,9 +18,9 @@ def prepared(s, count=1):
     record=routing.owned(old['id'],s.owner,'extraction');saved=core.store.json(record.ref)
     saved['review_status']='reviewed';core.store.put_json(record.ref,saved)
     before=core.store.get(record.ref)
-    emb=next(m for m in d['models'] if m['id']==d['embedding_model_id'])
-    replacement=model(s,emb['connection_profile_id'],'Replacement embeddings',['embedding'])
-    changed=mapping(s,d,mappings=d['mappings']+[{'model_id':replacement['id'],'enabled':True}],embedding_model_id=replacement['id'])
+    from test_agent_workspace import stale_index
+    for id in ids:stale_index({'id':id})
+    changed=s.api.get('/api/datasets/'+d['id']+'/models').json()
     body={'source_version':1,'template_id':t['id'],'display_name':'New run_2026-10-15_21-30-00','idempotency_key':'confirmed-rerun','allow_external':True}
     return changed|{'id':d['id']},t,ids,old,body,record.ref,before
 
@@ -91,7 +95,9 @@ def test_external_embedding_consent_is_checked_before_any_submission(system,monk
 def test_failed_reindex_never_starts_extraction(system,monkeypatch):
     s=system;d,t,ids,old,body,ref,before=prepared(s)
     accepted=post(s,'/api/extractions/'+old['id']+'/rerun',body)
-    monkeypatch.setattr(providers,'embed',lambda *args,**kwargs:(_ for _ in ()).throw(providers.ProviderError('Embedding provider quota exceeded')))
+    from lapi_app import knowledge
+    # Unchanged text reuses its vectors, so fail the unified index publication itself.
+    monkeypatch.setattr(knowledge,'publish_document',lambda *args,**kwargs:(_ for _ in ()).throw(providers.ProviderError('Embedding provider quota exceeded')))
     assert worker.run_once()
     done=s.api.get('/api/agent-v2/plans/'+accepted['id']).json()
     assert done['calls'][0]['status']=='failed' and not done['auto_continue']
