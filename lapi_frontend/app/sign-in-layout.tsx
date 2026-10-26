@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { LapiBanner } from "./lapi-banner";
 
-const PILLARS = ["Data from anywhere", "One unified knowledge base", "Answers with sources", "Secure by design", "Governed and compliant"];
+const PILLARS = ["Any data source", "One knowledge base", "Cited answers", "Secure by design", "Governed access"];
 
 /** Keep the sign-in task first in reading order at every viewport size. */
 export function SignInLayout({ children }: { children: ReactNode }) {
