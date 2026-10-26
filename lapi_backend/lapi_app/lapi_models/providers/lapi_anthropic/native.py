@@ -2,6 +2,7 @@
 import copy
 from jsonschema import validate, ValidationError
 from ...validation import ConnectionError
+from ....lapi_agent import token_usage
 
 
 def agent_payload(connection, messages, tools, budget, extra, required):
@@ -78,7 +79,8 @@ def generate(connection, instruction, text, schema, output_tokens, extra):
     if schema:
         raise ConnectionError('Direct Claude supports Chat only; use the configured Extraction model for structured extraction.')
     request = agent_payload(connection, [{'role': 'system', 'content': instruction}, {'role': 'user', 'content': text}], [], output_tokens, extra, False)
-    result, _ = agent_complete(connection, request)
+    result, data = agent_complete(connection, request)
+    token_usage.report(data, 'anthropic')
     return result['text']
 
 

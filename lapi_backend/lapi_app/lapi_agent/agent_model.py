@@ -71,7 +71,7 @@ def schema_decision(messages, tools, cfg, required_tool=False, on_token=None, st
         payload={'model':cfg['model'], 'messages':wire,
             'stream':False, 'think':False, 'format':schema, 'options':options,
             **ollama_provider.request_parameters()}
-        usage_call=token_usage.attempt()
+        usage_call=token_usage.attempt(protocol='ollama',parameters=payload.get('options'))
         if on_token:
             from .agent_stream import qwen_request
             data=qwen_request(payload,cfg['timeout'],on_token)
@@ -395,7 +395,7 @@ def complete(messages, tools, on_token=None):
             payload={'model': ollama_provider.local_model_name(cfg['model']),
                 'messages': messages, 'tools': tools, 'stream': False, 'think': False,
                 'options': options, **ollama_provider.request_parameters()}
-            usage_call=token_usage.attempt()
+            usage_call=token_usage.attempt(protocol='ollama',parameters=payload.get('options'))
             if on_token:
                 from .agent_stream import native_request
                 data=native_request(protocol,payload,cfg,on_token)
@@ -445,7 +445,7 @@ def complete(messages, tools, on_token=None):
             payload['parallel_tool_calls'] = False
             if cfg.get('_agent_require_tool') and cfg['model'].startswith('gpt-4o'):
                 payload.setdefault('temperature', 0)
-        usage_call=token_usage.attempt()
+        usage_call=token_usage.attempt(protocol=protocol,parameters={key:value for key,value in payload.items() if key not in ('model','messages','tools')})
         if on_token:
             from .agent_stream import native_request
             data=native_request(protocol,payload,cfg,on_token)

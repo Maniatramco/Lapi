@@ -2,6 +2,7 @@ import copy
 from urllib.parse import urlsplit
 from jsonschema import validate, ValidationError
 from ...validation import ConnectionError
+from ....lapi_agent import token_usage
 
 
 def strict_routes(connection):
@@ -115,6 +116,7 @@ def generate(connection, instruction, text, schema, output_tokens, extra):
     if schema and connection.c.get('structured_output', True):
         payload['response_format'] = {'type': 'json_schema', 'json_schema': {'name': 'extraction', 'schema': schema, 'strict': True}}
     data = connection.post('/chat/completions', payload)
+    token_usage.report(data, connection.c['protocol'])
     choice = data['choices'][0]
     if choice.get('finish_reason') not in ('stop',):
         raise ConnectionError('Model returned an incomplete or refused response.')
@@ -124,6 +126,7 @@ def generate(connection, instruction, text, schema, output_tokens, extra):
 
 def embed(connection, texts, query, dim, extra, restore_zero_index=False):
     data = connection.post('/embeddings', {'model': connection.model, 'input': texts, **extra, **({'dimensions': dim} if dim else {})})
+    token_usage.report(data, connection.c['protocol'], embedding=True, query=query)
     rows = data['data']
     # Google's protobuf JSON omits the default index value (zero).
     # Only restore that default for its fixed Gemini API host;

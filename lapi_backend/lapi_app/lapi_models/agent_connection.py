@@ -14,7 +14,7 @@ def complete(cfg, messages, tools, on_token=None):
     wire = agent_context.fit(messages, cfg, budget,
         lambda inputs: adapter.agent_payload(connection, inputs, tools, budget, extra, bool(cfg.get('_agent_require_tool'))),
         'tool_selection' if cfg.get('_agent_require_tool') else 'answer')
-    usage_call = token_usage.attempt()
+    usage_call = token_usage.attempt(protocol=connection.c['protocol'], parameters={'max_output_tokens': budget, **extra})
     try:
         result, usage = adapter.agent_complete(connection, wire)
         token_usage.record(usage, connection.c['protocol'], usage_call)
