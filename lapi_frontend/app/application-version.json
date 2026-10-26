@@ -6,7 +6,8 @@
       "date": "2026-10-27",
       "title": "Connect · Unify · Ask",
       "changes": [
-        "The Lapi tagline is now Connect · Unify · Ask: the banner's middle step reads Unify, and the sign-in card uses the same tagline."
+        "The Lapi tagline is now Connect · Unify · Ask: the banner's middle step reads Unify, and the sign-in card uses the same tagline.",
+        "The sign-in form no longer sits in a card: it blends into a light page background that is cleaner behind the form and softly tinted blue and orange at the edges."
       ]
     },
     {

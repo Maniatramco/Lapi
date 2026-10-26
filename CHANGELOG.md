@@ -7,6 +7,7 @@ The application version and in-app feature history are maintained in `lapi_front
 Connect · Unify · Ask
 
 - The Lapi tagline is now Connect · Unify · Ask: the banner's middle step reads Unify, and the sign-in card uses the same tagline.
+- The sign-in form no longer sits in a card: it blends into a light page background that is cleaner behind the form and softly tinted blue and orange at the edges.
 
 ## v26.1.13.5 - 27 October 2026
 
