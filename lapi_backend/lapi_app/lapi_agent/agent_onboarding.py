@@ -80,7 +80,7 @@ def publish_knowledge(data,owner):
             'storage_provider':destination['storage_provider'],
             'bucket':destination.get('oci_storage_bucket','') if destination['storage_provider']=='oci' else ''})
     snapshot,receipt=knowledge.sync(owner,data['dataset_id'])
-    manifest=core.local_store.json(knowledge._manifest_ref(snapshot))
+    manifest=knowledge.manifest(snapshot,vectors=snapshot['settings']['search_provider'] not in ('oracle','qdrant'))
     ids=[]
     for id in required:
         record=access.get_record(id,owner)
@@ -130,6 +130,12 @@ def validate_setup(owner, data):
         cfg = profile['settings']
         if role == 'embedding' and cfg.get('embedding_connection') and cfg['search_provider'] == 'oci':
             raise HTTPException(422, 'This embedding connection requires Local or Qdrant vector storage.')
+        if role == 'embedding':
+            # Datasets never choose an embedding model: the workspace Default indexes all.
+            from .. import workspace_defaults
+            pinned = workspace_defaults.embedding()
+            if pinned and pinned['model_id'] != model.id and not workspace_defaults.same_space(workspace_defaults.pin_embedding(model), pinned['snapshot']):
+                raise HTTPException(422, 'Datasets use the workspace Default embedding model. Choose it, or change the Default in Model Registration.')
         try:
             core.enforce_local_only(cfg)
         except ValueError as exc:

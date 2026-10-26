@@ -50,6 +50,19 @@ def allowed(record, actor, session, datasets=None, models=None):
     return record.owner == actor or (core.is_administrator(actor,session) and record.kind == 'config_profile')
 
 
+def visible_models(datasets, session):
+    """Models mapped to accessible datasets plus the workspace Defaults they use.
+
+    Used by the published knowledge view only; ownership checks stay unchanged.
+    """
+    from .workspace_defaults import WorkspaceDefaults, WORKSPACE
+    models = set(session.scalars(select(relational.DatasetModel.model_id).where(
+        relational.DatasetModel.dataset_id.in_(datasets), relational.DatasetModel.enabled == True)))
+    row = session.get(WorkspaceDefaults, WORKSPACE) if datasets else None
+    if row: models.update(id for id in (row.chat_model_id, row.extraction_model_id, row.embedding_model_id) if id)
+    return models
+
+
 def get_record(id, actor, kind=None):
     with core.Session() as session:
         record = session.get(core.Record, id)

@@ -229,3 +229,5 @@ def document_lock(document_id,*,blocking=True):
 from . import relational
 # Token usage and model price tables (created with the rest of the schema).
 from . import usage_tables
+# Shared knowledge catalog and workspace Default models (created by create_all).
+from . import knowledge_catalog, workspace_defaults

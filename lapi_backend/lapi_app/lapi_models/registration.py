@@ -94,6 +94,22 @@ def previous(r):
     return md, profile, snapshot, cfg.get('embedding_connection' if md['capabilities'] == ['embedding'] else 'model_connection')
 
 
+def test_key(owner, body, cfg, secret):
+    """Identity of a tested connection: same owner, model, settings and credentials."""
+    import hashlib
+    keys = routing.EMBED_KEYS if body.category == 'embedding' else routing.MODEL_KEYS
+    identity = {'owner': owner, 'category': body.category, 'provider_model': body.provider_model.strip(),
+                'settings': {k: cfg.get(k) for k in keys}, 'credentials': hashlib.sha256(json.dumps(secret, sort_keys=True).encode()).hexdigest()}
+    return 'model/connection-tests/' + hashlib.sha256(json.dumps(identity, sort_keys=True, default=str).encode()).hexdigest() + '.json'
+
+
+def passed_test(owner, body, cfg, secret):
+    """A passing probe of exactly this configuration in the last day."""
+    try: receipt = core.store.json(test_key(owner, body, cfg, secret))
+    except (FileNotFoundError, ValueError): return None
+    return receipt if time.time() - receipt.get('passed_at', 0) <= 86400 else None
+
+
 def prepare(body, owner, existing=None):
     if not body.name.strip():
         raise HTTPException(400, 'Enter a model name.')
@@ -195,6 +211,9 @@ def save(body, owner, existing=None):
     from .registry import equivalent
     if existing and routing.model_data(existing).get('archived'):
         raise HTTPException(409,'This registration is archived. Edit its replacement model instead.')
+    if existing and not body.enabled:
+        from .. import workspace_defaults
+        workspace_defaults.guard_disable(existing.id)
     duplicate=equivalent(owner,cfg,body.provider_model.strip(),capabilities,existing.id if existing else None) if not secret else None
     if duplicate:
         raise HTTPException(409,'An equivalent model is already registered as '+duplicate.name+'. Use Model Mapping or edit that registration.')
@@ -214,11 +233,14 @@ def save(body, owner, existing=None):
     core.local_store.put_json(ref, data)
     model_version = existing.version + 1 if existing else 1
     model_ref = f'model/{model_id}/v{model_version}.json'
+    tested = passed_test(owner, body, cfg, secret)
     now = time.time()
     history = parameter_history_entry(existing, cfg, capabilities, owner, model_version, now)
     core.store.put_json(model_ref, {'name': body.name.strip(), 'provider_model': body.provider_model.strip(),
         'connection_profile_id': profile_id, 'connection_profile_version': version, 'capabilities': capabilities, 'enabled': body.enabled,
-        'parameter_history': history})
+        'parameter_history': history,
+        # Only a version whose connection test passed can become a workspace Default.
+        **({'connection_test': {'connection_profile_version': version, 'passed_at': tested['passed_at']}} if tested else {})})
     with core.Session.begin() as session:
         if profile:
             p = session.get(core.Record, profile.id)
@@ -316,6 +338,7 @@ def install_routes(app, auth):
                     else:
                         adapter.generate('Give a brief answer.', 'Say ready.')
                         result = {'response_received': True}
+                core.store.put_json(test_key(owner, body, cfg, secret), {'passed_at': time.time(), 'category': body.category})
                 if body.category == 'extraction':
                     effective['extraction'] = effective_snapshot()
                 elif body.category == 'chat' and 'chat' not in effective and body.connection.protocol == 'ollama' and 'response_received' in result and not result.get('agent_tool_call_validated'):

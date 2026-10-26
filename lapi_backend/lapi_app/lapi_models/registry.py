@@ -87,7 +87,13 @@ def consolidate(canonical,apply=False):
             ref='diagnostics/model-consolidation/'+str(int(time.time()))+'.json'
             # Save a recoverable snapshot BEFORE any changes.
             core.local_store.put_json(ref,report)
-            from .. import main
+            from .. import main, workspace_defaults
+            # Workspace Defaults follow their canonical replacements. A changed
+            # Embedding Default deletes the old index; the jobs below rebuild it.
+            current=workspace_defaults.current()
+            for role in ('chat','extraction'):
+                if current[role] in aliases:workspace_defaults.replace_default(role,aliases[current[role]]['replacements'][role],admin.id)
+            if current['embedding']!=canonical['embedding']:workspace_defaults.replace_embedding(targets['embedding'],admin.id)
             for change in changes:
                 data=change['after'];body=routing.MappingInput(**{k:data[k] for k in ('mappings',*keys.values())},acknowledge_reindex=True)
                 with core.document_lock('dataset-'+change['record'].id):routing.save_mappings(change['record'],body)

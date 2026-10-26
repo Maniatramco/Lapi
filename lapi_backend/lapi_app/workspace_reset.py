@@ -9,12 +9,13 @@ from pathlib import Path
 from sqlalchemy import select,delete,func
 from fastapi import Depends,HTTPException
 from pydantic import BaseModel
-from . import core,relational,dataset_access as access,providers
+from . import core,relational,dataset_access as access,providers,knowledge_catalog
 
 KINDS={'knowledge_base','document','extraction','template','conversation','agent_plan','agent_onboarding','temporary_session','temporary_document'}
 FOLDERS=('knowledge_base','documents','extraction','template','conversation','agent_plan','agent_onboarding',
          'temporary_session','temporary_document','temporary-sessions','temporary-documents','jobs','agent-checkpoints','agent-state','executions','knowledge','vectors','upload-receipts')
-TABLES=(relational.Review,relational.Extraction,relational.Prompt,relational.Document,relational.DatasetModel,relational.UserDataset,relational.Dataset)
+# The shared knowledge catalog is archived and cleared with its vector collections.
+TABLES=(relational.Review,relational.Extraction,relational.Prompt,relational.Document,relational.DatasetModel,relational.UserDataset,relational.Dataset)+knowledge_catalog.TABLES
 FLAG='configuration/workspace-maintenance.json'
 
 def paused():
@@ -62,7 +63,7 @@ def _restore(id):
             if not session.get(core.Job,item['id']):session.add(core.Job(**item))
         session.flush()
         for model in TABLES:
-            for item in manifest['tables'][model.__name__]:
+            for item in manifest['tables'].get(model.__name__,[]):
                 keys={column.key:item[column.key] for column in model.__table__.primary_key}
                 existing=session.get(model,keys)
                 if existing:
