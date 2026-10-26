@@ -51,8 +51,7 @@ if cur.fetchone()[0] == 0:
     cur.execute(f'create user LAPI_OWNER identified by "{app}" quota unlimited on data')
     print('LAPI-VM> created LAPI_OWNER')
 else:
-    cur.execute(f'alter user LAPI_OWNER identified by "{app}"')
-    print('LAPI-VM> LAPI_OWNER already exists; password refreshed')
+    print('LAPI-VM> LAPI_OWNER already exists')
 cur.execute('grant create session, create table, create sequence, create view, create procedure to LAPI_OWNER')
 try:
     cur.execute('grant db_developer_role to LAPI_OWNER')
