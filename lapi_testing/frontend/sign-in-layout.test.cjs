@@ -22,8 +22,8 @@ test('sign-in task precedes supporting artwork and exposes the product identity 
   React.createElement('form',null,React.createElement('label',{htmlFor:'username'},'Username'),React.createElement('input',{id:'username',autoComplete:'username'}))));
  assert.ok(html.indexOf('id="login-heading"')<html.indexOf('aria-label="Lapi platform artwork"'));
  assert.match(html,/<p class="login-brand-name">Lapi<\/p>/);
- assert.match(html,/<p class="login-brand-tagline">Connect · Vectorize · Ask<\/p>/);
+ assert.match(html,/<p class="login-brand-tagline">Connect · Unify · Ask<\/p>/);
  assert.match(html,/aria-labelledby="login-heading"/);
- assert.match(html,/aria-label="Lapi: connect your data, vectorize it into one knowledge base, and ask"/);
+ assert.match(html,/aria-label="Lapi: connect your data, unify it into one knowledge base, and ask"/);
  assert.match(html,/autoComplete="username"/i);
 });

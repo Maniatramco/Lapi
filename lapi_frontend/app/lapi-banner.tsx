@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 
-/* Sign-in banner: Connect -> Vectorize -> Ask, flowing left to right in the Lapi palette.
+/* Sign-in banner: Connect -> Unify -> Ask, flowing left to right in the Lapi palette.
    Drawn in a 1280x900 space; the Lapi mark sits at the centre of the knowledge core. */
 
 const BLUE = "#2563eb", BLUE_DEEP = "#1d4ed8", BLUE_SOFT = "#eaf1ff", ORANGE = "#fdba74",
@@ -62,7 +62,7 @@ function FlowDot({ path, tone, delay }: { path: string; tone: "blue" | "orange";
   })}</>;
 }
 
-/** The Connect -> Vectorize -> Ask story as one responsive SVG. */
+/** The Connect -> Unify -> Ask story as one responsive SVG. */
 export function LapiBanner({ className }: { className?: string }) {
   const orbit: ReactElement[] = [];
   for (let i = 0; i < 18; i++) {
@@ -70,7 +70,7 @@ export function LapiBanner({ className }: { className?: string }) {
     orbit.push(<circle key={i} cx={CORE.x + Math.cos(a) * r} cy={CORE.y + Math.sin(a) * r} r={i % 3 ? 3 : 4.5}
       fill={i % 3 ? "#ffffff" : ORANGE} opacity={i % 3 ? 0.75 : 1} />);
   }
-  return <svg className={className} viewBox="0 0 1280 900" role="img" aria-label="Lapi: connect your data, vectorize it into one knowledge base, and ask"
+  return <svg className={className} viewBox="0 0 1280 900" role="img" aria-label="Lapi: connect your data, unify it into one knowledge base, and ask"
     fontFamily="Inter, ui-sans-serif, system-ui, sans-serif">
     <defs>
       <linearGradient id="lb-bg" x1="0" y1="0" x2="1" y2="1">
@@ -97,13 +97,13 @@ export function LapiBanner({ className }: { className?: string }) {
     {/* Identity */}
     <image href="/lapi-wordmark.svg" x="573" y="36" width="134" height="110" />
     <text x="640" y="190" textAnchor="middle" fontSize="34" fontWeight="700" letterSpacing="1">
-      <tspan fill={INK}>Connect</tspan><tspan fill={ORANGE_DEEP}> · </tspan><tspan fill={INK}>Vectorize</tspan><tspan fill={ORANGE_DEEP}> · </tspan><tspan fill={INK}>Ask</tspan>
+      <tspan fill={INK}>Connect</tspan><tspan fill={ORANGE_DEEP}> · </tspan><tspan fill={INK}>Unify</tspan><tspan fill={ORANGE_DEEP}> · </tspan><tspan fill={INK}>Ask</tspan>
     </text>
     <text x="640" y="228" textAnchor="middle" fontSize="22" fill={MUTED}>Bring data from anywhere into one unified knowledge base, then ask.</text>
 
     {/* Stage row */}
     <StageLabel n={1} label="CONNECT" x={TILE.x} />
-    <StageLabel n={2} label="VECTORIZE" x={CORE.x} anchor="middle" />
+    <StageLabel n={2} label="UNIFY" x={CORE.x} anchor="middle" />
     <StageLabel n={3} label="ASK" x={ASK.x} />
 
     {/* 1 Connect: sources stacked on the left */}
@@ -116,7 +116,7 @@ export function LapiBanner({ className }: { className?: string }) {
       <text x={TILE.x + 72} y={tileMid(i) + 7} fontSize="20" fontWeight="600" fill={INK}>{name}</text>
     </g>)}
 
-    {/* 2 Vectorize: the knowledge core carries the Lapi mark */}
+    {/* 2 Unify: the knowledge core carries the Lapi mark */}
     <circle cx={CORE.x} cy={CORE.y} r={CORE.r + 70} fill="url(#lb-glow)" />
     <circle className="lapi-banner-ring" cx={CORE.x} cy={CORE.y} r={CORE.r + 16} fill="none" stroke={ORANGE} strokeWidth="3" strokeDasharray="6 12" />
     <circle cx={CORE.x} cy={CORE.y} r={CORE.r} fill="url(#lb-core)" />

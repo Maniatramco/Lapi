@@ -2,6 +2,12 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.13.6 - 27 October 2026
+
+Connect · Unify · Ask
+
+- The Lapi tagline is now Connect · Unify · Ask: the banner's middle step reads Unify, and the sign-in card uses the same tagline.
+
 ## v26.1.13.5 - 27 October 2026
 
 Horizontal sign-in banner

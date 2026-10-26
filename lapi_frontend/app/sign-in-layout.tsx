@@ -12,7 +12,7 @@ export function SignInLayout({ children }: { children: ReactNode }) {
         <div className="login-identity">
           <img src="/lapi-mark.svg" alt="" width={48} height={48} />
           <div><p className="login-brand-name">Lapi</p>
-            <p className="login-brand-tagline">Connect · Vectorize · Ask</p></div>
+            <p className="login-brand-tagline">Connect · Unify · Ask</p></div>
         </div>
         {children}
         <div className="login-pillars">
