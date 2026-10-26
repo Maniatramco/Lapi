@@ -32,7 +32,7 @@ LABELS = {
     'read_document_section': 'Reading document section', 'describe_results': 'Describing saved fields',
     'aggregate_results': 'Calculating over saved results', 'compare_records': 'Comparing records',
     'get_workflow_status': 'Checking workflow status', 'get_dataset_onboarding_status': 'Checking dataset onboarding',
-    'update_plan': 'Planning', 'load_skill': 'Loading skill', 'search_my_history': 'Searching your history',
+    'update_plan': 'Planning', 'load_skill': 'Loading skill', 'list_skills': 'Reading skills', 'read_dataset_instructions': 'Reading dataset instructions', 'search_my_history': 'Searching your history',
     'prepare_workflow': 'Preparing workflow', 'prepare_recovery': 'Preparing recovery',
     'prepare_dataset_onboarding': 'Preparing dataset onboarding', 'propose_instruction_update': 'Drafting instructions'}
 GREETING = re.compile(r"^\s*(hi|hello|hey|good (?:morning|afternoon|evening)|thanks|thank you|ok(?:ay)?|cool|great)[\s!.]*$", re.I)
@@ -113,7 +113,7 @@ class AgenticChat:
         self.trace = []; self.model_calls = 0; self.seen = {}; self.observed_bytes = 0
         self.max_steps = setting('LAPI_AGENT_MAX_STEPS'); self.max_calls = setting('LAPI_AGENT_MAX_CALLS_PER_STEP')
         self.budget = setting('LAPI_AGENT_OBSERVATION_BYTES'); self.parallel = setting('LAPI_AGENT_PARALLEL_READS')
-        self.validation = {'attempts': []}; self.ended = None; self.phase = 'answered'; self.skip_prefetch = False
+        self.validation = {'attempts': []}; self.ended = None; self.phase = 'answered'
 
     # ---------------------------------------------------------------- prompt
     def system(self):
@@ -230,16 +230,24 @@ class AgenticChat:
         return out
 
     # ---------------------------------------------------------------- loop
-    def prefetch(self, text):
-        """Search for the question before the first model call (one round trip saved)."""
-        if self.skip_prefetch or not self.tools.body.dataset_id or GREETING.match(text) or text.lstrip().startswith('/'): return []
-        call = {'id': 'prefetch_search', 'name': 'search_knowledge', 'arguments': {'query': text[:2000], 'top_k': 8}}
+    def prefetch(self, text, preload=()):
+        """Hybrid search + rerank for the question before the first model call (AGENTS.md
+        order: scope -> retrieval -> rerank -> generate -> validate), plus any exact catalog
+        reads the request needs as supplementary evidence. One round trip saved."""
+        calls = [{'id': 'prefetch_search', 'name': 'search_knowledge',
+                  'arguments': {'query': text[:2000], 'top_k': 8,
+                                'scope': 'selected_dataset' if self.tools.body.dataset_id else 'accessible_datasets'}}]
+        calls += [{'id': f'prefetch_{i}', 'name': name, 'arguments': args} for i, (name, args) in enumerate(preload)]
         with self.progress.step('Searching knowledge'):
-            content = self.execute(call)
-        if json.loads(content).get('error'): return []
+            contents = [self.execute(c) for c in calls]
+        first = json.loads(contents[0])
+        if first.get('error') and re.search(r'rerank', first['error'], re.I):
+            raise providers.ProviderError(first['error'])  # never answer as if reranking ran
+        kept = [(c, content) for c, content in zip(calls, contents) if not json.loads(content).get('error') or c['name'] != 'search_knowledge']
+        if not kept: return []
         return [{'role': 'assistant', 'content': '', 'tool_calls': [
-                    {'id': call['id'], 'type': 'function', 'function': {'name': call['name'], 'arguments': call['arguments']}}]},
-                {'role': 'tool', 'tool_call_id': call['id'], 'tool_name': call['name'], 'content': content}]
+                    {'id': c['id'], 'type': 'function', 'function': {'name': c['name'], 'arguments': c['arguments']}} for c, _ in kept]}] + [
+                {'role': 'tool', 'tool_call_id': c['id'], 'tool_name': c['name'], 'content': content} for c, content in kept]
 
     def loop(self, messages, steps):
         """Model/tool iterations until a text answer, a proposal, or the step cap."""
@@ -274,9 +282,9 @@ class AgenticChat:
             output = self.call(messages, [], 'final_answer')
         return output.get('text') or ''
 
-    def run(self, history, text):
+    def run(self, history, text, question=None, preload=()):
         messages = self.system() + history + [{'role': 'user', 'content': text}]
-        messages += self.prefetch(text)
+        messages += self.prefetch(question or text, preload)
         answer = self.loop(messages, self.max_steps)
         if self.ended: return self.ended_answer()
         answer, follow_ups = split_follow_ups(answer_check.normalize(answer, self.tools.sources))
@@ -314,25 +322,16 @@ class AgenticChat:
         return 'Review the recovery action below and confirm it. Nothing has run yet.', []
 
 
-def fast_answer(tools, text):
-    """Exact catalog questions need no model call."""
+def catalog_reads(tools, text):
+    """Exact catalog questions preload the complete catalog as supplementary evidence.
+    The model still answers from it after hybrid search, and the answer is validated."""
     value = ' '.join(text.lower().strip(' ?.!').split())
-    plain = re.fullmatch(r'(?:please )?(?:list|show)(?: me)?(?: all)? (?:the )?(documents|files|datasets|prompts|prompt templates)(?: in (?:this|the) dataset)?', value)
-    count = re.fullmatch(r'how many (documents|files|datasets|prompts|prompt templates)(?: are there| do i have| are in (?:this|the) dataset| in (?:this|the) dataset)?', value)
-    match = plain or count
-    if not match: return None
+    match = (re.fullmatch(r'(?:please )?(?:list|show)(?: me)?(?: all)? (?:the )?(documents|files|datasets|prompts|prompt templates)(?: in (?:this|the) dataset)?', value)
+             or re.fullmatch(r'how many (documents|files|datasets|prompts|prompt templates)(?: are there| do i have| are in (?:this|the) dataset| in (?:this|the) dataset)?', value))
+    if not match: return []
     kind = {'files': 'documents', 'prompt templates': 'prompts'}.get(match[1], match[1])
-    if kind != 'datasets' and not tools.body.dataset_id: return None
-    result = tools.run('list_' + kind, {})
-    data = result['data']; n = result['citations'][0]
-    total = data[{'documents': 'document_count', 'datasets': 'dataset_count', 'prompts': 'prompt_count'}[kind]]
-    items = data[kind]
-    noun = {'documents': 'document', 'datasets': 'dataset', 'prompts': 'prompt template'}[kind]
-    head = f'There {"is" if total == 1 else "are"} {total} {noun}{"" if total == 1 else "s"}' + (f' in {data["dataset"]}' if data.get('dataset') else '') + f' [{n}].'
-    if count or not items: return head
-    lines = [f'- {i["name"]}' + (f' · {i["status"]}' if i.get('status') else '') for i in items[:100]]
-    more = f'\n\n…and {total - len(items)} more.' if total > len(items) else ''
-    return head + '\n\n' + '\n'.join(lines) + more
+    if kind != 'datasets' and not tools.body.dataset_id: return []
+    return [('list_' + kind, {})]
 
 
 def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_progress=None):
@@ -357,17 +356,9 @@ def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_pr
         history = history_messages(data, turns)
         text = body.text
         if body.attached_filenames: text += '\nAttached document filenames: ' + json.dumps(body.attached_filenames)
-        command = _optional('chat_commands', 'expand', tools, text, default=None)
-        follow_ups = []
-        if command and command.get('answer'):
-            answer = command['answer']
-        else:
-            if command and command.get('text'): text = command['text']; agent.skip_prefetch = True
-            answer = fast_answer(tools, body.text) if not history else None
-            if answer is None:
-                answer, follow_ups = agent.run(history, text)
-            else:
-                agent.validation['result'] = 'catalog'
+        command = _optional('chat_commands', 'expand', tools, text, default=None) or {}
+        preload = list(command.get('reads', [])) or catalog_reads(tools, body.text)
+        answer, follow_ups = agent.run(history, command.get('text') or text, question=body.text, preload=preload)
         citations_text, citations = answer_check.rich(tools.sources, answer)
         answer = citations_text
         if on_delta:

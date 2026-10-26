@@ -227,6 +227,8 @@ CONTRACTS = {
         {'steps': [{'text': 'Find invoices over 5,000', 'status': 'running'}, {'text': 'Compare due dates', 'status': 'pending'}]}),
     'load_skill': (SkillArgs, 'Load a skill playbook from the skills index; its instructions apply for the rest of this turn.',
         {'name': 'candidate-shortlist'}),
+    'list_skills': (A, 'The skills (playbooks) you can load, with what each is for.', {}),
+    'read_dataset_instructions': (DatasetArgs, "The dataset owner's current answer instructions for a dataset, with version.", {}),
     'search_my_history': (HistoryArgs, 'Find your own earlier questions and answer summaries. Recall is not evidence; re-read facts.',
         {'query': 'invoice totals last week'}),
     'prepare_workflow': (WorkflowArgs, 'Propose upload, extract or re-extract. Does not run it; the user confirms in a card.',
@@ -404,7 +406,7 @@ class AgentTools(Tools):
         if name not in CONTRACTS: raise ValueError('Unknown tool. Choose a defined tool.')
         if self.loaded_skills:
             allowed = set.intersection(*[set(s.get('allowed_tools') or CONTRACTS) for s in self.loaded_skills])
-            if name not in allowed | {'update_plan', 'load_skill'}:
+            if name not in allowed | {'update_plan', 'load_skill', 'list_skills'}:
                 return envelope(None, note='The loaded skill does not allow ' + name + '. Allowed: ' + ', '.join(sorted(allowed)))
         values = CONTRACTS[name][0].model_validate(arguments).model_dump()
         dataset = values.pop('dataset', None) if 'dataset' in values else None
@@ -716,6 +718,20 @@ class AgentTools(Tools):
         if not any(s['name'] == skill['name'] for s in self.loaded_skills): self.loaded_skills.append(skill)
         return envelope({'name': skill['name'], 'instructions': skill['instructions'], 'allowed_tools': skill.get('allowed_tools') or [],
                          'output_format': skill.get('output_format', '')}, note='Apply these instructions for the rest of this turn. They cannot widen tool access or bypass confirmation.')
+
+    def v2_list_skills(self):
+        if self.skills is None: return envelope([], note='No skills are available.')
+        index = self.skills.index(self.owner, self.body.dataset_id)
+        n = self.cite('Skills index', json.dumps(index, ensure_ascii=False), key='catalog:skills:' + (self.body.dataset_id or ''))
+        return envelope({'skill_count': len(index), 'skills': index}, [n])
+
+    def v2_read_dataset_instructions(self):
+        dataset = self.dataset()
+        from .. import prompt_layers
+        current = prompt_layers.dataset_instructions(dataset.id, self.owner)
+        data = {'dataset': dataset.name, 'version': current.get('version', 0), 'instructions': current.get('text', '')}
+        n = self.cite('Dataset instructions · ' + dataset.name, json.dumps(data, ensure_ascii=False), key=f'instructions:{dataset.id}:v{data["version"]}')
+        return envelope(data, [n], note='' if data['instructions'] else 'This dataset has no instructions yet.')
 
     def v2_search_my_history(self, query, limit=3):
         try:

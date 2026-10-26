@@ -33,17 +33,23 @@ def test_loaded_skill_narrows_tools_for_the_turn(system, monkeypatch):
     seen = scripted(monkeypatch, tool('load_skill', name='catalog-only'), tool('search_documents', query='owner'),
                     {'text': 'Done.', 'calls': []})
     p = plan(s, d, text='/skill catalog-only what files are here')
-    results = [json.loads(m['content']) for m in seen[2]['messages'] if m.get('role') == 'tool']
-    assert results[0]['data']['name'] == 'catalog-only'
-    assert 'does not allow search_documents' in results[1]['note']
+    results = {m['tool_name']: json.loads(m['content']) for m in seen[2]['messages'] if m.get('role') == 'tool'}
+    assert results['load_skill']['data']['name'] == 'catalog-only'
+    assert 'does not allow search_documents' in results['search_documents']['note']
     assert thread_message(s, p)['skills_used'] == ['catalog-only']
 
 
-def test_skill_command_lists_skills_without_a_model(system, monkeypatch):
+def test_skill_command_preloads_the_cited_skills_index(system, monkeypatch):
     s = system; d = dataset(s); upload(s, d); knowledge.sync(s.owner, d['id']); agentic(monkeypatch)
-    monkeypatch.setattr(agent_model, 'complete', lambda *a, **k: pytest.fail('Listing skills needs no model.'))
+    seen = []
+    def complete(messages, tools, on_token=None):
+        seen.append(messages)
+        index = next(json.loads(m['content']) for m in messages if m.get('tool_name') == 'list_skills')
+        names = ', '.join(x['name'] for x in index['data']['skills'])
+        return {'text': f"Available skills: {names} [{index['citations'][0]}].", 'calls': []}
+    monkeypatch.setattr(agent_model, 'complete', complete)
     p = plan(s, d, text='/skill')
-    assert 'invoice-review' in p['explanation'] and p['model_calls'] == 0
+    assert 'invoice-review' in p['explanation'] and p['model_calls'] == 1 and '[1]' in p['explanation']
 
 
 def test_dataset_instructions_are_versioned_warned_and_reach_the_prompt(system, monkeypatch):

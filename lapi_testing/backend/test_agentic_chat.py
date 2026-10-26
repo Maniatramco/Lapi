@@ -80,7 +80,7 @@ def test_mode_selection(monkeypatch):
 def test_every_tool_parameter_is_described_and_has_an_example():
     for contract in agent_tools_v2.definitions():
         fn = contract['function']
-        assert 'Example:' in fn['description'] or fn['name'] in ('get_dataset_status', 'get_model_configuration', 'describe_results', 'get_workflow_status', 'get_dataset_onboarding_status', 'list_prompts')
+        assert 'Example:' in fn['description'] or fn['name'] in ('get_dataset_status', 'get_model_configuration', 'describe_results', 'get_workflow_status', 'get_dataset_onboarding_status', 'list_prompts', 'list_skills', 'read_dataset_instructions')
         for name, schema in fn['parameters'].get('properties', {}).items():
             assert schema.get('description'), (fn['name'], name)
 
@@ -175,11 +175,25 @@ def test_parallel_reads_are_deduplicated_and_counts_come_from_catalog(system, mo
     assert m['text'].startswith('There is 1 document') and m['citations'][0]['document_name'].startswith('Document list')
 
 
-def test_exact_catalog_questions_take_the_fast_path_without_a_model(system, monkeypatch):
+def test_exact_catalog_questions_preload_the_catalog_and_still_use_retrieval_and_the_model(system, monkeypatch):
     s = system; d, doc = indexed(s); agentic(monkeypatch)
-    monkeypatch.setattr(agent_model, 'complete', lambda *a, **k: pytest.fail('Catalog question needs no model call.'))
+    seen = []
+    def complete(messages, tools, on_token=None):
+        seen.append(messages)
+        listing = next(json.loads(m['content']) for m in messages if m.get('tool_name') == 'list_documents')
+        return {'text': f"There is {listing['data']['document_count']} document in Dataset [{listing['citations'][0]}].", 'calls': []}
+    monkeypatch.setattr(agent_model, 'complete', complete)
     p = plan(s, d, text='How many documents are there?')
-    assert p['model_calls'] == 0 and p['explanation'].startswith('There is 1 document in Dataset [1].')
+    assert p['model_calls'] == 1 and p['explanation'].startswith('There is 1 document in Dataset [')
+    assert [m.get('tool_name') for m in seen[0] if m.get('role') == 'tool'] == ['search_knowledge', 'list_documents']
+
+
+def test_reranker_outage_fails_closed(system, monkeypatch):
+    s = system; d, doc = indexed(s); agentic(monkeypatch)
+    monkeypatch.setenv('LAPI_RERANKER', 'none')
+    monkeypatch.setattr(agent_model, 'complete', lambda *a, **k: pytest.fail('No answer without reranking.'))
+    r = s.api.post('/api/agent-v2/plans', json={'text': 'Who is the owner?', 'planner_model_id': next(m for m in d['models'] if 'chat' in m['capabilities'])['id'], 'dataset_id': d['id']})
+    assert r.status_code == 502 and 'rerank' in r.text.lower()
 
 
 def test_proposals_end_the_turn_and_nothing_runs(system, monkeypatch):
