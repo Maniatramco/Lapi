@@ -180,19 +180,24 @@ def chunk_pages(did,pages,size,overlap):
 def process(jid,token):
     payload=store.json('jobs/'+jid+'.json');snapshot=payload.get('execution')
     if not snapshot:raise ValueError('Legacy job has no model snapshot. Configure its dataset and submit a new indexing or extraction job.')
+    from .lapi_agent import token_usage
     with execution_context(snapshot):
         with Session() as session:job=session.get(Job,jid)
-        if job.kind=='index':
-            with document_lock('dataset-'+snapshot['dataset_id']):
-                dataset=routing.owned(snapshot['dataset_id'],job.owner,'knowledge_base')
-                if routing.dataset_config(dataset).get('index_generation')!=snapshot['index_generation']:raise ValueError('Dataset embedding configuration changed. Submit a new reindex job.')
+        # Every model call of this job (OCR, embeddings, extraction) is recorded
+        # against the job and persisted when it finishes, including on failure.
+        with token_usage.scope(owner=job.owner,dataset_id=snapshot.get('dataset_id'),job_id=jid,
+                               stage='reindex' if job.kind=='index' else 'extraction'):
+            if job.kind=='index':
+                with document_lock('dataset-'+snapshot['dataset_id']):
+                    dataset=routing.owned(snapshot['dataset_id'],job.owner,'knowledge_base')
+                    if routing.dataset_config(dataset).get('index_generation')!=snapshot['index_generation']:raise ValueError('Dataset embedding configuration changed. Submit a new reindex job.')
+                    _process(jid,token,snapshot)
+            else:
+                # Deletion holds this lock through its status commit. A claimed job
+                # blocks deletion; extraction itself retains normal concurrency.
+                with document_lock('dataset-'+snapshot['dataset_id']):
+                    routing.owned(snapshot['dataset_id'],job.owner,'knowledge_base')
                 _process(jid,token,snapshot)
-        else:
-            # Deletion holds this lock through its status commit. A claimed job
-            # blocks deletion; extraction itself retains normal concurrency.
-            with document_lock('dataset-'+snapshot['dataset_id']):
-                routing.owned(snapshot['dataset_id'],job.owner,'knowledge_base')
-            _process(jid,token,snapshot)
 
 def _process(jid,token,snapshot):
     with Session() as s:

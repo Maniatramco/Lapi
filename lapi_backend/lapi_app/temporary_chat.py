@@ -148,7 +148,8 @@ def install(app, auth):
             raise HTTPException(400, 'This document, question, and chat history exceed the direct context limit. Start a new chat or ask a shorter question. The document has not been truncated.')
         sources = [{'document_name': doc['name'], 'text': page['text'], 'page': page['page'], **{key:page[key] for key in ('text_origin','ocr') if key in page}} for page in doc['pages']]
         def answer():
-            with core.execution_context(snap):
+            from .lapi_agent import token_usage
+            with token_usage.scope(owner=owner, stage='final_answer'), core.execution_context(snap):
                 return providers.answer(body.text, sources, history)
         try:
             text = await asyncio.to_thread(answer)

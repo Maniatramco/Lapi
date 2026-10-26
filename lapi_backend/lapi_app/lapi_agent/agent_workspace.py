@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field,model_validator
 from typing import Literal
 from .. import core, dataset_models as routing, providers, runtime_config
 from ..temporary_chat import chat_snapshot
+from . import token_usage
 from ..json_documents import json_document_text
 
 TOOLS = ('upload', 'extract', 'reextract')
@@ -540,7 +541,9 @@ def install(app, auth, main):
                 record=routing.create('agent_plan',owner,'Assistant question',data,parent=body.dataset_id,status='query')
                 return {'id':record.id,**{key:value for key,value in data.items() if key!='deferred_input'}}
             try:
-                outcome = agent_graph.run(owner, body, snapshot, main)
+                with token_usage.scope(owner=owner, dataset_id=body.dataset_id, conversation_id=body.conversation_id, stage='chat'):
+                    outcome = agent_graph.run(owner, body, snapshot, main)
+                    token_usage.annotate(conversation_id=outcome.get('conversation_id'), message_id=(outcome.get('message') or {}).get('id'))
             except providers.ProviderError as exc:
                 raise HTTPException(502, str(exc)) from exc
             proposal = outcome['proposal'] or {}
@@ -646,7 +649,9 @@ def install(app, auth, main):
                             with setup.step('Checking agent configuration'):
                                 snapshot=routing.execution_snapshot(routing.owned(original.dataset_id,owner,'knowledge_base'),'chat',original.planner_model_id) if original.dataset_id else chat_snapshot(owner,original.planner_model_id)
                                 if original.agent_operation!='onboard':main.external_check(body.allow_external,cfg=snapshot['settings'])
-                            outcome=agent_graph.run(owner,original,snapshot,main,on_delta=delta,on_progress=progress,initial_progress=setup.snapshot())
+                            with token_usage.scope(owner=owner,dataset_id=original.dataset_id,conversation_id=original.conversation_id,stage='chat'):
+                                outcome=agent_graph.run(owner,original,snapshot,main,on_delta=delta,on_progress=progress,initial_progress=setup.snapshot())
+                                token_usage.annotate(conversation_id=outcome.get('conversation_id'),message_id=(outcome.get('message') or {}).get('id'))
                             proposal=outcome['proposal'] or {}
                             data.update(agent=proposal.get('agent') or outcome.get('agent'),onboarding=proposal.get('onboarding'),explanation=outcome['message']['text'],document_ids=proposal.get('document_ids',original.document_ids),
                                 template_id=proposal.get('template_id',original.template_id),calls=[dict(call,status='pending') for call in proposal.get('calls',[])],

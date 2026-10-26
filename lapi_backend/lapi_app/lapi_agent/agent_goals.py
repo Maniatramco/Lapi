@@ -100,8 +100,11 @@ def advance(record, main):
             body=PlanInput(text='Complete the confirmed request using its saved results: '+goal['request'],
                 planner_model_id=data['planner']['id'],dataset_id=dataset.id,document_ids=list(covered),
                 conversation_id=conversation.id,allow_external=data.get('workflow_allow_external',False))
-            message=agent_graph.run(record.owner,body,snapshot,main,on_progress=progress,
-                goal_context={'goal_id':key,'extraction_ids':ids,'request':goal['request']})['message']
+            from . import token_usage
+            with token_usage.scope(owner=record.owner,dataset_id=dataset.id,conversation_id=conversation.id,stage='chat'):
+                message=agent_graph.run(record.owner,body,snapshot,main,on_progress=progress,
+                    goal_context={'goal_id':key,'extraction_ids':ids,'request':goal['request']})['message']
+                token_usage.annotate(message_id=message.get('id'))
         with core.document_lock('agent-'+record.id):
             latest=core.store.json(record.ref);current=latest['goal']
             if current.get('lease_token')!=token or current['status']!='running':return

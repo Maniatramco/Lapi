@@ -449,17 +449,20 @@ def message(id:str,body:MessageInput,owner=Depends(auth)):
         data['document_ids']=[doc.id for doc in docs]
         request_id=uid();store.put_json('executions/'+request_id+'.json',snapshot)
         data['messages'].append({'id':request_id,'role':'user','text':body.text,'created_at':time.time(),'model_selection':selection});store.put_json(r.ref,data)
+        from .lapi_agent import token_usage
+        msg_id=uid()
         try:
-            sources=[]
-            if not snapshot['settings'].get('general_chat'):
-                with execution_context(snapshot['embedding_execution']):sources=providers.search(body.text,owner,docs,settings()['top_k'])
-            with execution_context(snapshot):text_answer=providers.answer(body.text,sources,data['messages'][:-1])
+            with token_usage.scope(owner=owner,dataset_id=data.get('dataset_id'),conversation_id=id,message_id=msg_id,stage='chat'):
+                sources=[]
+                if not snapshot['settings'].get('general_chat'):
+                    with execution_context(snapshot['embedding_execution']):sources=providers.search(body.text,owner,docs,settings()['top_k'])
+                with execution_context(snapshot),token_usage.stage('final_answer'):text_answer=providers.answer(body.text,sources,data['messages'][:-1])
         except providers.ProviderError as e:raise HTTPException(502,str(e))
         except Exception:raise HTTPException(502,'Retrieval or generation failed; check configured provider connectivity')
         import re
         used={int(x) for x in re.findall(r'\[(\d+)\]',text_answer)}
         citations=[{'index':i+1,**source,'url':'/api/documents/'+source['document_id']+'/preview'} for i,source in enumerate(sources) if i+1 in used]
-        msg={'id':uid(),'role':'assistant','text':text_answer,'citations':citations,'created_at':time.time(),'mock':snapshot['settings']['model_provider']=='mock','model_selection':selection}
+        msg={'id':msg_id,'role':'assistant','text':text_answer,'citations':citations,'created_at':time.time(),'mock':snapshot['settings']['model_provider']=='mock','model_selection':selection}
         data['messages'].append(msg);store.put_json(r.ref,data)
         return {'message':msg,'conversation_id':id}
     finally:lock.release()
@@ -1121,6 +1124,8 @@ from . import dataset_lifecycle
 dataset_lifecycle.install(app,auth)
 from . import model_registration
 model_registration.install_routes(app,auth)
+from . import token_usage_admin
+token_usage_admin.install(app,auth)
 
 from .browser_recovery import router as browser_recovery_router
 app.include_router(browser_recovery_router)
