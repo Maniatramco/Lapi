@@ -33,7 +33,7 @@ export function ModelPicker({ dataset, capability, value, onChange, onConfigure,
       <div className="model-unavailable"><strong>No eligible {capability} models</strong><p>Map an enabled model with {capability} capability to this dataset.</p><ActionButton type="button" className="text-button" onClick={onConfigure} label="Configure dataset models" action="mapping"/></div> : models.length === 1 ?
       <div className="model-readonly" aria-label={label}><Layers size={16} /><span>{modelLabel(models[0])}<small>{models[0].provider_model} · Only eligible model</small></span><CheckCircle2 size={15} /></div> :
       <select aria-label={label} value={value} onChange={e => onChange(e.target.value)} disabled={disabled}><option value="" disabled>Select a mapped model</option>{models.map(m => <option key={m.id} value={m.id}>{modelLabel(m)}{m.id === defaultId ? " · Dataset default" : ""}</option>)}</select>}
-    {local && <p className="muted small" role="status">Local · Ollama · {localModels === null ? "Checking installation…" : !localModels.available ? "Ollama unavailable" : installed ? "Installed · No paid API" : "Model not installed"}<br />Embedding: {dataset?.models?.find((m:Entity)=>m.id===dataset?.embedding_model_id)?.provider_model || "Not mapped"}. Changing the chat model keeps this dataset’s embedding index.</p>}
+    {local && <p className="muted small" role="status">Local · Ollama · {localModels === null ? "Checking installation…" : !localModels.available ? "Ollama unavailable" : installed ? "Installed · No paid API" : "Model not installed"}<br />Embedding: workspace Default{dataset?.models?.find((m:Entity)=>m.id===dataset?.embedding_model_id)?.provider_model ? ` · ${dataset.models.find((m:Entity)=>m.id===dataset.embedding_model_id).provider_model}` : ""}. Changing the chat model keeps the one knowledge index.</p>}
   </div>;
 }
 
@@ -58,17 +58,22 @@ export function DatasetWorkspace({datasets,models,documents,onSelect,onCreated,a
   </div>;
 }
 
+const providerLabels:Record<string,string>={'ollama':'Ollama','openai-compatible':'OpenAI-compatible','azure-openai':'Azure OpenAI','anthropic':'Anthropic Claude','bedrock':'Amazon Bedrock','vertex':'Google Vertex AI','oci':'OCI','openai':'OpenAI','sentence_transformers':'Sentence Transformers'};
+function providerName(model?:Entity){const provider:string|undefined=model?.connection?.protocol||model?.provider;return provider?providerLabels[provider]||provider:'—';}
+
 export function DatasetMappings({ dataset, models, api, run, busy, reload, notify, onConnections }: { dataset: Entity; models: Entity[]; api: Api; run: (fn: () => Promise<void>) => Promise<void>; busy: boolean; reload: () => void; notify: (text: string) => void; onConnections: () => void }) {
   const savedDraft = (source: Entity): MappingDraft => ({
     mappings: (source.mappings || (source.models || []).map((m: Entity) => ({ model_id: m.id, enabled: m.mapping_enabled !== false }))).map((m: Entity) => ({ ...m })),
     chatDefault: source.default_chat_model_id || "",
     extractDefault: source.default_extraction_model_id || "",
-    embedding: source.embedding_model_id || "",
+    // Datasets no longer choose an embedding model: the workspace Default indexes all.
+    embedding: "",
     ocr: source.ocr_model_id || "",
   });
   const [draft, setDraft] = useState<MappingDraft>(() => savedDraft(dataset));
-  const { mappings, chatDefault, extractDefault, embedding, ocr = "" } = draft;
-  const [ackReindex, setAckReindex] = useState(false);
+  const { mappings, chatDefault, extractDefault, ocr = "" } = draft;
+  const workspace: Entity = dataset.workspace_defaults || {};
+  const workspaceModel = (id?: string) => id ? models.find(m => m.id === id) : undefined;
 
   const [remoteChanged, setRemoteChanged] = useState(false);
   const dirty = useRef(false);
@@ -78,7 +83,6 @@ export function DatasetMappings({ dataset, models, api, run, busy, reload, notif
     savedRevision.current = { id: dataset.id, version: dataset.version };
     dirty.current = false;
     setRemoteChanged(false);
-    setAckReindex(false);
   };
   useEffect(() => {
     // A workspace refresh returns new objects, even when nothing was saved.
@@ -91,36 +95,40 @@ export function DatasetMappings({ dataset, models, api, run, busy, reload, notif
     loadSavedDraft();
   }, [dataset.id, dataset.version]);
   const candidates = (capability: string) => models.filter(m => m.enabled !== false && m.capabilities?.includes(capability));
-  const changeDefault = (key: "chatDefault" | "extractDefault" | "embedding" | "ocr", value: string) => {
+  const changeDefault = (key: "chatDefault" | "extractDefault" | "ocr", value: string) => {
     dirty.current = true;
     setDraft(current => selectMappingDefault(current,key,value));
-    if (key === "embedding") setAckReindex(false);
   };
-  const selectedEmbedding = models.find(m => m.id === embedding);
   const ocrCandidates = models.filter(m=>m.enabled!==false&&m.ocr_eligible===true);
   const selectedOcr = ocrCandidates.find(m=>m.id===ocr);
-  const complete=candidates('chat').some(m=>m.id===chatDefault)&&candidates('extraction').some(m=>m.id===extractDefault)&&candidates('embedding').some(m=>m.id===embedding)&&(!ocr||!!selectedOcr);
+  // Empty means "use the workspace Default" for chat and extraction.
+  const roleReady=(capability:string,value:string,fallback?:string)=>value?candidates(capability).some(m=>m.id===value):!!workspaceModel(fallback);
+  const embeddingDefault = workspaceModel(workspace.embedding_model_id || dataset.embedding_model_id);
+  const complete=roleReady('chat',chatDefault,workspace.chat_model_id)&&roleReady('extraction',extractDefault,workspace.extraction_model_id)&&!!embeddingDefault&&(!ocr||!!selectedOcr);
   const ocrChanged = ocr !== (dataset.ocr_model_id || '');
-  const pinnedEmbedding = dataset.embedding_selection;
-  const embeddingChanged = !!dataset.embedding_model_id && (embedding !== dataset.embedding_model_id || !!pinnedEmbedding && !!selectedEmbedding && (pinnedEmbedding.model_version !== selectedEmbedding.version || pinnedEmbedding.connection_profile_version !== selectedEmbedding.connection_profile_version));
   return <div className="dataset-mappings">
     {remoteChanged && <div className="notice warn"><Settings2 size={16} /><div><strong>Saved mappings changed while you were editing.</strong><p>Your unsaved selections are preserved. Load the latest saved mappings before making further changes.</p><button className="btn" onClick={loadSavedDraft}>Discard draft and load saved mappings</button></div></div>}
-    <div className="panel-head"><span className="pill">3 required categories · OCR configurable</span><ActionButton className="btn" onClick={onConnections} label="Register model" action="add"/></div>
+    <div className="panel-head"><span className="pill">Chat and Extraction per dataset · Embedding is the workspace Default</span><ActionButton className="btn" onClick={onConnections} label="Register model" action="add"/></div>
     <div className="mapping-table" role="region" aria-label="Dataset model mappings table" tabIndex={0}>
       <table aria-label="Dataset model mappings"><colgroup><col className="mapping-category-column"/><col className="mapping-model-column"/><col/><col/><col/><col/></colgroup>
         <thead><tr><th scope="col">Category</th><th scope="col">Default model</th><th scope="col">Provider</th><th scope="col" className="mapping-tokens" title="Configured input limit for embeddings; total context limit for chat and extraction">Input / context</th><th scope="col" className="mapping-tokens" title="Configured maximum output tokens">Output</th><th scope="col">Status</th></tr></thead>
-        <tbody>{[{label:"Embedding model", cap:"embedding", value:embedding, key:"embedding" as const}, {label:"Chat model", cap:"chat", value:chatDefault, key:"chatDefault" as const}, {label:"Extraction model", cap:"extraction", value:extractDefault, key:"extractDefault" as const}].map(f=>{
-          const options=candidates(f.cap);const selected=options.find(m=>m.id===f.value);
-          const purpose=f.cap==='embedding'?'Indexing and search':f.cap==='chat'?'Dataset questions':'Structured extraction';
-          const provider=selected?.connection?.protocol||selected?.provider;
-          const providerLabel:Record<string,string>={'ollama':'Ollama','openai-compatible':'OpenAI-compatible','azure-openai':'Azure OpenAI','anthropic':'Anthropic Claude','bedrock':'Amazon Bedrock','vertex':'Google Vertex AI','oci':'OCI','openai':'OpenAI','sentence_transformers':'Sentence Transformers'};
+        <tbody><tr>
+          <th scope="row"><span>Embedding</span><small>Indexing and search</small></th>
+          <td><span title="Set in Model Registration. Every dataset uses the workspace Default embedding model and the one knowledge index.">{embeddingDefault?`${modelLabel(embeddingDefault)} · ${embeddingDefault.provider_model}`:'No Default embedding model'}</span></td>
+          <td>{providerName(embeddingDefault)}</td>
+          <td className="mapping-tokens" title="Input tokens">{embeddingDefault?.context_limit?.toLocaleString()||'—'}</td>
+          <td className="mapping-tokens" title="Not applicable to embeddings">—</td>
+          <td><span className={`pill ${embeddingDefault?'green':'amber'}`} title="Change the workspace Default in Model Registration">{embeddingDefault?'Workspace Default':'Required'}</span></td>
+        </tr>{[{label:"Chat model", cap:"chat", value:chatDefault, key:"chatDefault" as const, fallback:workspaceModel(workspace.chat_model_id)}, {label:"Extraction model", cap:"extraction", value:extractDefault, key:"extractDefault" as const, fallback:workspaceModel(workspace.extraction_model_id)}].map(f=>{
+          const options=candidates(f.cap);const chosen=options.find(m=>m.id===f.value);const selected=chosen||(!f.value?f.fallback:undefined);
+          const purpose=f.cap==='chat'?'Dataset questions':'Structured extraction';
           return <tr key={f.cap}>
-            <th scope="row"><label htmlFor={`mapping-${f.cap}`}>{f.cap==='embedding'?'Embedding':f.cap==='chat'?'Chat':'Extraction'}</label><small>{purpose}</small></th>
-            <td><select id={`mapping-${f.cap}`} aria-label={f.label} value={f.value} onChange={e=>changeDefault(f.key,e.target.value)} disabled={busy} required title={selected?`${modelLabel(selected)} · ${selected.provider_model}`:`Choose ${f.label.toLowerCase()}`}><option value="">Select {f.cap==='extraction'?'an extraction':f.cap==='embedding'?'an embedding':'a chat'} model</option>{options.map(m=><option key={m.id} value={m.id}>{modelLabel(m)} · {m.provider_model}</option>)}</select>{!options.length&&<small className="field-error">Register an enabled {f.cap} model first.</small>}</td>
-            <td>{providerLabel[provider]||provider||'—'}</td>
-            <td className="mapping-tokens" title={f.cap==='embedding'?'Input tokens':'Context tokens'}>{selected?.context_limit?.toLocaleString()||'—'}</td>
-            <td className="mapping-tokens" title={f.cap==='embedding'?'Not applicable to embeddings':'Maximum output tokens'}>{f.cap==='embedding'?'—':selected?.max_output_tokens?.toLocaleString()||'—'}</td>
-            <td><span className={`pill ${selected?'green':'amber'}`} title={selected?'Model selected for this category; Save & Apply commits the mapping':'A model is required for this category'}>{selected?'Selected':'Required'}</span></td>
+            <th scope="row"><label htmlFor={`mapping-${f.cap}`}>{f.cap==='chat'?'Chat':'Extraction'}</label><small>{purpose}</small></th>
+            <td><select id={`mapping-${f.cap}`} aria-label={f.label} value={f.value} onChange={e=>changeDefault(f.key,e.target.value)} disabled={busy} required={!f.fallback} title={selected?`${modelLabel(selected)} · ${selected.provider_model}`:`Choose ${f.label.toLowerCase()}`}><option value="">{f.fallback?`Workspace Default · ${modelLabel(f.fallback)}`:`Select ${f.cap==='extraction'?'an extraction':'a chat'} model`}</option>{options.map(m=><option key={m.id} value={m.id}>{modelLabel(m)} · {m.provider_model}</option>)}</select>{!options.length&&!f.fallback&&<small className="field-error">Register an enabled {f.cap} model first.</small>}</td>
+            <td>{providerName(selected)}</td>
+            <td className="mapping-tokens" title="Context tokens">{selected?.context_limit?.toLocaleString()||'—'}</td>
+            <td className="mapping-tokens" title="Maximum output tokens">{selected?.max_output_tokens?.toLocaleString()||'—'}</td>
+            <td><span className={`pill ${selected?'green':'amber'}`} title={chosen?'Dataset override; Save & Apply commits the mapping':selected?'Uses the workspace Default':'A model is required for this category'}>{chosen?'Selected':selected?'Workspace Default':'Required'}</span></td>
           </tr>;
         })}<tr>
           <th scope="row"><label htmlFor="mapping-ocr">OCR</label><small>Scans and document images</small></th>
@@ -143,18 +151,18 @@ export function DatasetMappings({ dataset, models, api, run, busy, reload, notif
         <legend>Available {capability} models</legend>
         <p className="muted small">Enable models to offer them in this dataset's {capability==='chat'?'chat':'extraction'} selector. Keep one default above.</p>
         <div className="mapping-model-options">{candidates(capability).map(model=>{
-          const isDefault=[chatDefault,extractDefault,embedding,ocr==='local'?'':ocr].includes(model.id);
+          const isDefault=[chatDefault,extractDefault,ocr==='local'?'':ocr].includes(model.id);
           const enabled=mappings.some(item=>item.model_id===model.id&&item.enabled!==false);
           return <label className="check mapping-model-option" key={model.id}>
             <input type="checkbox" aria-label={`Enable ${modelLabel(model)} for ${capability}`} checked={enabled} disabled={isDefault}
               onChange={event=>{dirty.current=true;setDraft(current=>setMappingEnabled(current,model.id,event.target.checked));}}/>
-            <span>{modelLabel(model)}<small>{model.provider_model}{[chatDefault,extractDefault,embedding].includes(model.id)?' · Dataset default':''}{ocr===model.id?' · OCR default':''}</small></span>
+            <span>{modelLabel(model)}<small>{model.provider_model}{[chatDefault,extractDefault].includes(model.id)?' · Dataset default':''}{ocr===model.id?' · OCR default':''}</small></span>
           </label>;
         })}</div>
       </fieldset>)}
     </div>
-    {embeddingChanged && <div className="notice warn"><Settings2 size={17} /><div><strong>Changing the embedding model requires reindexing.</strong><p>Existing documents must be reindexed before they can be used again. Changing chat or extraction models does not change this embedding space.</p><label className="check"><input type="checkbox" checked={ackReindex} onChange={e => setAckReindex(e.target.checked)} />I understand existing documents will need reindexing.</label></div></div>}
-    <div className="row between wrap mapping-actions"><span className="muted small">Index generation {dataset.index_generation || 1} · Connection credentials remain encrypted</span><ActionButton className="btn primary" disabled={busy || remoteChanged || !complete || embeddingChanged && !ackReindex} onClick={() => run(async () => { const saved = await api(`/datasets/${dataset.id}/models`, "PUT", { mappings, default_chat_model_id: chatDefault || null, default_extraction_model_id: extractDefault || null, embedding_model_id: embedding || null, ocr_model_id: ocr || null, expected_version: dataset.version, acknowledge_reindex: ackReindex }); setDraft(savedDraft(saved)); dirty.current = false; notify(embeddingChanged ? "Mappings saved. Reindex existing documents with the new embedding model." : "Mappings applied. The next operation will use these selections."); reload(); })} label="Save & Apply" action="save"/></div>
+    <p className="muted small">Datasets do not choose an embedding model. The workspace Default embedding model, set in Model Registration, builds the one knowledge index for every dataset.</p>
+    <div className="row between wrap mapping-actions"><span className="muted small">Index generation {dataset.index_generation || 1} · Connection credentials remain encrypted</span><ActionButton className="btn primary" disabled={busy || remoteChanged || !complete} onClick={() => run(async () => { const saved = await api(`/datasets/${dataset.id}/models`, "PUT", { mappings, default_chat_model_id: chatDefault || null, default_extraction_model_id: extractDefault || null, ocr_model_id: ocr || null, expected_version: dataset.version }); setDraft(savedDraft(saved)); dirty.current = false; notify("Mappings applied. The next operation will use these selections."); reload(); })} label="Save & Apply" action="save"/></div>
   </div>;
 }
 

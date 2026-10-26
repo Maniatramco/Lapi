@@ -51,7 +51,7 @@ export function ManageDataset({dataset,tab:initialTab='details',models,documents
      {isAdmin&&<div className="manage-actions"><button type="button" className="btn primary" disabled={busy||!changed||!name.trim()} onClick={()=>void save()}>{busy?'Saving…':'Save changes'}</button><button type="button" className="btn" disabled={busy||!changed} onClick={()=>{setName(dataset.name||'');setDescription(dataset.description||'');setActive(dataset.active!==false);}}>Reset</button></div>}
     </section>}
     {tab==='models'&&<section id="manage-panel-models" role="tabpanel" aria-labelledby="manage-tab-models" className="manage-panel">
-     <p className="manage-note"><Layers size={14} aria-hidden="true"/>Embedding indexes knowledge; chat answers; extraction fills prompts; OCR reads scans. Changing embedding or OCR marks documents for reindexing.</p>
+     <p className="manage-note"><Layers size={14} aria-hidden="true"/>The workspace Default embedding model indexes knowledge for every dataset; chat answers; extraction fills prompts; OCR reads scans. Changing OCR marks documents for reindexing.</p>
      {isAdmin?<DatasetMappings key={dataset.id} dataset={dataset} models={models} api={api} run={run} busy={busy} reload={reload} notify={notify} onConnections={()=>onNavigate('Model Registration')}/>:<p className="manage-note">Only administrators can change model mappings.</p>}
     </section>}
     {tab==='documents'&&<section id="manage-panel-documents" role="tabpanel" aria-labelledby="manage-tab-documents" className="manage-panel">

@@ -2,9 +2,10 @@
 import {CheckCircle2,CircleAlert,Database} from "lucide-react";
 import {SummaryTiles} from "./summary-tiles";
 type Entity=Record<string,any>;
-const ROLES=[["embedding_model_id","Embedding"],["default_chat_model_id","Chat"],["default_extraction_model_id","Extraction"]] as const;
-/** Which model roles a dataset still needs before it can index, answer and extract. */
-export function missingRoles(dataset:Entity){return ROLES.filter(([key])=>!dataset[key]).map(([,label])=>label);}
+const ROLES=[["embedding_model_id","Embedding","embedding_model_id"],["default_chat_model_id","Chat","chat_model_id"],["default_extraction_model_id","Extraction","extraction_model_id"]] as const;
+/** Which model roles a dataset still needs before it can index, answer and extract.
+ * A dataset without its own Chat or Extraction choice uses the workspace Default. */
+export function missingRoles(dataset:Entity){return ROLES.filter(([key,,workspace])=>!dataset[key]&&!dataset.workspace_defaults?.[workspace]).map(([,label])=>label);}
 export function mappingTiles(datasets:Entity[]){
  return [
   {label:"Datasets",value:datasets.length,detail:`${datasets.filter(d=>d.active===false).length} inactive`,tone:""},

@@ -21,6 +21,7 @@ import { OperationProgress, extractionProgressJob } from "./operation-progress";
 import "./workspace-flow.css";
 import { DatasetWorkspace, DatasetMappings, ModelPicker, eligibleModels, modelLabel } from "./dataset-workspace";
 import { ModelRegistration } from "./model-registration";
+import { KnowledgeIndexBanner } from "./knowledge-index-banner";
 import { UserManagement } from "./user-management";
 import { AdminDocuments } from "./admin-documents";
 import { TokenUsageAdmin } from "./token-usage";
@@ -814,6 +815,7 @@ export default function App() {
         </header>
         <main aria-label={viewLabel(view)} className={`workspace workspace-region${view==='Home'?' home-page-shell':''}${view === "Lapi agent V2" ? " agent-v2-workspace" : view === "Extract" ? " extract-page-shell" : view === "Extract Data" ? " extract-data-workspace" : ""}${view === 'Review' ? ` review-page-shell${extraction?' has-review':''}` : ''}${PAGE_INTROS[view]?' has-page-band':''}`}>
           {!(view === 'Review' && extraction) && <PageBand view={view}/>}
+          <KnowledgeIndexBanner api={api} isAdmin={Boolean(user.is_admin)} revision={refresh} onChanged={reload}/>
           {error && view !== "Home" && (
             <Notice tone="error">
               {error}
@@ -905,7 +907,8 @@ export default function App() {
               empty={<Empty icon={Activity} title="No processing jobs yet" detail="Document uploads, reindexing, and extractions will be tracked here."/>}/>
           )}
           {view === "Model Registration" && <ModelRegistration models={models} settings={settings} api={api} run={run} busy={busy}
-            onSaved={model => { setModels(current => current.some(m => m.id === model.id) ? current.map(m => m.id === model.id ? model : m) : [model, ...current]); notify("Model saved. New runs use the updated connection; apply embedding changes in Model Mapping."); reload(); }}
+            onSaved={model => { setModels(current => current.some(m => m.id === model.id) ? current.map(m => m.id === model.id ? model : m) : [model, ...current]); notify("Model saved. New runs use the updated connection; re-apply an edited Default embedding model to rebuild the knowledge index."); reload(); }}
+            onDefaultsChanged={() => { notify("Workspace Default saved."); reload(); }}
             onMapping={() => navigate("Model Mapping")} />}
           {view === "Model Mapping" && <section className="panel model-mapping-screen">
             <MappingOverview datasets={kbs} selected={selectedDataset?.id || ""} busy={busy} onSelect={changeDataset} />

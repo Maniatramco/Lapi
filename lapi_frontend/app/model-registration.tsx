@@ -6,6 +6,7 @@ import { ModelPrices } from "./model-prices";
 import "./model-configuration.css";
 import { type ParameterSchema, type ParameterValues, type StageValues, cleanStages, formatValue, parseModelParameters, schemaPath, sourceLabel, supportedModelParameters, testStages, valuesError } from "./model-parameters";
 import { ParameterForm, ParameterHistory } from "./model-parameter-form";
+import "./knowledge-index-banner.css";
 import { SummaryTiles } from "./summary-tiles";
 
 type Entity = Record<string, any>;
@@ -38,9 +39,17 @@ const credentialFields: Record<string, [string, string, boolean?][]> = {
   oci_credentials: [["tenancy", "Tenancy OCID"], ["user", "User OCID"], ["fingerprint", "Key fingerprint"], ["key_content", "Private key (PEM)", true], ["pass_phrase", "Key passphrase (optional)"]],
 };
 
-export function ModelRegistration({ models, settings, api, run, busy, onSaved, onMapping }: {
+const ROLE_KEYS: Record<string, string> = { chat: "chat_model_id", extraction: "extraction_model_id", embedding: "embedding_model_id" };
+const ROLE_LABELS: Record<string, string> = { chat: "Chat", extraction: "Extraction", embedding: "Embedding" };
+const INDEX_CONFIRMATION = "I understand the knowledge index will be deleted and rebuilt";
+/** Registrations need a passing connection test for their saved version. */
+function connectionTested(model: Entity) {
+  return !model.connection || model.connection_test?.connection_profile_version === model.connection_profile_version;
+}
+
+export function ModelRegistration({ models, settings, api, run, busy, onSaved, onMapping, onDefaultsChanged }: {
   models: Entity[]; settings: Entity; api: Api; run: (fn: () => Promise<void>) => Promise<void>;
-  busy: boolean; onSaved: (model: Entity) => void; onMapping: () => void;
+  busy: boolean; onSaved: (model: Entity) => void; onMapping: () => void; onDefaultsChanged?: () => void;
 }) {
   const defaults = settings.model_defaults;
   const blank = (): Entity => ({ name: "", category: "chat", provider_model: "", timeout: defaults?.timeout, context_limit: defaults?.context_limit, max_output_tokens: defaults?.max_output_tokens, enabled: true,
@@ -57,6 +66,24 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
   const [providerChoice, setProviderChoice] = useState("ollama");
   const [providerError, setProviderError] = useState("");
   useEffect(() => { let active = true; api("/model-providers").then(value => { if (active) setProviderChoices(value); }).catch(() => { if (active) setProviderError("Provider choices could not load. Reload this screen to retry."); }); return () => { active = false; }; }, [api]);
+  const [workspaceDefaults, setWorkspaceDefaults] = useState<Entity | null>(null);
+  const [rebuild, setRebuild] = useState<Entity | null>(null);
+  const [rebuildAck, setRebuildAck] = useState(false);
+  const [rebuildExternal, setRebuildExternal] = useState(false);
+  useEffect(() => { let active = true; api("/workspace/defaults").then(value => { if (active) setWorkspaceDefaults(value); }).catch(() => { if (active) setWorkspaceDefaults(null); }); return () => { active = false; }; }, [api, models]);
+  const isDefault = (model: Entity, role: string) => !!workspaceDefaults && workspaceDefaults[ROLE_KEYS[role]] === model.id;
+  const applyDefault = (model: Entity, role: string, confirmed = false, allowExternal = false) => run(async () => {
+    const value = await api(`/model-registrations/${model.id}/default`, "PUT", { role, acknowledge_index_rebuild: confirmed, allow_external: allowExternal });
+    setWorkspaceDefaults(value); setRebuild(null); onDefaultsChanged?.();
+  });
+  const chooseDefault = (model: Entity, role: string) => {
+    // Changing the embedding Default deletes the one knowledge index: confirm first.
+    if (role === "embedding" && (workspaceDefaults?.embedding_model_id || workspaceDefaults?.impact?.documents)) {
+      setRebuild(model); setRebuildAck(false); setRebuildExternal(false); return;
+    }
+    applyDefault(model, role);
+  };
+  const rebuildRemote = !!rebuild && (rebuild.connection?.protocol || rebuild.provider) !== "ollama";
   const [extraText, setExtraText] = useState("{}");
   const [extraOpen, setExtraOpen] = useState(false);
   const [schema, setSchema] = useState<ParameterSchema | null>(null);
@@ -127,20 +154,21 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
       <div className="panel-head"><span className="pill">{models.length} models</span><ActionButton className="btn primary" disabled={busy || !defaults} onClick={() => start()} label="Register model" action="add" showLabel/></div>
       {!!models.length && <label className="registration-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="Search registered models" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setSearch('');}} placeholder="Search models or categories" />{search&&<button className="btn icon" type="button" title="Clear search" aria-label="Clear model search" onClick={()=>setSearch('')}><X size={14}/></button>}</label>}
       {!!models.length && <div className="registration-table" role="region" aria-label="Registered models table" tabIndex={0}>
-        <table aria-label="Registered models"><thead><tr><th scope="col">Model</th><th scope="col">Category</th><th scope="col">Provider</th><th scope="col">Endpoint</th><th scope="col" className="registration-tokens" title="Configured input limit for embeddings; total context limit for chat and extraction">Input / context</th><th scope="col" className="registration-tokens" title="Configured maximum output tokens">Output</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+        <table aria-label="Registered models"><thead><tr><th scope="col">Model</th><th scope="col">Category</th><th scope="col" title="One workspace Default per role. Datasets may override Chat and Extraction; the Embedding Default builds the one knowledge index.">Default</th><th scope="col">Provider</th><th scope="col">Endpoint</th><th scope="col" className="registration-tokens" title="Configured input limit for embeddings; total context limit for chat and extraction">Input / context</th><th scope="col" className="registration-tokens" title="Configured maximum output tokens">Output</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
           <tbody>{visible.map(m=><tr key={m.id}>
             <th scope="row"><div className="registration-model-cell"><Layers size={16} aria-hidden="true"/><div><strong>{m.name}</strong><small>{m.provider_model}</small>{(()=>{const count=Object.keys(m.extra_parameters||{}).length+Object.values(m.stage_parameters||{}).reduce((n:number,v:any)=>n+Object.keys(v||{}).length,0);return count>0&&<small>{count} parameter{count===1?'':'s'} set{m.parameter_version?` · v${m.parameter_version}`:''}</small>;})()}</div></div></th>
-            <td><div className="model-chips">{m.capabilities.map((cap:string)=><span className="model-chip" key={cap}>{cap==='extraction'?'Extraction':cap==='embedding'?'Embedding':'Chat'}</span>)}</div></td>
+            <td><div className="model-chips">{m.capabilities.map((cap:string)=><span className="model-chip" key={cap}>{cap==='extraction'?'Extraction':cap==='embedding'?'Embedding':'Chat'}</span>)}{m.capabilities.filter((cap:string)=>isDefault(m,cap)).map((cap:string)=><span className="model-chip is-default" key={'default-'+cap} title={`Workspace ${ROLE_LABELS[cap]} Default`}>{m.capabilities.length>1?`${ROLE_LABELS[cap]} default`:'Default'}</span>)}</div></td>
+            <td><div className="model-default-cell">{m.capabilities.map((cap:string)=>{const current=isDefault(m,cap);const tested=connectionTested(m);return <label className="check" key={cap} title={current?`Workspace ${ROLE_LABELS[cap]} Default. Choose another model to change it.`:!m.enabled?'Enable this model to make it a Default.':!tested?'Test and save this connection before making it a Default.':`Make ${m.name} the workspace ${ROLE_LABELS[cap]} Default`}><input type="checkbox" aria-label={`${ROLE_LABELS[cap]} Default: ${m.name}`} checked={current} disabled={busy||current||!workspaceDefaults||!m.enabled||!tested} onChange={()=>chooseDefault(m,cap)}/>{m.capabilities.length>1?ROLE_LABELS[cap]:'Default'}</label>;})}</div></td>
             <td>{providerChoices.find(p=>p.id===providerId(m.connection||{protocol:m.provider}))?.name||m.provider}</td>
             <td><span className="registration-endpoint" title={m.connection?.endpoint||'No endpoint configured'}>{m.connection?.endpoint||'—'}</span></td>
             <td className="registration-tokens" title={m.capabilities[0]==='embedding'?'Input tokens':'Context tokens'}>{m.context_limit?.toLocaleString()||'—'}</td>
             <td className="registration-tokens" title={m.capabilities[0]==='embedding'?'Not applicable to embeddings':'Maximum output tokens'}>{m.capabilities[0]==='embedding'?'—':m.max_output_tokens?.toLocaleString()||'—'}</td>
             <td><span className={`pill ${m.enabled?'green':'amber'}`}>{m.enabled?'Enabled':'Disabled'}</span></td>
             <td><button className="btn icon registration-edit" disabled={busy || !defaults} title={`Edit ${m.name}`} aria-label={`Edit ${m.name}`} onClick={()=>start(m)}><Pencil size={15}/></button><button className="btn icon registration-edit" title={`Prices for ${m.name}`} aria-label={`Prices for ${m.name}`} aria-pressed={prices?.id===m.id} onClick={()=>setPrices(prices?.id===m.id?null:m)}><Coins size={15}/></button></td>
-          </tr>)}{!visible.length&&<tr><td colSpan={8} className="registration-table-empty">No models match your search.</td></tr>}</tbody>
+          </tr>)}{!visible.length&&<tr><td colSpan={9} className="registration-table-empty">No models match your search.</td></tr>}</tbody>
         </table>
       </div>}
-      {!models.length && <div className="empty"><Layers size={30} /><h3>Start with your models</h3><p>Register an Embedding, Chat, and Extraction model. Each dataset needs all three categories.</p></div>}
+      {!models.length && <div className="empty"><Layers size={30} /><h3>Start with your models</h3><p>Register an Embedding, Chat, and Extraction model, test each connection, and mark one Default per role. The Embedding Default builds the one knowledge index for every dataset.</p></div>}
       <div className="registration-footer"><ActionButton className="btn" onClick={onMapping} label="Open Model Mapping" action="mapping"/></div>
     </section> : null}
     {!open && prices && models.some(m => m.id === prices.id) && <ModelPrices key={prices.id} model={prices} api={api} onClose={() => setPrices(null)} />}
@@ -187,8 +215,23 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
         {test && <div className="notice" role="status"><Check size={17} /><div>Connection passed in {(test.elapsed_ms / 1000).toFixed(2)}s.{test.dimensions && ` Embedding dimensions: ${test.dimensions}.`}{test.schema_validated && " Extraction schema validated."}{test.agent_tool_call_validated && " Agent function calling validated."}
           {!!test.effective_parameters && Object.keys(test.effective_parameters).length > 0 && <ul className="registration-test-effective" aria-label="Settings sent in the test">{Object.entries(test.effective_parameters as Record<string, { parameters: ParameterValues; sources: Record<string, keyof typeof sourceLabel> }>).map(([stage, value]) => <li key={stage}><strong>{stageLabel(stage)}:</strong> {Object.keys(value.parameters).length ? Object.entries(value.parameters).map(([key, v]) => `${key} ${formatValue(v)} (${sourceLabel[value.sources[key]] || "set"})`).join(", ") : "no sampling parameters sent (provider defaults)"}{test.samples?.[stage] && <span className="muted"> · sample answer: “{test.samples[stage]}”</span>}</li>)}</ul>}</div></div>}
         <div className="registration-actions"><button className="btn" type="button" disabled={busy || !!parameterError || !form.name.trim() || !form.provider_model.trim() || !form.connection.endpoint || remote && (!form.allow_external || settings.local_only)} onClick={e => { if (!e.currentTarget.form?.reportValidity()) return; setTest(null); setTesting(true); run(async () => { try { setTest(await api("/model-registrations/test", "POST", testPayload())); } finally { setTesting(false); } }); }}>{testing ? "Testing connection…" : "Test Connection"}</button><div className="row wrap"><button className="btn" type="button" disabled={busy} onClick={close}>Cancel</button><ActionButton className="btn primary" disabled={busy || !!parameterError || !test} label="Save Model" action="save"/></div></div>
-        <p className="muted small">Test the connection before saving. The test sends a sample prompt with the parameter values above and lists what was sent. Chat tests verify Agent function calling, plus one short sample answer when you change answer-stage values. New chat and extraction runs use the latest saved connection. Embedding changes require applying the dataset mapping and reindexing its documents. Work already queued keeps its saved version.</p>
+        <p className="muted small">Test the connection before saving. The test sends a sample prompt with the parameter values above and lists what was sent. Chat tests verify Agent function calling, plus one short sample answer when you change answer-stage values. New chat and extraction runs use the latest saved connection. Editing the Default embedding model requires re-applying it as Default, which deletes the knowledge index and reindexes every document. Work already queued keeps its saved version.</p>
       </form>
     </section>}
+    {rebuild && <div className="modal-bg"><section className="modal index-rebuild-dialog" role="dialog" aria-modal="true" aria-labelledby="index-rebuild-title">
+      <h2 id="index-rebuild-title">Rebuild the knowledge index with {rebuild.name}?</h2>
+      <p>{rebuild.name} becomes the workspace Default embedding model. The current knowledge index is deleted now and rebuilt in the background. There is no rollback.</p>
+      <ul>
+        <li>{(workspaceDefaults?.impact?.documents ?? 0).toLocaleString()} documents are reindexed.</li>
+        <li>{(workspaceDefaults?.impact?.knowledge_items ?? 0).toLocaleString()} knowledge items are deleted and published again.</li>
+        <li>Until reindexing finishes, chat answers only from documents that are already reindexed.</li>
+      </ul>
+      <label className="check"><input type="checkbox" checked={rebuildAck} onChange={e => setRebuildAck(e.target.checked)} />{INDEX_CONFIRMATION}</label>
+      {rebuildRemote && <label className="check"><input type="checkbox" checked={rebuildExternal} onChange={e => setRebuildExternal(e.target.checked)} />Allow document text to be sent to {rebuild.name} for reindexing. Provider usage may be billed.</label>}
+      <div className="row" style={{ justifyContent: "flex-end", marginTop: 18 }}>
+        <button className="btn" type="button" disabled={busy} onClick={() => setRebuild(null)}>Cancel</button>
+        <button className="btn primary" type="button" disabled={busy || !rebuildAck || rebuildRemote && !rebuildExternal} onClick={() => applyDefault(rebuild, "embedding", true, rebuildRemote && rebuildExternal)}>Continue</button>
+      </div>
+    </section></div>}
   </div>;
 }

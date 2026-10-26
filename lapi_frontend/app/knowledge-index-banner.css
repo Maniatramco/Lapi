@@ -1,0 +1,17 @@
+.knowledge-index-banner>div{flex:1;min-width:0}
+.knowledge-index-banner p{margin:4px 0 0}
+.knowledge-index-banner .btn{margin-top:10px;display:inline-flex;gap:6px;align-items:center}
+.knowledge-index-track{height:6px;background:#e0e8f5;border-radius:8px;overflow:hidden;margin:8px 0 4px;max-width:420px}
+.knowledge-index-track>span{display:block;height:100%;background:#2563eb;border-radius:inherit;transition:width .45s ease}
+.knowledge-index-failures{margin-top:6px}
+.knowledge-index-failures ul{margin:6px 0 0;padding-left:18px;max-height:160px;overflow:auto}
+.knowledge-index-failures li{overflow-wrap:anywhere}
+.knowledge-index-spin{animation:knowledge-index-spin 1s linear infinite}
+@keyframes knowledge-index-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.knowledge-index-spin,.knowledge-index-track>span{animation:none;transition:none}}
+.model-default-cell{display:flex;flex-direction:column;gap:4px}
+.model-default-cell label{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;font-size:var(--text-small)}
+.model-chip.is-default{background:#2563eb;color:#fff;border-color:#2563eb}
+.index-rebuild-dialog{max-width:520px}
+.index-rebuild-dialog ul{margin:8px 0 12px;padding-left:18px}
+.index-rebuild-dialog .check{margin-top:10px}
