@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.13.4 - 27 October 2026
+
+Lapi brand
+
+- New Lapi brand: an L with a speech-bubble P (ask) and an orange answer dot, from Laya (harmony) and Poorni (complete).
+- The mark on white is used in the header, sign-in card and banner; the blue-tile version is the Lapi Agent icon, browser tab icon and app icon.
+- A custom lowercase lapi wordmark, with an orange dot on the i, leads the sign-in banner.
+
+Assets: `lapi_frontend/public/lapi-mark.svg`, `lapi-agent.svg`, `lapi-wordmark.svg`, `lapi-wordmark-white.svg`, `lapi-mark-180.png`, `lapi-mark-512.png` and `favicon.ico`.
+
 ## v26.1.13.3 - 27 October 2026
 
 Lapi LP monogram

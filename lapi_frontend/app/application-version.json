@@ -1,6 +1,16 @@
 {
-  "version": "26.1.13.3",
+  "version": "26.1.13.4",
   "releases": [
+    {
+      "version": "26.1.13.4",
+      "date": "2026-10-27",
+      "title": "Lapi brand",
+      "changes": [
+        "New Lapi brand: an L with a speech-bubble P (ask) and an orange answer dot, from Laya (harmony) and Poorni (complete).",
+        "The mark on white is used in the header, sign-in card and banner; the blue-tile version is the Lapi Agent icon, browser tab icon and app icon.",
+        "A custom lowercase lapi wordmark, with an orange dot on the i, leads the sign-in banner."
+      ]
+    },
     {
       "version": "26.1.13.3",
       "date": "2026-10-27",

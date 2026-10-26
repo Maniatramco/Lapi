@@ -1,15 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lapi">
-  <defs>
-    <linearGradient id="lp-tile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3b82f6"/>
-      <stop offset="1" stop-color="#1d4ed8"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="16" fill="url(#lp-tile)"/>
-  <!-- P bowl (light orange) shares the stem with the L -->
-  <path d="M21 17.5H33a9.5 9.5 0 0 1 0 19H25" fill="none" stroke="#fdba74" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- L: one stem and a foot (white) -->
-  <path d="M21 16V46.5H44" fill="none" stroke="#ffffff" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- knowledge node inside the bowl -->
-  <circle cx="33" cy="27" r="2.6" fill="#ffffff"/>
+<path d="M16.6 0.6H47.4A16 16 0 0 1 63.4 16.6V47.4A16 16 0 0 1 47.4 63.4H16.6A16 16 0 0 1 0.6 47.4V16.6A16 16 0 0 1 16.6 0.6Z" fill="#ffffff" stroke="#dbe5f7" stroke-width="1.2"/>
+<path d="M19.5 12H19.5A4.5 4.5 0 0 1 24 16.5V52H19.5A4.5 4.5 0 0 1 15 47.5V16.5A4.5 4.5 0 0 1 19.5 12Z" fill="#2563eb"/>
+<path d="M15 43H44.5A4.5 4.5 0 0 1 49 47.5V47.5A4.5 4.5 0 0 1 44.5 52H19.5A4.5 4.5 0 0 1 15 47.5V43Z" fill="#2563eb"/>
+<path d="M30 12H39A12 12 0 0 1 51 24V24A12 12 0 0 1 39 36H30A3 3 0 0 1 27 33V15A3 3 0 0 1 30 12Z" fill="#fb923c"/>
+<path d="M27 30 L27 40.5 L33.5 35.5Z" fill="#fb923c"/>
+<circle cx="33.6" cy="24" r="2.15" fill="#ffffff"/>
+<circle cx="39.2" cy="24" r="2.15" fill="#ffffff"/>
+<circle cx="44.8" cy="24" r="2.15" fill="#ffffff"/>
 </svg>

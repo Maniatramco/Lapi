@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lapi">
+<defs><linearGradient id="lapi-tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs>
+<path d="M16 0H48A16 16 0 0 1 64 16V48A16 16 0 0 1 48 64H16A16 16 0 0 1 0 48V16A16 16 0 0 1 16 0Z" fill="url(#lapi-tile)"/>
+<path d="M19.5 12H19.5A4.5 4.5 0 0 1 24 16.5V52H19.5A4.5 4.5 0 0 1 15 47.5V16.5A4.5 4.5 0 0 1 19.5 12Z" fill="#ffffff"/>
+<path d="M15 43H44.5A4.5 4.5 0 0 1 49 47.5V47.5A4.5 4.5 0 0 1 44.5 52H19.5A4.5 4.5 0 0 1 15 47.5V43Z" fill="#ffffff"/>
+<path d="M30 12H39A12 12 0 0 1 51 24V24A12 12 0 0 1 39 36H30A3 3 0 0 1 27 33V15A3 3 0 0 1 30 12Z" fill="#fdba74"/>
+<path d="M27 30 L27 40.5 L33.5 35.5Z" fill="#fdba74"/>
+<circle cx="33.6" cy="24" r="2.15" fill="#1d4ed8"/>
+<circle cx="39.2" cy="24" r="2.15" fill="#1d4ed8"/>
+<circle cx="44.8" cy="24" r="2.15" fill="#1d4ed8"/>
+</svg>
