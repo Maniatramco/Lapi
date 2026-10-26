@@ -14,6 +14,7 @@ import time
 import httpx
 from jsonschema import validate
 from . import runtime_config
+from .lapi_models.parameters import OLLAMA_OCR_OPTIONS
 
 _pdf_lock = threading.Lock()  # PDFium is not thread safe, even across documents.
 SCHEMA = {'type': 'object', 'additionalProperties': False,
@@ -160,7 +161,7 @@ def transcribe(image, cfg):
         'messages': [{'role': 'system', 'content': INSTRUCTION}, {'role': 'user',
         'content': 'Transcribe every visible line, in reading order. Your JSON MUST have exactly these two keys: {"text":"full transcription as one string with newline characters", "unreadable":false}. Do not use document fields as keys. Set unreadable true if any text is unclear.',
         'images': [base64.b64encode(image).decode('ascii')]}],
-        'options': {'temperature': 0.1, 'repeat_penalty':1.1, 'seed': 42, 'num_ctx': cfg['context'], 'num_predict': cfg['output'], 'num_batch':cfg['batch'],
+        'options': {**OLLAMA_OCR_OPTIONS, 'num_ctx': cfg['context'], 'num_predict': cfg['output'], 'num_batch':cfg['batch'],
                     **({'num_gpu':0} if runtime_config.get('LAPI_OCR_FORCE_CPU') else {})}, 'keep_alive': runtime_config.get('LAPI_OCR_KEEP_ALIVE')})
     if not result.get('done') or result.get('done_reason') == 'length':
         raise OcrError('OCR output was incomplete. Increase LAPI_OCR_MAX_TOKENS and LAPI_OCR_CONTEXT or split the page, then retry. Partial text was not indexed.')

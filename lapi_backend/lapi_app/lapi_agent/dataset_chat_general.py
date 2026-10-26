@@ -64,10 +64,14 @@ def decision(messages, settings):
         return wire
     budget=settings['max_output_tokens']
     wire=agent_context.fit(messages,settings,budget,serialize,'dashboard_general_routing')
-    options=ollama_provider.generation_options(wire,budget)
-    options.update(temperature=0,seed=42)
+    # Chat answer stage: Model Registration values, else the documented Lapi
+    # default (temperature 0, seed 42) from lapi_models/parameters.py.
+    from ..lapi_models.parameters import default_stage
+    with default_stage('chat'):
+        options=ollama_provider.generation_options(wire,budget)
+        keep=ollama_provider.request_parameters()
     payload={'model':ollama_provider.local_model_name(settings['model']),'messages':wire,
-             'stream':False,'think':False,'format':SCHEMA,'options':options,**ollama_provider.request_parameters()}
+             'stream':False,'think':False,'format':SCHEMA,'options':options,**keep}
     try:
         usage=token_usage.attempt()
         result=ollama_provider.request('/api/chat',payload,settings['timeout'])

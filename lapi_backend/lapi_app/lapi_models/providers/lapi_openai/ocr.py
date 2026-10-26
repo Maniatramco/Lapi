@@ -6,7 +6,7 @@ import math
 from .... import core, runtime_config
 from ...cloud_ocr import provider, eligible
 from ...connection import ModelConnection
-from ...parameters import validate_parameters
+from ...parameters import for_stage
 
 
 def configure(snapshot, limits):
@@ -16,6 +16,8 @@ def configure(snapshot, limits):
         raise ValueError('OpenAI OCR requires a mapped GPT-4o or GPT-4o Mini extraction model; embedding models cannot read images.')
     identity = {key: snapshot.get(key) for key in ('model_id', 'model_version', 'connection_profile_id', 'connection_profile_version', 'provider_model')}
     identity.update(connection=connection, parameters=cfg.get('extra_parameters', {}))
+    if (cfg.get('stage_parameters') or {}).get('extraction'):
+        identity['stage_parameters'] = cfg['stage_parameters']['extraction']
     return limits | {'provider': 'openai', 'model': snapshot['provider_model'],
         'endpoint': connection['endpoint'], 'protocol': 6, 'execution': snapshot,
         'timeout': min(limits['timeout'], cfg['timeout']),
@@ -47,8 +49,10 @@ def transcribe(image, cfg, instruction, schema):
     with core.execution_context(cfg['execution']):
         settings = core.settings()
         adapter = ModelConnection(settings)
-        extra = validate_parameters(settings.get('extra_parameters', {}), adapter.c['protocol'], 'extraction', adapter.c)
-        payload = {'model': adapter.model, 'max_completion_tokens': cfg['output'], 'temperature': 0.1, **extra,
+        # Extraction stage with the documented OCR default (temperature 0.1);
+        # a value set in Model Registration wins.
+        extra = for_stage(settings, 'extraction', adapter.c['protocol'], adapter.c, purpose='ocr')
+        payload = {'model': adapter.model, 'max_completion_tokens': cfg['output'], **extra,
             'messages': [{'role': 'system', 'content': instruction}, {'role': 'user', 'content': [
                 {'type': 'text', 'text': 'Transcribe every visible line. Return only text and unreadable in the requested JSON.'},
                 {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(image).decode('ascii'), 'detail': 'high'}}]}],
