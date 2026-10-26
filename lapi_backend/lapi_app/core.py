@@ -227,3 +227,5 @@ def document_lock(document_id,*,blocking=True):
 
 # Register the relational tables and transaction hooks after storage exists.
 from . import relational
+# Token usage and model price tables (created with the rest of the schema).
+from . import usage_tables
