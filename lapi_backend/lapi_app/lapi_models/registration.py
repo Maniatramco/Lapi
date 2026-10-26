@@ -8,7 +8,8 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, ConfigDict, SecretStr
 from .. import core, dataset_models as routing, providers
 from .connection import ConnectionError, ModelConnection, validate_connection, validate_credentials
-from .parameters import validate_parameters
+from . import parameters as model_parameters
+from .parameters import validate_parameters, validate_stage_parameters
 from .validation import temporary_credentials
 from .catalog import choices
 from .. import runtime_config
@@ -23,6 +24,28 @@ def probe_agent(cfg):
     if len(calls) != 1 or calls[0].get('name') != 'connection_status' or calls[0].get('arguments') != {'status': 'ready'}:
         raise ConnectionError('This Chat model did not pass the function calling test. Choose a tool-capable model or use it for extraction instead.')
     return {'response_received': True, 'agent_tool_call_validated': True}
+
+
+SAMPLE_PROMPTS = {
+    'chat': 'In one short sentence, say that the connection test is ready.',
+    'optimize': 'Rewrite this instruction to be clearer, in one sentence: say ready when the test passes.',
+}
+
+
+def sample_stage(cfg, stage):
+    """One short sample prompt at a stage, sent with that stage's chosen values."""
+    from ..lapi_agent import agent_model
+    with model_parameters.use_stage(stage):
+        result = agent_model.complete([{'role': 'system', 'content': 'Answer briefly in plain text. Do not call tools.'},
+            {'role': 'user', 'content': SAMPLE_PROMPTS[stage]}], [])
+    if not isinstance(result.get('text'), str) or not result['text'].strip():
+        raise ConnectionError('The sample prompt returned no answer with these settings.')
+    return result['text'].strip()[:400]
+
+
+def effective_snapshot():
+    value = model_parameters.effective()
+    return {'parameters': value['parameters'], 'sources': value['sources']} if value else None
 
 
 class ConnectionInput(BaseModel):
@@ -51,6 +74,11 @@ class RegistrationInput(BaseModel):
     context_limit: int | None = Field(default=None, ge=1, le=2097152, strict=True)
     max_output_tokens: int | None = Field(default=None, ge=1, le=131072, strict=True)
     extra_parameters: dict | None = None
+    # Per-stage values: {'chat'|'tool_step'|'extraction'|'optimize': {key: value}}.
+    # A null value means "Use provider default"; an omitted key means "default".
+    stage_parameters: dict[str, dict] | None = None
+    # Connection test only: also run a sample prompt at these stages.
+    test_stages: list[Literal['chat', 'tool_step', 'extraction', 'optimize']] | None = Field(default=None, max_length=4)
     enabled: bool = True
     credentials: dict[str, SecretStr] = Field(default_factory=dict, max_length=12)
     clear_credentials: bool = False
@@ -99,10 +127,16 @@ def prepare(body, owner, existing=None):
         extra_key = 'embedding_extra_parameters' if role == 'embedding' else 'extra_parameters'
         cfg[context_key] = body.context_limit if body.context_limit is not None else old_cfg.get(context_key) or runtime_config.get('LAPI_DEFAULT_EMBEDDING_INPUT_TOKENS' if role == 'embedding' else 'LAPI_DEFAULT_MODEL_CONTEXT_TOKENS')
         params = body.extra_parameters if body.extra_parameters is not None else old_cfg.get(extra_key, {})
+        stages = body.stage_parameters if body.stage_parameters is not None else old_cfg.get('stage_parameters') or {}
         try:
-            cfg[extra_key] = validate_parameters(params, c['protocol'], body.category, c)
+            cfg[extra_key] = validate_parameters(params, c['protocol'], body.category, c, keep_null=True)
+            staged = validate_stage_parameters(stages, c['protocol'], body.category, c)
         except ValueError as exc:
             raise ConnectionError(str(exc)) from exc
+        # Only stored when set, so older registrations keep an identical identity.
+        cfg.pop('stage_parameters', None)
+        if staged:
+            cfg['stage_parameters'] = staged
         if role == 'embedding':
             if body.max_output_tokens is not None:
                 raise ConnectionError('Embedding models return vectors; output tokens apply only to Chat and Extraction.')
@@ -115,6 +149,45 @@ def prepare(body, owner, existing=None):
         raise HTTPException(400, str(exc)) from exc
     except (ValueError, json.JSONDecodeError):
         raise HTTPException(400, 'Saved credentials cannot be decrypted. Enter the credentials again.')
+
+
+HISTORY_LIMIT = 50
+
+
+def parameter_set(cfg, capabilities):
+    embedding = capabilities == ['embedding']
+    return {'extra_parameters': copy.deepcopy(cfg.get('embedding_extra_parameters' if embedding else 'extra_parameters') or {}),
+        'stage_parameters': {} if embedding else copy.deepcopy(cfg.get('stage_parameters') or {})}
+
+
+def author(owner):
+    from .. import dataset_access as access
+    actor = access.request_actor.get() or owner
+    with core.Session() as session:
+        user = session.get(core.User, actor)
+        return {'id': actor, 'username': user.username if user else None}
+
+
+def parameter_history_entry(existing, cfg, capabilities, owner, model_version, now):
+    """Carry the parameter history forward and append one entry per change.
+
+    Each entry records the author, time, the full parameter set after the
+    change and the field-level changes, so the model detail can show who
+    changed what and when. Unchanged saves add nothing.
+    """
+    history, before = [], {}
+    if existing:
+        data = routing.model_data(existing)
+        history = copy.deepcopy(data.get('parameter_history') or [])
+        before = parameter_set(previous(existing)[2]['settings'], data['capabilities'])
+    after = parameter_set(cfg, capabilities)
+    changes = model_parameters.parameter_changes(before, after)
+    if existing and not changes:
+        return history
+    history.append({'version': (history[-1]['version'] + 1) if history else 1, 'model_version': model_version,
+        'at': now, 'author': author(owner), 'event': 'changed' if existing else 'registered',
+        'parameters': after, 'changes': changes})
+    return history[-HISTORY_LIMIT:]
 
 
 def save(body, owner, existing=None):
@@ -141,9 +214,11 @@ def save(body, owner, existing=None):
     core.local_store.put_json(ref, data)
     model_version = existing.version + 1 if existing else 1
     model_ref = f'model/{model_id}/v{model_version}.json'
-    core.store.put_json(model_ref, {'name': body.name.strip(), 'provider_model': body.provider_model.strip(),
-        'connection_profile_id': profile_id, 'connection_profile_version': version, 'capabilities': capabilities, 'enabled': body.enabled})
     now = time.time()
+    history = parameter_history_entry(existing, cfg, capabilities, owner, model_version, now)
+    core.store.put_json(model_ref, {'name': body.name.strip(), 'provider_model': body.provider_model.strip(),
+        'connection_profile_id': profile_id, 'connection_profile_version': version, 'capabilities': capabilities, 'enabled': body.enabled,
+        'parameter_history': history})
     with core.Session.begin() as session:
         if profile:
             p = session.get(core.Record, profile.id)
@@ -163,6 +238,19 @@ def install_routes(app, auth):
     @app.get('/api/model-providers')
     def provider_choices(owner=Depends(auth)):
         return choices()
+
+    @app.get('/api/model-registrations/parameter-schema')
+    def parameter_schema(protocol: str, category: Literal['embedding', 'chat', 'extraction'], chat_format: str = 'generic',
+            embedding_format: str = 'titan', model: str = '', owner=Depends(auth)):
+        if protocol not in ConnectionInput.model_fields['protocol'].annotation.__args__:
+            raise HTTPException(400, 'Unknown model protocol.')
+        return model_parameters.parameter_schema(protocol, category, {'chat_format': chat_format[:30], 'embedding_format': embedding_format[:30]}, model[:200])
+
+    @app.get('/api/model-registrations/{id}/parameter-history')
+    def parameter_history(id: str, owner=Depends(auth)):
+        record = routing.owned(id, owner, 'model')
+        data = routing.model_data(record)
+        return {'model_id': record.id, 'name': record.name, 'history': list(reversed(data.get('parameter_history') or []))}
     @app.post('/api/model-registrations')
     def register(body: RegistrationInput, owner=Depends(auth)):
         with core.document_lock('model-registration-'+owner):
@@ -188,10 +276,24 @@ def install_routes(app, auth):
         # or test credentials are persisted, and the configured timeout remains bounded.
         started = time.monotonic()
         snapshot = {'settings': dict(cfg, _agent_require_tool=True), 'secret_refs': {}, 'capability': body.category}
+        effective = {}
+        model_parameters.clear_effective()
         with core.execution_context(snapshot), temporary_credentials(secret):
             try:
                 if body.category == 'chat':
-                    result = probe_agent(snapshot['settings'])
+                    with model_parameters.use_stage('tool_step'):
+                        result = probe_agent(snapshot['settings'])
+                    effective['tool_step'] = effective_snapshot()
+                    # "Test with these settings": one short sample prompt per
+                    # requested answer stage, sent with that stage's values.
+                    samples = {}
+                    for stage in [s for s in ('chat', 'optimize') if s in (body.test_stages or [])]:
+                        model_parameters.clear_effective()
+                        with core.execution_context({'settings': dict(cfg), 'secret_refs': {}, 'capability': 'chat'}):
+                            samples[stage] = sample_stage(cfg, stage)
+                        effective[stage] = effective_snapshot()
+                    if samples:
+                        result['samples'] = samples
                 elif body.connection.protocol == 'ollama':
                     from ..ollama_provider import embed, chat, extract
                     if body.category == 'embedding':
@@ -214,7 +316,12 @@ def install_routes(app, auth):
                     else:
                         adapter.generate('Give a brief answer.', 'Say ready.')
                         result = {'response_received': True}
-                return {'ok': True, 'category': body.category, 'elapsed_ms': round((time.monotonic()-started)*1000), **result}
+                if body.category == 'extraction':
+                    effective['extraction'] = effective_snapshot()
+                elif body.category == 'chat' and 'chat' not in effective and body.connection.protocol == 'ollama' and 'response_received' in result and not result.get('agent_tool_call_validated'):
+                    effective['chat'] = effective_snapshot()
+                return {'ok': True, 'category': body.category, 'elapsed_ms': round((time.monotonic()-started)*1000), **result,
+                    **({'effective_parameters': {k: v for k, v in effective.items() if v is not None}} if body.category != 'embedding' else {})}
             except (ConnectionError, providers.ProviderError) as exc:
                 raise HTTPException(400, str(exc)) from exc
             except Exception:

@@ -11,7 +11,7 @@ from . import runtime_config, providers, dataset_access as access
 
 CAPABILITIES={'chat','extraction','embedding'}
 ROUTING_DEFAULTS={'mappings':[], 'default_chat_model_id':None, 'default_extraction_model_id':None, 'embedding_model_id':None, 'ocr_model_id':None, 'index_generation':0}
-MODEL_KEYS=('model_provider','model','model_connection','timeout','context_limit','max_output_tokens','extra_parameters','oci_region','oci_project_id','oci_auth_mode','oci_profile','oci_model')
+MODEL_KEYS=('model_provider','model','model_connection','timeout','context_limit','max_output_tokens','extra_parameters','stage_parameters','oci_region','oci_project_id','oci_auth_mode','oci_profile','oci_model')
 EMBED_KEYS=('embedding_provider','embedding_model','embedding_connection','embedding_context_limit','embedding_extra_parameters','search_provider','oci_region','oci_project_id','oci_auth_mode','oci_profile','oci_vector_store_id','timeout','chunk_size','chunk_overlap','top_k')
 
 _snapshot_reads=ContextVar('lapi_snapshot_reads',default=None)
@@ -97,7 +97,11 @@ def model_public(r):
     embedding=data['capabilities']==['embedding'];cfg=snap['settings']
     from .lapi_models import cloud_ocr
     ocr_eligible='extraction' in data['capabilities'] and cloud_ocr.eligible({'settings':cfg,'provider_model':data['provider_model']})
-    return core.representation(r)|data|{'ocr_eligible':ocr_eligible,'provider':connection['protocol'] if connection else p,'connection_profile_version':snap['connection_profile_version'],'credential_configured':configured,'connection':copy.deepcopy(connection),'timeout':cfg.get('timeout',runtime_config.get('LAPI_MODEL_REGISTRATION_TIMEOUT')),'context_limit':cfg.get('embedding_context_limit' if embedding else 'context_limit') or runtime_config.get('LAPI_DEFAULT_EMBEDDING_INPUT_TOKENS' if embedding else 'LAPI_DEFAULT_MODEL_CONTEXT_TOKENS'),'max_output_tokens':None if embedding else cfg.get('max_output_tokens') or runtime_config.get('LAPI_DEFAULT_MODEL_OUTPUT_TOKENS'),'extra_parameters':copy.deepcopy(cfg.get('embedding_extra_parameters' if embedding else 'extra_parameters',{}))}
+    # Parameter history is served by its own endpoint; lists carry the latest change only.
+    history=data.pop('parameter_history',None) or []
+    data['parameters_updated']={k:history[-1].get(k) for k in ('version','at','author')} if history else None
+    data['parameter_version']=len(history)
+    return core.representation(r)|data|{'stage_parameters':{} if embedding else copy.deepcopy(cfg.get('stage_parameters') or {}),'ocr_eligible':ocr_eligible,'provider':connection['protocol'] if connection else p,'connection_profile_version':snap['connection_profile_version'],'credential_configured':configured,'connection':copy.deepcopy(connection),'timeout':cfg.get('timeout',runtime_config.get('LAPI_MODEL_REGISTRATION_TIMEOUT')),'context_limit':cfg.get('embedding_context_limit' if embedding else 'context_limit') or runtime_config.get('LAPI_DEFAULT_EMBEDDING_INPUT_TOKENS' if embedding else 'LAPI_DEFAULT_MODEL_CONTEXT_TOKENS'),'max_output_tokens':None if embedding else cfg.get('max_output_tokens') or runtime_config.get('LAPI_DEFAULT_MODEL_OUTPUT_TOKENS'),'extra_parameters':copy.deepcopy(cfg.get('embedding_extra_parameters' if embedding else 'extra_parameters',{}))}
 
 def dataset_config(r):return configuration(r)
 def mapped_model(dataset,id):
@@ -212,7 +216,7 @@ def _execution_snapshot(r,capability,model_id=None):
 def public_selection(snapshot):
     selected={k:snapshot.get(k) for k in ('model_id','model_name','model_version','provider_model','connection_profile_id','connection_profile_version','dataset_id','index_generation')}
     cfg=snapshot.get('settings',{})
-    return selected|{k:cfg.get(k) for k in ('model_provider','embedding_provider','search_provider','context_limit','max_output_tokens','extra_parameters','embedding_context_limit','embedding_extra_parameters')}
+    return selected|{k:cfg.get(k) for k in ('model_provider','embedding_provider','search_provider','context_limit','max_output_tokens','extra_parameters','stage_parameters','embedding_context_limit','embedding_extra_parameters')}
 
 def documents_scope(owner,dataset_id,ids=None):
     docs=[owned(id,owner,'document') for id in ids] if ids else []

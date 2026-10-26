@@ -55,6 +55,39 @@ Ollama execution continues through `lapi_local/ollama.py`; it is not silently
 routed through the cloud facade. Legacy root imports alias the canonical
 modules, preserving older callers and saved protocol/configuration formats.
 
+## Model parameters per stage
+
+Model Registration edits sampling values in a typed form built from
+`GET /api/model-registrations/parameter-schema` (`parameters.parameter_schema`,
+also `supported_parameters(..., schema=True)`): each field's type, range,
+provider default and help, the stages of the category and suggested starting
+values. Ranges are the validation ranges (temperature 0–2, 0–1 on Bedrock).
+A provider without sampling overrides (direct Claude) returns a notice.
+
+A Chat or Extraction model stores `extra_parameters` (model-wide) and
+`stage_parameters` for `chat`, `tool_step`, `extraction` and `optimize`. A
+missing key means Default; `null` means Use provider default (nothing is
+sent). Call sites resolve one field at a time with
+`parameters.for_stage(cfg, stage)`: stage value, then model value, then the
+documented Lapi default in `LAPI_DEFAULTS`. Admin values always win.
+
+| Lapi default | Where it used to be hard-coded |
+| --- | --- |
+| Ollama, every stage: top_p 0.8, top_k 20, repeat_penalty 1.1, seed 42; Optimize temperature 0.7 | Ollama adapter sampling |
+| Ollama Chat answer and Tool steps: temperature 0 | `agent_model`, `chat_agent`, `dataset_chat_general` |
+| Ollama Extraction: temperature 0.2 | Ollama extraction |
+| OpenAI-compatible and Azure GPT-4o Tool steps: temperature 0 | `agent_model` strict tool choice |
+| Cloud OCR (Extraction stage): temperature 0.1 | OpenAI and Gemini OCR |
+
+Local Ollama OCR has no registered model and keeps `OLLAMA_OCR_OPTIONS`.
+Calls infer their stage (tools offered: `tool_step`; schema: `extraction`;
+otherwise `chat`); `with parameters.use_stage('optimize'):` chooses it
+explicitly. `parameters.effective()` returns the parameters and sources of
+the latest call for usage records. The connection test reports them per
+stage and, with `test_stages`, runs one sample prompt per answer stage.
+Every saved change appends a `parameter_history` entry (author, time, full
+set, field changes), served by `GET /api/model-registrations/{id}/parameter-history`.
+
 ## Direct Claude Chat
 
 Choose `anthropic` for direct Claude API keys, not Bedrock, Vertex or the

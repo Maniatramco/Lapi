@@ -1,7 +1,7 @@
 """Native Agent dispatch with bounded transport and validated tool responses."""
 from .connection import ModelConnection
 from .validation import ConnectionError
-from .parameters import validate_parameters
+from .parameters import for_stage, current_stage
 from .provider_registry import provider
 from ..lapi_agent import agent_context, token_usage
 
@@ -10,7 +10,9 @@ def complete(cfg, messages, tools, on_token=None):
     connection = ModelConnection(cfg)
     adapter = provider(connection.c)
     budget = cfg.get('max_output_tokens') or 768
-    extra = validate_parameters(cfg.get('extra_parameters', {}), connection.c['protocol'], 'chat', connection.c)
+    # Tool steps when tools are offered, else the chat answer; an outer
+    # parameters.use_stage(...) block chooses the stage explicitly.
+    extra = for_stage(cfg, current_stage('tool_step' if tools else 'chat'), connection.c['protocol'], connection.c)
     cache = getattr(adapter, 'mark_cache', None) if cfg.get('_cache_prefix') else None
 
     def build(inputs):

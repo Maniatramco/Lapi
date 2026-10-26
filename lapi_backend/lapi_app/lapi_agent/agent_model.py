@@ -7,6 +7,7 @@ import re
 from jsonschema import validate, ValidationError
 from .. import core, providers, ollama_provider
 from . import agent_context, token_usage
+from ..lapi_models import parameters
 
 # The semantic selector may also choose the first scoped, read-only metadata
 # tools. Their normal contracts and ownership checks still govern execution.
@@ -65,12 +66,14 @@ def schema_decision(messages, tools, cfg, required_tool=False, on_token=None, st
         # once in the system message and consume the actual input context.
         # Required tool selection generates at most 256 tokens. Reserve that
         # actual budget during preflight, not the larger final-answer budget.
-        with core.execution_context({'settings':dict(cfg,max_output_tokens=budget)}):
+        # Sampling: Model Registration values for this stage, else the
+        # documented Lapi default (temperature 0, seed 42); see parameters.py.
+        with core.execution_context({'settings':dict(cfg,max_output_tokens=budget)}), parameters.default_stage('tool_step' if tools else 'chat'):
             options = ollama_provider.generation_options(wire,budget)
-        options.update(temperature=0,seed=42)
+            keep = ollama_provider.request_parameters()
         payload={'model':cfg['model'], 'messages':wire,
             'stream':False, 'think':False, 'format':schema, 'options':options,
-            **ollama_provider.request_parameters()}
+            **keep}
         usage_call=token_usage.attempt()
         if on_token:
             from .agent_stream import qwen_request
@@ -390,11 +393,14 @@ def complete(messages, tools, on_token=None):
             'tool_selection' if cfg.get('_agent_require_tool') else 'answer')
         messages=packed['messages']
         try:
-            options = ollama_provider.generation_options(packed,budget)
-            options.update(temperature=0, seed=42)
+            # Sampling: Model Registration values for this stage, else the
+            # documented Lapi default (temperature 0, seed 42); see parameters.py.
+            with parameters.default_stage('tool_step' if tools else 'chat'):
+                options = ollama_provider.generation_options(packed,budget)
+                keep = ollama_provider.request_parameters()
             payload={'model': ollama_provider.local_model_name(cfg['model']),
                 'messages': messages, 'tools': tools, 'stream': False, 'think': False,
-                'options': options, **ollama_provider.request_parameters()}
+                'options': options, **keep}
             usage_call=token_usage.attempt()
             if on_token:
                 from .agent_stream import native_request
@@ -434,12 +440,14 @@ def complete(messages, tools, on_token=None):
         budget=cfg.get('max_output_tokens') or 768
         wire=agent_context.fit(messages,cfg,budget,serialize,'tool_selection' if cfg.get('_agent_require_tool') else 'answer')
         payload={'model':cfg['model'],**wire,'max_completion_tokens':budget}
-        if provider == 'registered':
-            from ..lapi_models.parameters import validate_parameters, ParameterError
-            try:
-                payload.update(validate_parameters(cfg.get('extra_parameters', {}), protocol, 'chat', connection))
-            except ParameterError as exc:
-                raise providers.ProviderError(str(exc)) from exc
+        # Sampling: Model Registration values for this stage, else the
+        # documented Lapi default (GPT-4o tool steps: temperature 0).
+        try:
+            stage = parameters.current_stage('tool_step' if tools else 'chat')
+            payload.update(parameters.for_stage(cfg, stage, protocol, connection) if provider == 'registered'
+                else parameters.for_stage({'model': cfg['model']}, stage, 'openai-compatible', {}))
+        except parameters.ParameterError as exc:
+            raise providers.ProviderError(str(exc)) from exc
         if cfg.get('_agent_require_tool'):payload['tool_choice']='required'
         # Agentic chat: the stable prefix (system prompt + tools) is identical
         # across turns of a dataset; OpenAI routes it to the same prompt cache.
@@ -447,8 +455,6 @@ def complete(messages, tools, on_token=None):
             payload['prompt_cache_key']=cfg['_prompt_cache_key'][:64]
         if any(t.get('function', {}).get('strict') for t in wire_tools):
             payload['parallel_tool_calls'] = False
-            if cfg.get('_agent_require_tool') and cfg['model'].startswith('gpt-4o'):
-                payload.setdefault('temperature', 0)
         usage_call=token_usage.attempt()
         if on_token:
             from .agent_stream import native_request
