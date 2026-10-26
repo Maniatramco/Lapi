@@ -64,11 +64,13 @@ def system_prompt():
 
 def _optional(module, name, *args, default=None):
     """Layers owned by other workstreams (skills, instructions, memory) are optional."""
+    import importlib
     try:
-        mod = __import__('lapi_app.lapi_agent.' + module, fromlist=[name]) if module != 'prompt_layers' else __import__('lapi_app.prompt_layers', fromlist=[name])
-        return getattr(mod, name)(*args)
+        package = __package__.rsplit('.', 1)[0] if module == 'prompt_layers' else __package__
+        function = getattr(importlib.import_module('.' + module, package), name)
     except (ImportError, AttributeError):
         return default
+    return function(*args)
 
 
 def history_messages(thread_data, turns):
@@ -110,7 +112,7 @@ class AgenticChat:
         self.trace = []; self.model_calls = 0; self.seen = {}; self.observed_bytes = 0
         self.max_steps = setting('LAPI_AGENT_MAX_STEPS'); self.max_calls = setting('LAPI_AGENT_MAX_CALLS_PER_STEP')
         self.budget = setting('LAPI_AGENT_OBSERVATION_BYTES'); self.parallel = setting('LAPI_AGENT_PARALLEL_READS')
-        self.validation = {'attempts': []}; self.ended = None; self.phase = 'answered'
+        self.validation = {'attempts': []}; self.ended = None; self.phase = 'answered'; self.skip_prefetch = False
 
     # ---------------------------------------------------------------- prompt
     def system(self):
@@ -229,7 +231,7 @@ class AgenticChat:
     # ---------------------------------------------------------------- loop
     def prefetch(self, text):
         """Search for the question before the first model call (one round trip saved)."""
-        if not self.tools.body.dataset_id or GREETING.match(text) or text.lstrip().startswith('/'): return []
+        if self.skip_prefetch or not self.tools.body.dataset_id or GREETING.match(text) or text.lstrip().startswith('/'): return []
         call = {'id': 'prefetch_search', 'name': 'search_knowledge', 'arguments': {'query': text[:2000], 'top_k': 8}}
         with self.progress.step('Searching knowledge'):
             content = self.execute(call)
@@ -340,7 +342,10 @@ def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_pr
     started = time.monotonic()
     with core.document_lock('agent-turn-' + thread.id), agent_context.observe(context_calls.append), token_usage.collect() as usage_calls:
         data = core.store.json(thread.ref)
-        turns = setting('LAPI_CHAT_MEMORY_TURNS') if getattr(body, 'use_memory', True) else 0
+        # Earlier turns are used unless this request or the user's memory setting turns them off.
+        memory = _optional('user_memory', 'load', owner, default=(None, {'enabled': True}))[1]
+        remember = getattr(body, 'use_memory', True) and memory.get('enabled', True)
+        turns = setting('LAPI_CHAT_MEMORY_TURNS') if remember else 0
         history = history_messages(data, turns)
         text = body.text
         if body.attached_filenames: text += '\nAttached document filenames: ' + json.dumps(body.attached_filenames)
@@ -349,7 +354,7 @@ def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_pr
         if command and command.get('answer'):
             answer = command['answer']
         else:
-            if command and command.get('text'): text = command['text']
+            if command and command.get('text'): text = command['text']; agent.skip_prefetch = True
             answer = fast_answer(tools, body.text) if not history else None
             if answer is None:
                 answer, follow_ups = agent.run(history, text)
@@ -382,7 +387,8 @@ def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_pr
         progress.complete()
         message['answer_workflow'] = progress.snapshot()
         core.store.put_json(thread.ref, data)
-    _optional('user_memory', 'remember_turn', owner, body, message, default=None)
+    if remember:
+        _optional('user_memory', 'remember_turn', owner, body, message, snapshot, default=None)
     return {'conversation_id': thread.id, 'reply_user_id': data['messages'][-2]['id'], 'message': message,
             'proposal': tools.proposal, 'agent': 'agentic_chat', 'duration_ms': round((time.monotonic() - started) * 1000),
             'model_calls': agent.model_calls, 'phase': agent.phase}

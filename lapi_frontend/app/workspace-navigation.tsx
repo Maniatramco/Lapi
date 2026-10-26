@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from 'react';
-import {BookOpen,ChevronRight,CloudUpload,Database,FileSearch,FileText,FolderPlus,Info,Layers,Settings2,Table2} from 'lucide-react';
+import {BookOpen,ChevronRight,CloudUpload,Database,FileSearch,FileText,FolderPlus,Info,Layers,Settings2,Sparkles,Table2} from 'lucide-react';
 import {AgentLogo} from './agent-logo';
 
 type Item={name:string;icon:typeof Database};
@@ -15,6 +15,7 @@ export function WorkspaceNavigation({view,isAdmin,onNavigate,adminItems,adminOpe
  return <nav aria-label="Workspace pages">
   {link('Home','Dashboard',Database)}
   {link('Lapi agent V2','Lapi Agent',Database)}
+  {link('Skills & memory','Skills & memory',Sparkles)}
   <button className={`nav-item nav-group-toggle${onboardViews.includes(view)?' group-active':''}`} aria-label="Onboard" aria-expanded={onboardOpen} aria-controls="onboard-navigation" onClick={()=>setOnboardOpen(!onboardOpen)}><FolderPlus size={18}/><span className="nav-item-label">Onboard</span><ChevronRight size={14} className={onboardOpen?'rotated':''}/></button>
   <div id="onboard-navigation" className="nav-submenu" hidden={!onboardOpen}>
    {link('Datasets','Dataset',BookOpen)}{link('Prompt templates','Prompt',FileText)}{link('Extract Data','Extract',Table2)}{link('Extract','Review',FileSearch)}{link('Add knowledge','Add knowledge',CloudUpload)}

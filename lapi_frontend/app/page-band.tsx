@@ -14,6 +14,7 @@ export const PAGE_INTROS:Record<string,Intro>={
  'Jobs & activity':{group:'Manage workspace',title:'Jobs & activity',text:'Indexing, extraction and cleanup run in the background. Follow their progress and retry failures here.'},
  'Storage':{group:'Manage workspace',title:'Storage',text:'See where originals, databases and knowledge are kept, and configure file storage.'},
  'Files & processing':{group:'Manage workspace',title:'Files & processing',text:"Review every source file's storage, indexing, OCR and extraction status."},
+ 'Skills & memory':{group:'Lapi Agent',title:'Skills & memory',text:'Teach the agent playbooks, set how it answers for each dataset, tune model guides and manage what it remembers about you.'},
  'About':{group:'Lapi',title:'About Lapi',text:'What Lapi does, how it keeps knowledge grounded, and what changed in each version.'},
 };
 

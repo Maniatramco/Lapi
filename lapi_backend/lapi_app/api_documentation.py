@@ -157,6 +157,20 @@ NOTES = {
     'POST /api/settings/profiles/{id}/activate': 'Activate a legacy deployment profile. Registered-model profiles are applied through dataset Model Mapping instead.',
     'GET /api/settings/profiles/{id}/export': 'Export a profileâ€™s name, version, and settings as JSON.',
     'GET /api/documentation': 'Read this live API contract and learning notes. No document data, user records, or configured credential values are included.',
+    'GET /api/skills': 'List the skills you can use in chat: your own, those shared with a dataset or the workspace, and built-in playbooks.',
+    'POST /api/skills': 'Create a skill (name, description, steps, optional allowed tools and output format). Sharing with a dataset or the workspace requires an administrator.',
+    'PUT /api/skills/{skill_id}': 'Save a new version of a skill you own (administrators can edit shared skills).',
+    'DELETE /api/skills/{skill_id}': 'Remove a skill you own from chat. Built-in skills cannot be removed.',
+    'GET /api/me/memory': 'Read your chat memory: the short preference note, whether memory is on, and your recent questions (kept 90 days, private to you).',
+    'PUT /api/me/memory': 'Edit your memory note or turn chat memory on or off.',
+    'DELETE /api/me/memory': 'Clear your memory note and question history.',
+    'GET /api/datasets/{dataset_id}/instructions': 'Read the dataset instructions that guide chat answers for this dataset, with the version number.',
+    'GET /api/datasets/{dataset_id}/instructions/versions': 'List earlier versions of the dataset instructions.',
+    'PUT /api/datasets/{dataset_id}/instructions': 'Save new dataset instructions (administrators, max 4 KB). Returns warnings when the text tries to weaken citation or confirmation rules.',
+    'GET /api/datasets/{dataset_id}/prompt-guide': 'Read the dataset-specific model optimization guide that overrides the model guide in chat.',
+    'PUT /api/datasets/{dataset_id}/prompt-guide': 'Save the dataset-specific model optimization guide (administrators, max 8 KB).',
+    'GET /api/models/{model_id}/prompt-guide': 'Read the optimization guide used when chatting with this model, or the built-in default for its family.',
+    'PUT /api/models/{model_id}/prompt-guide': 'Save the optimization guide for this model (administrators, max 8 KB).',
     'GET /api/documentation/export': 'Download the current OpenAPI JSON contract for offline study or import into API tools. This export contains schemas, not workspace data or configured credentials.',
 }
 
@@ -169,7 +183,7 @@ GROUPS = {
     'extractions': 'Extraction & review', 'jobs': 'Jobs & workflow',
     'index': 'Index & search', 'settings': 'Settings & connections',
     'overview': 'Workspace & services', 'capabilities': 'Workspace & services',
-    'documentation': 'Workspace & services',
+    'documentation': 'Workspace & services', 'skills': 'Chat', 'me': 'Chat',
 }
 PUBLIC = {'GET /health', 'GET /ready', 'GET /api/auth/status', 'POST /api/auth/setup',
           'POST /api/auth/login', 'POST /api/auth/recovery/prepare', 'POST /api/auth/recovery/reset'}

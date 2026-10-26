@@ -1172,6 +1172,11 @@ from .lapi_agent import dataset_chat
 dataset_chat.install(app, auth, __import__(__name__, fromlist=['app']))
 from .lapi_agent import extraction_rerun
 extraction_rerun.install(app, auth, __import__(__name__, fromlist=['app']))
+from .lapi_agent import skills as agent_skills, user_memory
+agent_skills.install(app, auth)
+user_memory.install(app, auth)
+from . import prompt_layers
+prompt_layers.install(app, auth)
 from . import agent_onboarding
 agent_onboarding.install(app, auth)
 

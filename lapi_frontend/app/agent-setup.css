@@ -1,0 +1,28 @@
+.agent-setup{display:grid;gap:16px;max-width:960px}
+.agent-setup-tabs{display:flex;flex-wrap:wrap;gap:8px}
+.agent-setup-card{display:grid;gap:12px;padding:16px;border:1px solid var(--border,#e5e7eb);border-radius:12px;background:var(--surface,#fff)}
+.agent-setup-card label{display:grid;gap:6px;font-weight:600;font-size:.9rem}
+.agent-setup-card input,.agent-setup-card select,.agent-setup-card textarea{font:inherit;font-weight:400;padding:8px 10px;border:1px solid var(--border,#d1d5db);border-radius:8px;background:var(--surface,#fff);color:inherit;width:100%;box-sizing:border-box}
+.agent-setup-card textarea{resize:vertical;min-height:90px}
+.agent-setup-head,.agent-setup-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.agent-setup-head{justify-content:space-between;align-items:center}
+.agent-setup-head p{flex:1 1 320px;margin:0}
+.agent-setup-row>label{flex:1 1 180px}
+.agent-setup-row.spread{justify-content:space-between;align-items:center}
+.agent-setup-actions{display:flex;flex-wrap:wrap;gap:8px}
+.agent-setup-list{list-style:none;padding:0;margin:0;display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.agent-setup-list p{margin:0}
+.agent-setup-error{color:var(--danger,#b42318)}
+.agent-setup-warning{color:var(--warning,#9a5b00);background:var(--warning-bg,#fff6e5);padding:8px 10px;border-radius:8px}
+.agent-setup-toggle{display:flex!important;align-items:center;gap:8px;font-weight:600}
+.agent-setup-toggle input{width:auto!important}
+.agent-setup-version pre,.agent-setup-history{white-space:pre-wrap;font-size:.85rem}
+.agent-setup-history{list-style:none;padding:0;display:grid;gap:10px}
+.agent-plan{list-style:none;padding:8px 12px;margin:0 0 8px;border-left:3px solid var(--accent,#f59e0b);display:grid;gap:4px;font-size:.9rem}
+.agent-plan li[data-status=done]{color:var(--muted,#6b7280);text-decoration:line-through}
+.agent-follow-ups{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.agent-follow-ups .btn{font-size:.85rem}
+.agent-instruction-diff{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:8px}
+.agent-instruction-diff pre{white-space:pre-wrap;font-size:.85rem;padding:8px;border-radius:8px;border:1px solid var(--border,#e5e7eb);margin:4px 0 0;max-height:260px;overflow:auto}
+.agent-source-snippet{margin:2px 0 0;font-size:.82rem}
+@media (max-width:640px){.agent-setup-card{padding:12px}}

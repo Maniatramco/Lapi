@@ -7,6 +7,7 @@ import {ReviewDetail} from './review-detail';
 import { ExtractionDirectory } from "./extraction-directory";
 import { ExtractData } from "./extract-data";
 import { PromptTemplates } from "./prompt-templates";
+import { AgentSetup } from "./agent-setup";
 import { ReExtractionDialog } from "./re-extract";
 import { WorkspaceNavigation } from "./workspace-navigation";
 import { WorkflowOverview } from "./workflow-overview";
@@ -65,6 +66,7 @@ import type { DatasetKnowledgeScope } from "./dataset-knowledge-picker";
 type Entity = Record<string, any>;
 type View =
   | "About"
+  | "Skills & memory"
   | "Home"
   | "Datasets"
   | "Lapi agent V2"
@@ -85,6 +87,7 @@ const sections: { name: View; icon: typeof Shield; group?: string }[] = [
   { name: "About", icon: BookOpen },
   { name: "Home", icon: Database, group: "WORKSPACE" },
   { name: "Lapi agent V2", icon: Bot, group: "WORKSPACE" },
+  { name: "Skills & memory", icon: Bot, group: "WORKSPACE" },
   { name: "Users & passwords", icon: KeyRound },
   { name: "Datasets", icon: BookOpen },
   { name: "Extract", icon: FileSearch },
@@ -479,7 +482,7 @@ export default function App() {
     window.location.hash = encodeURIComponent(destination==="Review"&&reviewId?`Review/${reviewId}`:destination==="Extract"&&reviewSection==="Create"?"Review/create":viewRoute(destination));
     setView(destination);
     if (destination !== "Home") setDashboardHandoff(null);
-    if (!["About", "Home", "Datasets", "Lapi Agent", "Lapi agent V2", "Extract", "Extract Data", "Review", "Extraction Review", "Re-extract", "Prompt templates", "Add knowledge"].includes(name)) setAdminNavigation(true);
+    if (!["About", "Home", "Datasets", "Lapi Agent", "Lapi agent V2", "Skills & memory", "Extract", "Extract Data", "Review", "Extraction Review", "Re-extract", "Prompt templates", "Add knowledge"].includes(name)) setAdminNavigation(true);
     setError("");
     setMobile(false);
     return true;
@@ -549,7 +552,7 @@ export default function App() {
       if(next === "Review")setReviewRouteId("");
       setView(next);
       if(next==="Lapi agent V2")window.history.replaceState(null,"","#"+encodeURIComponent(viewLabel(next)));
-      if (!["About", "Home", "Datasets", "Lapi Agent", "Lapi agent V2", "Extract", "Extract Data", "Review", "Extraction Review", "Re-extract", "Prompt templates"].includes(next)) setAdminNavigation(true);
+      if (!["About", "Home", "Datasets", "Lapi Agent", "Lapi agent V2", "Skills & memory", "Extract", "Extract Data", "Review", "Extraction Review", "Re-extract", "Prompt templates"].includes(next)) setAdminNavigation(true);
     }
     setMobile(false);
     setError("");
@@ -738,7 +741,7 @@ export default function App() {
           <span className="brand-name">Lapi</span>
         </div>
         <div className="brand-sub">AI Data Platform</div>
-        <WorkspaceNavigation view={view} isAdmin={Boolean(user.is_admin)} onNavigate={navigate} adminOpen={adminNavigation} onAdminToggle={()=>setAdminNavigation(!adminNavigation)} adminItems={sections.filter(s=>!["About","Home","Datasets","Add knowledge","Lapi Agent","Lapi agent V2","Extract","Extract Data","Review","Extraction Review","Re-extract","Prompt templates","Model Registration","Model Mapping"].includes(s.name)&&(user.is_admin||["Users & passwords","Jobs & activity"].includes(s.name)))}/>
+        <WorkspaceNavigation view={view} isAdmin={Boolean(user.is_admin)} onNavigate={navigate} adminOpen={adminNavigation} onAdminToggle={()=>setAdminNavigation(!adminNavigation)} adminItems={sections.filter(s=>!["About","Home","Datasets","Add knowledge","Lapi Agent","Lapi agent V2","Skills & memory","Extract","Extract Data","Review","Extraction Review","Re-extract","Prompt templates","Model Registration","Model Mapping"].includes(s.name)&&(user.is_admin||["Users & passwords","Jobs & activity"].includes(s.name)))}/>
 
         <div className="nav-footer">
           <div className="row" style={{ marginBottom: 9 }}>
@@ -822,6 +825,7 @@ export default function App() {
           )}
           {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
           {view === "About" && <AboutLapi/>}
+          {view === "Skills & memory" && <AgentSetup api={api} datasets={kbs} selectedDataset={kb} isAdmin={Boolean(user.is_admin)} onNotify={notify}/>}
           {view === "Add knowledge" && <AddKnowledge api={api} datasets={kbs} documents={docs} selectedDataset={kb} onChanged={reload} onBack={()=>navigate("Home")} onExtract={()=>navigate("Extract Data")} onAsk={scope=>{if(navigate("Home")){setDashboardDatasetId('');setDashboardHandoff({...scope,key:Date.now()});}}}/>}
           {view === "Files & processing" && (user.is_admin?<AdminDocuments api={api} onChanged={reload} onReview={openReview}/>:<div className="panel" role="alert">Administrator access is required to manage files and processing.</div>)}
           {view === "Users & passwords" && <UserManagement api={api} user={user as {id:string;username:string;is_admin?:boolean}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
