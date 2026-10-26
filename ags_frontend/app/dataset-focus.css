@@ -1,0 +1,6 @@
+/* Dataset table and create-only onboarding. */
+.dataset-focus{min-width:0}
+.dataset-focus .dataset-navigation{padding:0;margin-bottom:12px;border:0;background:transparent;align-items:center}
+.dataset-focus .agent-onboarding{margin:0;max-width:880px}
+.model-catalog-focus .catalog-form{margin-top:0;border:0;padding:0;background:transparent}
+.model-catalog-focus .catalog-list{max-height:540px;overflow-y:auto;padding-right:6px;overscroll-behavior:contain}

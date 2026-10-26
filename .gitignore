@@ -1,0 +1,51 @@
+.env
+.env.*
+!ags_local_use/.env.example
+!ags_local_use/.env.oracle.example
+secrets/
+backups/
+data/
+local-models/
+*.sqlite*
+*.db
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+*.log
+
+*.tsbuildinfo
+
+frontend/screenshots/
+ags_frontend/screenshots/
+/ags_runtime/
+
+# Local verification artifacts can contain workspace data and large binaries.
+/.codex-remote-attachments/
+/output/
+/work/
+/docs/testing/results/
+
+# Private destination receipts from the portable application release helper.
+/ags_deploy/deployment-records/
+
+# Keep the deployment EXE local until end-to-end testing is complete.
+/ags_deploy/AegisDeploy/AegisDeploy.exe
+
+# Session-specific local design review notes.
+/design-qa.md
+
+# Private OCI deployment inputs stay local to each checkout.
+/ags_deploy/targets/
+
+# Archived desktop executables remain local.
+/delete/ags_deploy/AegisDeploy/
+
+# Private target settings beside the main deployment entry point.
+/ags_deploy/aegis-oci-inputs.json
