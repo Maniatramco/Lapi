@@ -61,6 +61,26 @@ except oracledb.DatabaseError:
 print('LAPI-VM> database version', con.version)
 PY
 
+say "installing the pinned local reranker (same as Aegis production)"
+"${COMPOSE[@]}" run --rm --no-deps -T --entrypoint python api - <<'PY'
+import json
+from pathlib import Path
+from huggingface_hub import hf_hub_download
+from ags_app.reranker import MODEL_ID, REVISION, verify_assets
+d = Path('/data/models/reranker')
+try:
+    verify_assets(d)
+    print('LAPI-VM> reranker already present')
+except Exception:
+    d.mkdir(parents=True, exist_ok=True)
+    for f in ('onnx/model.onnx', 'tokenizer.json'):
+        hf_hub_download(repo_id=MODEL_ID, revision=REVISION, filename=f,
+                        local_dir=d, token=False, endpoint='https://huggingface.co')
+    verify_assets(d)
+    (d / 'aegis-model.json').write_text(json.dumps({'model': MODEL_ID, 'revision': REVISION}))
+    print('LAPI-VM> reranker downloaded and verified')
+PY
+
 say "starting ollama and pulling free local models"
 "${COMPOSE[@]}" up -d ollama qdrant
 for _ in $(seq 30); do "${COMPOSE[@]}" exec -T ollama ollama list >/dev/null 2>&1 && break; sleep 5; done
