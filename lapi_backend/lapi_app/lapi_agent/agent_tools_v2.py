@@ -462,10 +462,9 @@ class AgentTools(Tools):
     def v2_get_model_configuration(self):
         data = self.get_model_configuration()
         try:
-            from .. import dataset_models
-            defaults = getattr(dataset_models, 'workspace_defaults', None)
-            if callable(defaults): data['workspace_defaults'] = defaults()
-        except Exception:  # Defaults are informational; mapping data stays authoritative.
+            from .. import workspace_defaults
+            data['workspace_defaults'] = workspace_defaults.current()
+        except ImportError:
             pass
         n = self.cite('Model configuration · ' + data['dataset']['name'], json.dumps(data, ensure_ascii=False, default=str),
                       key=f'catalog:models:{data["dataset"]["id"]}')
@@ -653,6 +652,15 @@ class AgentTools(Tools):
         self.sources.append(src)
         return src['index']
 
+    def _index_note(self, view, note):
+        """While the knowledge index rebuilds, say so instead of implying the scope is complete."""
+        try:
+            from .chat_knowledge import index_notice
+            extra = index_notice(view)
+        except ImportError:
+            extra = None
+        return note + (' ' + extra if extra else '')
+
     def v2_search_documents(self, query, top_k=8, documents=None):
         self.dataset(); ids = self.resolve_documents(documents)
         view = self._view(ids); hits, diagnostics = self._hits(view, query, ['document_chunk'], top_k)
@@ -660,7 +668,7 @@ class AgentTools(Tools):
                  'text': r['text'][:2400], **({'ocr_notice': 'AI OCR transcription; verify against the original.'} if r.get('ocr') else {})} for r in hits]
         rows = fit_list(rows)
         return envelope({'passages': rows, 'retrieval': {k: diagnostics.get(k) for k in ('mode', 'reranker_enabled', 'returned_entities')}},
-                        [r['citation'] for r in rows], note='Ranked passages, not a complete list.')
+                        [r['citation'] for r in rows], note=self._index_note(view, 'Ranked passages, not a complete list.'))
 
     def v2_search_knowledge(self, query, source_types=None, top_k=8, scope='selected_dataset'):
         types = source_types or ['dataset', 'document', 'document_chunk', 'extraction', 'prompt', 'model', 'workflow', 'application']
@@ -676,7 +684,7 @@ class AgentTools(Tools):
         rows = fit_list([{'citation': self._source(r, view), 'type': r['source_type'], 'title': r['title'], 'page': r.get('page'),
                           'chunk_id': r.get('chunk_id'), 'text': r['text'][:2400]} for r in hits])
         return envelope({'results': rows, 'retrieval': {k: diagnostics.get(k) for k in ('mode', 'reranker_enabled', 'returned_entities')}},
-                        [r['citation'] for r in rows], note='Ranked results, not a complete list or count.')
+                        [r['citation'] for r in rows], note=self._index_note(view, 'Ranked results, not a complete list or count.'))
 
     def v2_read_document_section(self, document, chunk_id='', before=1, after=1, pages=None):
         self.dataset(); ids = self.resolve_documents([document]); doc = next(d for d in self.documents(ids) if d.id == ids[0])
