@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.13.2 - 27 October 2026
+
+Connect · Vectorize · Ask sign-in banner
+
+- The sign-in banner tells the Lapi story in three steps: Connect data from anywhere (documents, databases, cloud storage, apps and APIs, sheets, email), Vectorize it into one unified knowledge base, and Ask questions that come back with sources.
+- The banner is drawn in the Lapi palette with flowing blue and orange dots, scales sharply on every screen, and pauses its motion when reduced motion is requested.
+- The sign-in tagline is now Connect · Vectorize · Ask.
+
+The banner is the `LapiBanner` SVG component in `lapi_frontend/app/lapi-banner.tsx`; the previous raster banner was moved to `delete/`.
+
 ## v26.1.13.1 - 27 October 2026
 
 Lapi colours: white, blue and light orange

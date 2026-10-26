@@ -1,6 +1,16 @@
 {
-  "version": "26.1.13.1",
+  "version": "26.1.13.2",
   "releases": [
+    {
+      "version": "26.1.13.2",
+      "date": "2026-10-27",
+      "title": "Connect · Vectorize · Ask sign-in banner",
+      "changes": [
+        "The sign-in banner tells the Lapi story in three steps: Connect data from anywhere (documents, databases, cloud storage, apps and APIs, sheets, email), Vectorize it into one unified knowledge base, and Ask questions that come back with sources.",
+        "The banner is drawn in the Lapi palette with flowing blue and orange dots, scales sharply on every screen, and pauses its motion when reduced motion is requested.",
+        "The sign-in tagline is now Connect · Vectorize · Ask."
+      ]
+    },
     {
       "version": "26.1.13.1",
       "date": "2026-10-27",
