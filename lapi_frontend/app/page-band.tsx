@@ -13,6 +13,7 @@ export const PAGE_INTROS:Record<string,Intro>={
  'Users & passwords':{group:'Manage workspace',title:'Users & passwords',text:'Manage people, roles and dataset access, and change your own password.'},
  'Jobs & activity':{group:'Manage workspace',title:'Jobs & activity',text:'Indexing, extraction and cleanup run in the background. Follow their progress and retry failures here.'},
  'Storage':{group:'Manage workspace',title:'Storage',text:'See where originals, databases and knowledge are kept, and configure file storage.'},
+ 'Token usage':{group:'Manage workspace',title:'Token usage',text:'Tokens each provider reported for every model call, with approximate cost by dataset, model, user and day.'},
  'Files & processing':{group:'Manage workspace',title:'Files & processing',text:"Review every source file's storage, indexing, OCR and extraction status."},
  'About':{group:'Lapi',title:'About Lapi',text:'What Lapi does, how it keeps knowledge grounded, and what changed in each version.'},
 };

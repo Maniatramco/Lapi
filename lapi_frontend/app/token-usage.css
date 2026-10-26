@@ -1,0 +1,37 @@
+.token-usage{display:grid;gap:18px;min-width:0}
+.token-usage .panel{padding:20px;min-width:0}
+.token-usage h2{margin:0 0 12px;font-size:16px;color:#14213d}
+.token-usage-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.token-usage-filters label{display:grid;gap:4px;font-size:12px;color:#5b6782;min-width:140px;flex:1}
+.token-usage-filters input,.token-usage-filters select{min-width:0;width:100%}
+.token-usage-actions{display:flex;gap:8px;align-items:center;margin-left:auto}
+.token-usage-actions .btn{display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.token-usage-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.token-usage-head .btn{display:inline-flex;gap:6px;align-items:center;font-size:12px}
+.token-usage-plot{position:relative;display:grid;grid-template-columns:48px 1fr;height:220px;gap:8px}
+.token-usage-axis{display:flex;flex-direction:column;justify-content:space-between;font-size:11px;color:#5b6782;text-align:right;padding-bottom:1px}
+.token-usage-bars{display:flex;align-items:flex-end;gap:4px;border-bottom:1px solid #c7d7fb;background:linear-gradient(#eef2f9 1px,transparent 1px) 0 0/100% 50%;min-width:0}
+.token-usage-day{flex:1;height:100%;display:flex;align-items:flex-end;justify-content:center;background:none;border:0;padding:0;cursor:pointer;min-width:3px;border-radius:4px 4px 0 0}
+.token-usage-day:hover,.token-usage-day:focus-visible{background:#fff4e8;outline:none}
+.token-usage-day:focus-visible{box-shadow:0 0 0 2px #2563eb}
+.token-usage-stack{display:flex;flex-direction:column-reverse;gap:2px;width:min(100%,28px);border-radius:4px 4px 0 0;overflow:hidden}
+.token-usage-stack span{display:block;min-height:1px}
+.token-usage-tooltip{position:absolute;top:0;right:0;z-index:2;display:grid;gap:3px;max-width:280px;padding:8px 10px;font-size:12px;color:#14213d;background:#fff;border:1px solid #e3e9f4;border-radius:8px;box-shadow:0 8px 20px rgba(37,99,235,.12);pointer-events:none}
+.token-usage-tooltip i,.token-usage-legend i,.token-usage-swatch{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.token-usage-days{display:flex;justify-content:space-between;margin-left:56px;font-size:11px;color:#5b6782;margin-top:4px}
+.token-usage-legend{display:flex;flex-wrap:wrap;gap:6px 14px;list-style:none;padding:0;margin:14px 0 0;font-size:12px;color:#33415c}
+.token-usage-legend button{background:none;border:0;padding:2px 4px;cursor:pointer;color:inherit;border-radius:4px}
+.token-usage-legend button:hover{background:#eaf1ff}
+.token-usage-table{overflow-x:auto}
+.token-usage-table table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+.token-usage-table th,.token-usage-table td{padding:10px;text-align:right;border-top:1px solid #e3e9f4;white-space:nowrap}
+.token-usage-table thead th{border-top:0;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#5b6782}
+.token-usage-table th:first-child{text-align:left}
+.token-usage-table tbody th{font-weight:600;color:#14213d}
+.token-usage-table .text-button{background:none;border:0;padding:0;color:#1d4ed8;font-weight:600;cursor:pointer;text-align:left}
+.token-usage-open{background:#eaf1ff}
+.token-usage-detail td{text-align:left;background:#fbfcff;white-space:normal}
+.token-usage-detail td{display:table-cell}
+.token-usage-detail td>div{display:inline-block;vertical-align:top;min-width:240px;margin-right:24px}
+.token-usage-detail ul{margin:6px 0 0;padding-left:18px;font-size:12px}
+@media(max-width:600px){.token-usage .panel{padding:14px}.token-usage-filters label{min-width:100%}.token-usage-actions{margin-left:0}.token-usage-plot{grid-template-columns:36px 1fr;height:180px}.token-usage-days{margin-left:44px}}
