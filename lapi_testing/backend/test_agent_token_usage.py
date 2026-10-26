@@ -16,6 +16,7 @@ def test_provider_totals_include_multiple_calls_without_reasoning_double_count()
         token_usage.record({'prompt_eval_count': 50, 'eval_count': 10}, 'ollama')
         assert token_usage.summary(calls)['input_tokens'] == 150
         assert token_usage.summary(calls)['output_tokens'] == 50
+        assert token_usage.summary(calls)['reasoning_tokens'] == 30
         with token_usage.collect() as other:
             token_usage.record({'usage': {'input_tokens': 3, 'output_tokens': 2}}, 'openai')
             assert token_usage.summary(other)['input_tokens'] == 3
@@ -103,5 +104,14 @@ def test_usage_is_saved_and_returned_on_completed_stream(system,monkeypatch):
     frames=events(reply(s,p))
     usage=frames[-1]['message']['token_usage']
     assert usage['input_tokens']==31 and usage['output_tokens']==7 and usage['complete']
+    assert len(usage['steps'])==1 and usage['steps'][0]['input_tokens']==31
+    assert usage['cost']['status']=='price_not_set' and usage['cost']['totals']==[]
     saved=s.api.get('/api/agent-v2/plans/'+p['id']).json()['chat']
     assert saved['token_usage']==usage
+    # The same call is persisted once, attributed to the user, conversation and message.
+    from sqlalchemy import select
+    from lapi_app.usage_tables import TokenUsage
+    with core.Session() as session:
+        rows=list(session.scalars(select(TokenUsage).where(TokenUsage.owner_id==s.owner)))
+    answer=[r for r in rows if (r.input_tokens,r.output_tokens)==(31,7)]
+    assert len(answer)==1 and answer[0].message_id==frames[-1]['message']['id'] and answer[0].conversation_id

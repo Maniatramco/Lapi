@@ -155,9 +155,11 @@ def test_workspace_and_sampling_validation_prevent_unusable_headers_and_options(
 def test_anthropic_token_usage_includes_reported_cached_input_only():
     with token_usage.collect() as usage:
         token_usage.record({'usage': {'input_tokens': 10, 'cache_creation_input_tokens': 2, 'cache_read_input_tokens': 4, 'output_tokens': 3}}, 'anthropic')
-        assert token_usage.summary(usage)['input_tokens'] == 16
-        assert token_usage.summary(usage)['output_tokens'] == 3
-        assert token_usage.summary(usage)['complete']
+        summary = token_usage.summary(usage)
+        # Totals include cache reads and writes once; they are also kept separately.
+        assert summary['input_tokens'] == 16 and summary['output_tokens'] == 3 and summary['complete']
+        assert summary['cached_input_tokens'] == 4 and summary['cache_write_tokens'] == 2
+        assert summary['steps'][0]['cached_input_tokens'] == 4 and summary['steps'][0]['cache_write_tokens'] == 2
 
 
 def test_dashboard_general_claude_reply_discloses_no_knowledge_lookup(system, monkeypatch):
