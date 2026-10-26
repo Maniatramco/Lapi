@@ -30,7 +30,7 @@ def test_loaded_skill_narrows_tools_for_the_turn(system, monkeypatch):
     s = system; d = dataset(s); upload(s, d); knowledge.sync(s.owner, d['id']); agentic(monkeypatch)
     post(s, '/api/skills', {'name': 'catalog-only', 'description': 'Only catalog tools', 'instructions': 'List documents only.',
                             'allowed_tools': ['list_documents']})
-    seen = scripted(monkeypatch, tool('load_skill', name='catalog-only'), tool('search_documents', query='owner'),
+    seen = scripted(monkeypatch, {'text': '', 'calls': [{'id': 'ls', 'name': 'load_skill', 'arguments': {'name': 'catalog-only'}}]}, tool('search_documents', query='owner'),
                     {'text': 'Done.', 'calls': []})
     p = plan(s, d, text='/skill catalog-only what files are here')
     results = {m['tool_name']: json.loads(m['content']) for m in seen[2]['messages'] if m.get('role') == 'tool'}
@@ -80,7 +80,7 @@ def test_instruction_proposal_is_a_card_and_saves_nothing(system, monkeypatch):
 
 def test_model_guide_falls_back_to_family_and_dataset_override_wins(system):
     s = system; d = dataset(s)
-    assert 'parallel' in prompt_layers.model_guide({'model_name': 'Gemini 2.5 Flash', 'settings': {}})
+    assert 'independent read tools' in prompt_layers.model_guide({'model_name': 'Gemini 2.5 Flash', 'settings': {}})
     s.api.put(f"/api/datasets/{d['id']}/prompt-guide", json={'text': 'Dataset guide.'})
     assert prompt_layers.model_guide({'model_name': 'Gemini', 'settings': {}}, d['id']) == 'Dataset guide.'
 

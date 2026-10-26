@@ -26,8 +26,8 @@ function Skills({api,datasets,selectedDataset,isAdmin,onError,onNotify}:{api:Api
  const load=useCallback(()=>api(`/skills?dataset_id=${encodeURIComponent(selectedDataset||'')}`).then(r=>setSkills(r.skills||[])).catch(e=>onError(e.message)),[api,selectedDataset,onError]);
  useEffect(()=>{void load();},[load]);
  const save=async()=>{if(!draft)return;setBusy(true);onError('');
-  try{const body={...draft,allowed_tools:draft.allowed_tools||[]};delete (body as Entity).id;
-   await api(draft.id?`/skills/${draft.id}`:'/skills',draft.id?'PUT':'POST',{name:body.name,description:body.description,instructions:body.instructions,allowed_tools:body.allowed_tools,output_format:body.output_format,scope:body.scope,dataset_id:body.scope==='dataset'?body.dataset_id:''});
+  try{const body:Entity=draft;
+   await api(draft.id?`/skills/${draft.id}`:'/skills',draft.id?'PUT':'POST',{name:body.name,description:body.description,instructions:body.instructions,allowed_tools:body.allowed_tools||[],output_format:body.output_format||'',scope:body.scope,dataset_id:body.scope==='dataset'?body.dataset_id:''});
    setDraft(null);onNotify('Skill saved. Use it in chat with /skill '+draft.name+'.');await load();}
   catch(e){onError(e instanceof Error?e.message:'Could not save the skill.');}finally{setBusy(false);}};
  const remove=async(skill:Entity)=>{if(!window.confirm(`Remove the skill "${skill.name}"?`))return;try{await api(`/skills/${skill.id}`,'DELETE');await load();}catch(e){onError(e instanceof Error?e.message:'Could not remove the skill.');}};
