@@ -71,3 +71,10 @@ html body .login-shell .login-illustration>svg.login-artwork{display:block;width
 .lapi-banner-ring{transform-box:fill-box;transform-origin:center;animation:lapi-ring 24s linear infinite}
 @keyframes lapi-ring{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.lapi-banner-flow{display:none}.lapi-banner-ring{animation:none}}
+
+/* Horizontal banner: give the story column more room and a landscape frame */
+html body .login-shell .login-layout{grid-template-columns:minmax(0,1.45fr) minmax(360px,1fr)}
+html body .login-shell .login-illustration{width:min(100%,860px,calc((100svh - 64px)*1280/900));aspect-ratio:1280/900}
+.lapi-banner-orbit{transform-box:view-box;transform-origin:640px 534px;animation:lapi-ring 40s linear infinite reverse}
+@media(prefers-reduced-motion:reduce){.lapi-banner-orbit{animation:none}}
+@media(max-width:760px){html body .login-shell .login-layout{grid-template-columns:minmax(0,1fr)}html body .login-shell .login-illustration{width:min(100%,640px)}}

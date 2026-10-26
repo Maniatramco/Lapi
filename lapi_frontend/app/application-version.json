@@ -1,6 +1,15 @@
 {
-  "version": "26.1.13.4",
+  "version": "26.1.13.5",
   "releases": [
+    {
+      "version": "26.1.13.5",
+      "date": "2026-10-27",
+      "title": "Horizontal sign-in banner",
+      "changes": [
+        "The sign-in banner now flows left to right: data sources on the left, the knowledge core in the middle and a cited answer on the right.",
+        "The Lapi mark sits at the centre of the knowledge core, circled by a slowly turning ring of vector points; the banner is wider and landscape."
+      ]
+    },
     {
       "version": "26.1.13.4",
       "date": "2026-10-27",

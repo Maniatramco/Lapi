@@ -2,6 +2,13 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.13.5 - 27 October 2026
+
+Horizontal sign-in banner
+
+- The sign-in banner now flows left to right: data sources on the left, the knowledge core in the middle and a cited answer on the right.
+- The Lapi mark sits at the centre of the knowledge core, circled by a slowly turning ring of vector points; the banner is wider and landscape.
+
 ## v26.1.13.4 - 27 October 2026
 
 Lapi brand
