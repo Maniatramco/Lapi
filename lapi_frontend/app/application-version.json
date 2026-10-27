@@ -4,9 +4,11 @@
     {
       "version": "26.1.16.2",
       "date": "2026-10-27",
-      "title": "A branded Ask card on sign-in",
+      "title": "A redesigned sign-in page",
       "changes": [
-        "The sign-in artwork's Ask step is now a Lapi Agent chat card: a blue header with the Lapi mark, the question as a chat bubble, the answer with numbered citations, and matching numbered source chips."
+        "Sign-in has a calm white form column (larger fields, a gradient Sign in button, a note that sessions end after 12 hours) beside a brand-blue panel that says what Lapi does: \"Ask your data. Get answers you can trust.\"",
+        "The Connect -> Unify -> Ask diagram is redrawn for the blue panel with fewer, larger elements: glass source tiles, a white knowledge core with the Lapi mark, and a Lapi Agent chat card with numbered citations and matching source chips.",
+        "Three facts sit under the diagram: cited answers, governed access and self-hosting. On phones the form comes first and the panel keeps its words; the diagram is hidden where its labels would be too small to read."
       ]
     },
     {

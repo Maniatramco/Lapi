@@ -4,11 +4,15 @@ The application version and in-app feature history are maintained in `lapi_front
 
 ## v26.1.16.2 - 27 October 2026
 
-A branded Ask card on sign-in
+A redesigned sign-in page
 
-The Ask step of the sign-in artwork (`lapi-banner.tsx`) is redrawn as a Lapi Agent chat card in the existing palette: a blue gradient header with the Lapi mark, "Lapi Agent", "Answers with citations" and a "3 sources" pill; the question as a right-aligned blue chat bubble; the answer in a soft bubble with the orange accent bar, "net-60" in brand blue and numbered citation markers; numbered source chips matching those markers; and "Verified against your data". The card is slightly taller (318 instead of 250 units) and stays clear of the knowledge core. Frontend only.
+- Layout (`sign-in-layout.tsx`, new `login.css` loaded last): a white form column first in reading order, then a brand-blue story panel. The panel carries the message as real text ("Ask your data. Get answers you can trust." and one sentence on what Lapi does), the diagram, and three facts (cited answers, governed access, self-hosted). The rotating "Built for" ticker is replaced by a quiet "Secure sign-in. Sessions end after 12 hours." line, matching the 12-hour session cookie.
+- Diagram (`lapi-banner.tsx`): redrawn for the blue panel in a 1200x580 space without the headline text it used to embed: glass source tiles, a white knowledge core with the Lapi mark, orange ring and orbit, and a Lapi Agent chat card (dark header with the Lapi mark, question bubble, answer with numbered citations, matching numbered source chips, "Verified against your data").
+- Form: larger 50px fields with a focus ring, a gradient Sign in button, left-aligned heading and copy. The existing `.login-card`, `.login-story`, brand-name/tagline and accessibility labels are kept for the tests.
+- Responsive: two columns from 961px; below that the form comes first and the panel follows; the facts stack below 641px; the diagram is hidden below 561px, where its labels would be under 6px.
+- `login.css` overrides the earlier sign-in layers (`readability.css`, `sign-in.css`, `lapi-theme.css`) instead of editing them; their pillar, glow and illustration rules no longer match any sign-in markup.
 
-Validation: rendered from the actual component source in a browser preview (React 18.3.1 and Babel compiling `lapi-banner.tsx`) with the real brand images; the frontend type-check, unit and browser tests were not run (no Node.js on this computer).
+Validation: rendered from the actual `sign-in-layout.tsx` and `lapi-banner.tsx` with all 13 application stylesheets in `layout.tsx` order (React 18.3.1 and Babel in a browser preview) at 1440x900, 1100x720, 820x1000, 375x812 and 320x900: no horizontal scrolling, form above the panel below 961px, headline 34px at 1100px, the 1100x720 panel fits the window. lucide-react 0.468.0 provides Lock, Quote, Server and ShieldCheck. The frontend type-check, unit and browser tests were not run (no Node.js on this computer).
 
 ## v26.1.16.1 - 27 October 2026
 
