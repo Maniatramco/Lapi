@@ -70,3 +70,17 @@ body .add-knowledge .knowledge-actions .btn.primary{background:#2f5bea;border-co
 @keyframes knowledge-shift{0%{background-position:0% 50%}100%{background-position:100% 50%}}
 @media(prefers-reduced-motion:reduce){.add-knowledge-hero{animation:none}.storage-card{transition:none}.storage-card:hover:not(:disabled){transform:none}}
 @media(max-width:560px){.add-knowledge-hero{padding:16px}.add-knowledge-body{padding:16px}.knowledge-actions .btn{flex:1;justify-content:center}.knowledge-count{width:100%}}
+
+.connector-guide{border:1px solid #e1e6f1;border-radius:12px;background:#f6f8fe;margin:0 0 18px}
+.connector-guide>summary{font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;list-style-position:inside}
+.connector-guide>summary span{font-size:.85rem;color:#616b85}
+.connector-guide-body{padding:0 16px 14px;display:grid;gap:14px;font-size:14px;color:#0e1630}
+.connector-guide-body h3{font-size:15px;font-weight:700;margin:6px 0}
+.connector-guide-body ol,.connector-guide-body ul{margin:0;padding-left:22px;display:grid;gap:6px;line-height:1.5}
+.connector-guide-body ol{list-style:decimal}.connector-guide-body ul{list-style:disc}.connector-guide-body li{display:list-item}
+.connector-guide-body code{background:#fff;border:1px solid #e1e6f1;border-radius:5px;padding:0 4px;font-size:.85em;overflow-wrap:anywhere}
+.connector-guide-fields{margin:0;display:grid;gap:8px}
+.connector-guide-fields div{display:grid;grid-template-columns:minmax(150px,1fr) 2fr;gap:10px}
+.connector-guide-fields dt{font-weight:600}
+.connector-guide-fields dd{margin:0}
+@media (max-width:640px){.connector-guide-fields div{grid-template-columns:1fr;gap:2px}}

@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.9",
+  "version": "26.1.16.10",
   "releases": [
+    {
+      "version": "26.1.16.10",
+      "date": "2026-10-28",
+      "title": "Step-by-step connector guides",
+      "changes": [
+        "Add knowledge now shows a plain-language, step-by-step guide for each storage connector (Amazon S3, Azure Blob Storage, OCI Object Storage, SharePoint, Google Drive and Google Cloud Storage): what you need, where to click in the provider's console, which value goes in which field, and how to fix each error Test connection can show."
+      ]
+    },
     {
       "version": "26.1.16.9",
       "date": "2026-10-27",

@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.10 - 28 October 2026
+
+Step-by-step connector guides
+
+- New `lapi_frontend/app/connector-guides.ts`: a plain-language setup guide for every storage connector (Amazon S3, Azure Blob Storage, OCI Object Storage, SharePoint, Google Drive, Google Cloud Storage). Each lists what you need, numbered steps in the provider's console, where each Lapi field's value comes from, and the fix for each error Test connection can return. A shared final part covers Test, Save, selecting files, Vectorize and the OCR model needed for images and scans.
+- Add knowledge shows the guide above the connection form, open for a new connection and collapsed when editing a saved one. Text to copy or look for is shown as code.
+- The file-selection page lists images among the importable types.
+- Test: every provider has a complete guide, and the panel renders.
+
 ## v26.1.16.9 - 27 October 2026
 
 Image uploads read with OCR
