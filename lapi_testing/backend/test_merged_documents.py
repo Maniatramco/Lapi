@@ -110,7 +110,7 @@ def test_failed_second_record_is_not_reported_complete_and_job_retry_reuses_firs
 
 def test_invalid_merge_creates_no_catalog_document(system):
     s=system;d=dataset(s)
-    r=s.api.post('/api/documents/upload',data={'dataset_id':d['id'],'merge_files':'true'},files=[('files',('a.txt',b'Valid text','text/plain')),('files',('b.pdf',b'Broken','application/pdf'))])
+    r=s.api.post('/api/documents/upload',data={'dataset_id':d['id'],'merge_files':'true'},files=[('files',('a.txt',b'Valid text','text/plain')),('files',('b.pdf',bytes(range(256))*4,'application/pdf'))])
     assert r.status_code==400 and '"b.pdf" is not a real PDF' in r.json()['detail'] and s.api.get('/api/documents').json()==[]
 
 

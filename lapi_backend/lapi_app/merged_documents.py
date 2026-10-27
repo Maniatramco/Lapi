@@ -8,7 +8,9 @@ def prepare(parts):
     from .worker import parse_document
     if not 2 <= len(parts) <= 20:
         raise ValueError('Merge requires between 2 and 20 files.')
-    pdf = all(name.lower().endswith('.pdf') for name, _ in parts)
+    from .file_formats import plain_text
+    # A physical PDF merge needs real PDFs; a .pdf holding only text merges as text.
+    pdf = all(name.lower().endswith('.pdf') and plain_text(name, raw) is None for name, raw in parts)
     writer = None
     if pdf:
         from pypdf import PdfReader, PdfWriter

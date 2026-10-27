@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.11",
+  "version": "26.1.16.12",
   "releases": [
+    {
+      "version": "26.1.16.12",
+      "date": "2026-10-28",
+      "title": "Text-only files are indexed as their text",
+      "changes": [
+        "A .pdf, .docx or image file that only holds text, such as a saved web link, is now indexed and extracted as that text instead of failing. Lapi never opens links found in a document. Files that are neither the named format nor text are still refused with the reason."
+      ]
+    },
     {
       "version": "26.1.16.11",
       "date": "2026-10-28",

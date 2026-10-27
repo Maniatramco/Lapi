@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.12 - 28 October 2026
+
+Text-only files are indexed as their text
+
+- New `file_formats.plain_text`: a .pdf, .docx or image file whose contents are UTF-8 text (for example a saved web link) is accepted on upload and cloud import and indexed, chunked and extracted as that text, as one page. Links inside it are never fetched.
+- Such a file opens as text from Open original, merges as text rather than as a PDF, and offers no page images.
+- Files that are neither the named format nor text (binary data, a renamed image, archive or older .doc) are still refused with what they actually are. A failed document can be indexed again with Retry.
+
 ## v26.1.16.11 - 28 October 2026
 
 OCR as a model use with its own Default

@@ -84,7 +84,7 @@ def test_failed_index_stops_following_extraction(system, monkeypatch):
     # Upload now refuses such files; this covers one stored before that check.
     with monkeypatch.context() as patch:
         patch.setattr(file_formats, 'problem', lambda name, raw: None)
-        assert send_files(s, p, [('files', ('bad.docx', b'Not a DOCX file', 'application/octet-stream'))]).status_code == 200
+        assert send_files(s, p, [('files', ('bad.docx', bytes(range(256))*4, 'application/octet-stream'))]).status_code == 200
     assert worker.run_once()
     failed = s.api.get('/api/agent-v2/plans/' + p['id']).json()
     assert failed['calls'][0]['status'] == 'failed' and failed['calls'][0]['error']
@@ -177,8 +177,10 @@ def test_native_planner_uses_orchestration_instruction_and_validates_output(syst
         with pytest.raises(providers.ProviderError): providers.plan(agent.PLANNER_INSTRUCTION, 'Delete.', agent.planner_schema())
 
 def test_invalid_docx_returns_a_readable_format_error():
-    with pytest.raises(ValueError, match=r'"damaged.docx" is not a real Word \(DOCX\) document: it is plain text'):
-        worker.parse_document('damaged.docx', b'Not a ZIP file')
+    # A .docx that only holds text is read as that text; one that is neither DOCX nor text is refused.
+    assert worker.parse_document('notes.docx', b'Not a ZIP file')[0]['text'] == 'Not a ZIP file'
+    with pytest.raises(ValueError, match=r'"damaged.docx" is not a real Word \(DOCX\) document: its contents are not in DOCX format'):
+        worker.parse_document('damaged.docx', bytes(range(256)) * 4)
     raw=io.BytesIO()
     with zipfile.ZipFile(raw,'w') as archive: archive.writestr('example.txt','A ZIP is not a DOCX.')
     with pytest.raises(ValueError, match='not a valid DOCX'):

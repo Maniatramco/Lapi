@@ -99,10 +99,14 @@ def test_dataset_without_an_ocr_model_explains_what_to_map(system):
 
 def test_image_with_wrong_contents_is_refused_at_upload(system):
     d = dataset(system)
-    response = send(system, d, 'scan.png', b'https://portal.example.com/scan')
-    assert response.status_code == 400 and 'only contains a web link' in response.json()['detail']
+    response = send(system, d, 'scan.png', bytes(range(256)) * 4)
+    assert response.status_code == 400 and 'contents are not in an image format' in response.json()['detail']
+    # An image file that only holds a link is indexed as that text, without OCR.
+    link = send(system, d, 'scan.png', b'https://portal.example.com/scan')
+    assert link.status_code == 200, link.text
+    assert worker.parse_document('scan.png', b'https://portal.example.com/scan')[0]['text'] == 'https://portal.example.com/scan'
     assert send(system, d, 'scan.gif', b'GIF89a').status_code == 400
-    assert system.api.get('/api/documents').json() == []
+    assert [doc['id'] for doc in system.api.get('/api/documents').json()] == [link.json()['documents'][0]['id']]
 
 
 def test_image_can_be_merged_with_text(system, cloud_vision):
