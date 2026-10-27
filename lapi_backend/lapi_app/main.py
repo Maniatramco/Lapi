@@ -874,7 +874,7 @@ def retry_job(id:str,owner=Depends(auth)):
             except FileNotFoundError:saved={}
             from .lapi_models import cloud_ocr
             cloud=saved.get('ocr_execution')
-            if not saved.get('settings',{}).get('_ocr_cloud_only') and not (cloud and cloud_ocr.eligible(cloud)):
+            if not saved.get('settings',{}).get('_ocr_cloud_only') and not (cloud and cloud_ocr.provider(cloud)):
                 raise HTTPException(409,'This old indexing job saved the local OCR route. Use Reindex on the document to apply its current cloud OCR model; the old job was not restarted.')
             current=routing.execution_snapshot(routing.owned(target.parent_id,owner,'knowledge_base'),'embedding')
             if not routing.same_run_models(saved,current):raise HTTPException(409,'Dataset model mappings changed. Use Reindex on the document to apply its current embedding and OCR models.')

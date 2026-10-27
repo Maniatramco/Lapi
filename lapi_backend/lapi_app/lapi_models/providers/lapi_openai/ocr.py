@@ -13,8 +13,10 @@ from ....lapi_agent import token_usage
 def configure(snapshot, limits):
     cfg = snapshot['settings']
     connection = cfg.get('model_connection') or {}
-    if provider(snapshot) != 'openai' or not eligible(snapshot):
-        raise ValueError('OpenAI OCR requires a mapped GPT-4o or GPT-4o Mini extraction model; embedding models cannot read images.')
+    # A model chosen for the OCR use passed its image test (cloud_ocr.ready); an OCR
+    # route through an Extraction model must still be a known vision model.
+    if provider(snapshot) != 'openai' or snapshot.get('capability') != 'ocr' and not eligible(snapshot):
+        raise ValueError('OpenAI OCR requires a model ticked for OCR whose image test passed, or GPT-4o / GPT-4o Mini; embedding models cannot read images.')
     identity = {key: snapshot.get(key) for key in ('model_id', 'model_version', 'connection_profile_id', 'connection_profile_version', 'provider_model')}
     identity.update(connection=connection, parameters=cfg.get('extra_parameters', {}))
     if (cfg.get('stage_parameters') or {}).get('extraction'):
@@ -36,7 +38,8 @@ def visual_tokens(width, height, model):
     if min(width,height)>768:
         scale=768/min(width,height)
         width=max(1,math.floor(width*scale));height=max(1,math.floor(height*scale))
-    base,tile=(2833,5667) if model.startswith('gpt-4o-mini') else (85,170)
+    # Other models' image sizing is not published to Lapi: assume twice GPT-4o's.
+    base,tile=(2833,5667) if model.startswith('gpt-4o-mini') else (85,170) if model.startswith('gpt-4o') else (170,340)
     return base+tile*math.ceil(width/512)*math.ceil(height/512)
 
 

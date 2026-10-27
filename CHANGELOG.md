@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.11 - 28 October 2026
+
+OCR as a model use with its own Default
+
+- Model Registration: OCR joins Chat, Extraction and Embedding in "Use for", offered for OpenAI (api.openai.com) and Gemini API connections. It shares the model's connection and runs at the Extraction stage with its parameters; it can be combined with Chat and Extraction, never with Embedding.
+- Test connection with OCR ticked generates a small image with a known code, sends it through the same OCR path as indexing (Chat Completions or the Responses API, as chosen for the model) and checks the code is read back. A passed image test is saved per connection version (`ocr_test`); editing the connection needs a new test.
+- `cloud_ocr.ready`: a model can read images for datasets when it is ticked for OCR with a passed image test, or (as before) is a gpt-4o / gpt-4o-mini or Gemini extraction model. The old gpt-4o-only rule still guards OCR routes that go through an Extraction model.
+- Workspace OCR Default (`ocr_model_id` on `lapi_workspace_defaults`, added to existing databases at start-up): set from the Default column in Model Registration; refused until the model's image test passed. Datasets without their own OCR choice use it, then fall back to a vision extraction default. Dataset Model Mapping shows it as the automatic choice and may select it without mapping it.
+- Images sent to models other than gpt-4o reserve twice GPT-4o's image tokens when checking the context budget.
+
 ## v26.1.16.10 - 28 October 2026
 
 Step-by-step connector guides

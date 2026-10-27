@@ -1,5 +1,6 @@
 """Generic model registration; immutable connection versions, encrypted secrets."""
 import copy
+import io
 import json
 import time
 from typing import Literal
@@ -43,6 +44,45 @@ def sample_stage(cfg, stage):
     return result['text'].strip()[:400]
 
 
+OCR_SAMPLE = '4827'
+
+
+def sample_image():
+    """A small generated page with a known code for the OCR connection test."""
+    from PIL import Image, ImageDraw, ImageFont
+    image = Image.new('RGB', (720, 200), 'white')
+    ImageDraw.Draw(image).text((40, 70), 'Lapi OCR test code ' + OCR_SAMPLE, fill='black', font=ImageFont.load_default(size=44))
+    out = io.BytesIO(); image.save(out, format='PNG')
+    return out.getvalue()
+
+
+def probe_ocr(cfg, provider_model):
+    """Send the sample image through the same OCR path as indexing and check the code is read back."""
+    from .. import ocr
+    from . import cloud_ocr
+    snapshot = {'settings': cfg, 'secret_refs': {}, 'provider_model': provider_model, 'capability': 'ocr'}
+    kind = cloud_ocr.provider(snapshot)
+    if not kind:
+        raise ConnectionError(OCR_PROVIDERS)
+    limits = {'enabled': True, 'timeout': runtime_config.get('LAPI_OCR_TIMEOUT'), 'output': runtime_config.get('LAPI_OCR_MAX_TOKENS'),
+              'context': runtime_config.get('LAPI_OCR_CONTEXT'), 'dpi': runtime_config.get('LAPI_OCR_DPI'), 'batch': runtime_config.get('LAPI_OCR_BATCH')}
+    try:
+        text, _ = ocr.transcribe(sample_image(), cloud_ocr.adapter(kind).configure(snapshot, limits))
+    except ocr.OcrError as exc:
+        raise ConnectionError('The OCR test image could not be read: ' + str(exc)) from None
+    if OCR_SAMPLE not in text.replace(' ', ''):
+        raise ConnectionError('The model answered but did not read the test image correctly, so it cannot be used for OCR. Choose a model that accepts images.')
+    return {'ocr_validated': True}
+
+
+OCR_PROVIDERS = 'OCR works with OpenAI (api.openai.com) or Google Gemini API connections. Untick OCR for other providers.'
+
+
+def stage_use(use):
+    """OCR runs at the Extraction stage with Extraction's parameters."""
+    return 'extraction' if use == 'ocr' else use
+
+
 def effective_snapshot():
     value = model_parameters.effective()
     return {'parameters': value['parameters'], 'sources': value['sources']} if value else None
@@ -68,11 +108,11 @@ class ConnectionInput(BaseModel):
 class RegistrationInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=120)
-    category: Literal['embedding', 'chat', 'extraction']
+    category: Literal['embedding', 'chat', 'extraction', 'ocr']
     # Everything this model is used for; `category` is the one the test and parameters
-    # follow. Chat and Extraction can share one model; Embedding stays on its own
+    # follow. Chat, Extraction and OCR can share one model; Embedding stays on its own
     # (the form saves a separate embedding registration of the same model).
-    capabilities: list[Literal['chat', 'extraction', 'embedding']] | None = Field(default=None, min_length=1, max_length=2)
+    capabilities: list[Literal['chat', 'extraction', 'embedding', 'ocr']] | None = Field(default=None, min_length=1, max_length=3)
     provider_model: str = Field(min_length=1, max_length=200)
     connection: ConnectionInput
     timeout: int = Field(default=runtime_config.get('LAPI_MODEL_REGISTRATION_TIMEOUT'), ge=5, le=1800)
@@ -119,7 +159,7 @@ def prepare(body, owner, existing=None):
     if not body.name.strip():
         raise HTTPException(400, 'Enter a model name.')
     try:
-        c = validate_connection(body.connection.model_dump(), body.category, body.provider_model.strip())
+        c = validate_connection(body.connection.model_dump(), stage_use(body.category), body.provider_model.strip())
         secret = {key: value.get_secret_value() for key, value in body.credentials.items()}
         if any(len(value) > 32768 for value in secret.values()):
             raise ConnectionError('Credential values are too large.')
@@ -128,13 +168,13 @@ def prepare(body, owner, existing=None):
         if body.category not in uses:
             raise ConnectionError('Use for must include the model category.')
         if 'embedding' in uses and len(uses) > 1:
-            raise ConnectionError('Embedding is registered on its own. Save Chat and Extraction as one model, and Embedding as another.')
+            raise ConnectionError('Embedding is registered on its own. Save Chat, Extraction and OCR as one model, and Embedding as another.')
         if existing:
             md, profile, snapshot, old = previous(existing)
             if body.capabilities is None:
                 uses = md['capabilities']  # A form that does not send uses keeps the saved ones.
             if body.category not in uses or ('embedding' in uses) != ('embedding' in md['capabilities']):
-                raise ConnectionError('An Embedding model cannot become a Chat or Extraction model, or the reverse. Register another model instead.')
+                raise ConnectionError('An Embedding model cannot become a Chat, Extraction or OCR model, or the reverse. Register another model instead.')
             unchanged_destination = old and all(old.get(k) == c.get(k) for k in ('protocol', 'auth_mode', 'endpoint'))
             # Never reuse a saved key for a different endpoint or protocol implicitly.
             if not secret and not body.clear_credentials and unchanged_destination:
@@ -157,9 +197,9 @@ def prepare(body, owner, existing=None):
         params = body.extra_parameters if body.extra_parameters is not None else old_cfg.get(extra_key, {})
         stages = body.stage_parameters if body.stage_parameters is not None else old_cfg.get('stage_parameters') or {}
         try:
-            for use in uses:  # Shared values must suit every use (Chat and Extraction).
-                cfg[extra_key] = validate_parameters(params, c['protocol'], use, c, keep_null=True)
-                staged = validate_stage_parameters(stages, c['protocol'], use, c)
+            for use in uses:  # Shared values must suit every use (Chat, Extraction and OCR).
+                cfg[extra_key] = validate_parameters(params, c['protocol'], stage_use(use), c, keep_null=True)
+                staged = validate_stage_parameters(stages, c['protocol'], stage_use(use), c)
         except ValueError as exc:
             raise ConnectionError(str(exc)) from exc
         # Only stored when set, so older registrations keep an identical identity.
@@ -173,6 +213,10 @@ def prepare(body, owner, existing=None):
             cfg['max_output_tokens'] = body.max_output_tokens if body.max_output_tokens is not None else old_cfg.get('max_output_tokens') or runtime_config.get('LAPI_DEFAULT_MODEL_OUTPUT_TOKENS')
             if cfg['max_output_tokens'] + runtime_config.get('LAPI_CONTEXT_HEADROOM_TOKENS') >= cfg['context_limit']:
                 raise ConnectionError('Context tokens must exceed maximum output tokens plus '+str(runtime_config.get('LAPI_CONTEXT_HEADROOM_TOKENS'))+' tokens of headroom.')
+        if 'ocr' in uses:
+            from . import cloud_ocr
+            if not cloud_ocr.provider({'settings': cfg, 'provider_model': body.provider_model.strip()}):
+                raise ConnectionError(OCR_PROVIDERS)
         return cfg, secret, uses
     except ConnectionError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -247,13 +291,16 @@ def save(body, owner, existing=None):
     model_version = existing.version + 1 if existing else 1
     model_ref = f'model/{model_id}/v{model_version}.json'
     tested = passed_test(owner, body, cfg, secret)
+    # OCR needs its own passed image test before datasets may send it images.
+    ocr_tested = passed_test(owner, body.model_copy(update={'category': 'ocr'}), cfg, secret) if 'ocr' in capabilities else None
     now = time.time()
     history = parameter_history_entry(existing, cfg, capabilities, owner, model_version, now)
     core.store.put_json(model_ref, {'name': body.name.strip(), 'provider_model': body.provider_model.strip(),
         'connection_profile_id': profile_id, 'connection_profile_version': version, 'capabilities': capabilities, 'enabled': body.enabled,
         'parameter_history': history,
         # Only a version whose connection test passed can become a workspace Default.
-        **({'connection_test': {'connection_profile_version': version, 'passed_at': tested['passed_at']}} if tested else {})})
+        **({'connection_test': {'connection_profile_version': version, 'passed_at': tested['passed_at']}} if tested else {}),
+        **({'ocr_test': {'connection_profile_version': version, 'passed_at': ocr_tested['passed_at']}} if ocr_tested else {})})
     with core.Session.begin() as session:
         if profile:
             p = session.get(core.Record, profile.id)
@@ -275,11 +322,11 @@ def install_routes(app, auth):
         return choices()
 
     @app.get('/api/model-registrations/parameter-schema')
-    def parameter_schema(protocol: str, category: Literal['embedding', 'chat', 'extraction'], chat_format: str = 'generic',
+    def parameter_schema(protocol: str, category: Literal['embedding', 'chat', 'extraction', 'ocr'], chat_format: str = 'generic',
             embedding_format: str = 'titan', model: str = '', owner=Depends(auth)):
         if protocol not in ConnectionInput.model_fields['protocol'].annotation.__args__:
             raise HTTPException(422, 'Unknown model protocol.')
-        return model_parameters.parameter_schema(protocol, category, {'chat_format': chat_format[:30], 'embedding_format': embedding_format[:30]}, model[:200])
+        return model_parameters.parameter_schema(protocol, stage_use(category), {'chat_format': chat_format[:30], 'embedding_format': embedding_format[:30]}, model[:200])
 
     @app.get('/api/model-registrations/{id}/parameter-history')
     def parameter_history(id: str, owner=Depends(auth)):
@@ -315,7 +362,9 @@ def install_routes(app, auth):
         model_parameters.clear_effective()
         with core.execution_context(snapshot), temporary_credentials(secret), explaining_provider_errors():
             try:
-                if body.category == 'chat':
+                if body.category == 'ocr':
+                    result = probe_ocr(cfg, body.provider_model.strip())
+                elif body.category == 'chat':
                     with model_parameters.use_stage('tool_step'):
                         result = probe_agent(snapshot['settings'])
                     effective['tool_step'] = effective_snapshot()
