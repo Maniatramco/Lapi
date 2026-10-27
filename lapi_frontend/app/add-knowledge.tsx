@@ -13,6 +13,7 @@ export const STORAGE_PROVIDERS=[
  {id:'oci_object',name:'OCI Object Storage',help:'A namespace bucket in your region',auth:'Customer secret key (S3-compatible)'},
  {id:'sharepoint',name:'SharePoint',help:'A site document library',auth:'Microsoft Entra application'},
  {id:'google_drive',name:'Google Drive',help:'A folder shared with a service account',auth:'Google service-account key'},
+ {id:'gcs',name:'Google Cloud Storage',help:'A bucket and optional folder prefix',auth:'Google service-account key with Storage Object Viewer'},
 ] as const;
 const STEPS:[Step,string][]=[['choose','Choose storage'],['connect','Connect & test'],['select','Select documents'],['vectorize','Vectorize']];
 export const MAX_SELECTION=20;
@@ -91,6 +92,7 @@ export function AddKnowledge({api,datasets,documents,selectedDataset,onChanged,o
     {form.provider==='azure_blob'&&<>{field('account','Storage account','For example: contosodocs')}{field('container','Container')}{field('prefix','Folder prefix','End with / to limit browsing to one folder.',false)}{credential('sas_token','Container SAS token','Read (r) and list (l) permissions only. Paste the part after ?.',true)}</>}
     {form.provider==='oci_object'&&<>{field('namespace','Object Storage namespace','Shown on the bucket details page.')}{field('bucket','Bucket')}{field('region','Region','For example: ap-mumbai-1')}{field('prefix','Folder prefix','End with / to limit browsing to one folder.',false)}{credential('access_key_id','Customer secret key: access key')}{credential('secret_access_key','Customer secret key: secret','From your OCI user profile > Customer secret keys.')}</>}
     {form.provider==='sharepoint'&&<>{field('tenant_id','Entra tenant ID','Directory UUID')}{field('client_id','Application client ID','Entra application UUID')}{credential('client_secret','Application client secret')}{field('site_id','SharePoint site ID','Not the site URL.')}{field('drive_id','Document library drive ID')}{field('folder_id','Folder item ID','Leave empty for the library root.',false)}</>}
+    {form.provider==='gcs'&&<>{field('bucket','Cloud Storage bucket','Bucket name, without gs://')}{field('prefix','Folder prefix','End with / to limit browsing to one folder.',false)}{credential('service_account','Service-account JSON key','Grant the service account Storage Object Viewer on this bucket.',true)}</>}
     {form.provider==='google_drive'&&<>{field('folder_id','Google Drive folder ID','Share the folder with the service-account email.')}{credential('service_account','Service-account JSON key','Google Docs import as DOCX; Sheets and Slides as PDF.',true)}</>}
    </div>
    {['s3','azure_blob'].includes(form.provider)&&<details className="knowledge-advanced"><summary>Local storage emulator (development only)</summary>{field('endpoint','Emulator endpoint',form.provider==='azure_blob'?'For example: http://127.0.0.1:10000/devstoreaccount1':'For example: http://127.0.0.1:9000',false)}<small>Only accepted when this Lapi server enables local emulators. Leave empty for the real provider.</small></details>}

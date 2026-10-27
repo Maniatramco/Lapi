@@ -4,8 +4,8 @@ const original=mod.require.bind(mod);mod.require=id=>id.endsWith('.css')?{}:id==
 mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,filename);
 const {STORAGE_PROVIDERS,blankConnection,connectionPayload,vectorizeState,MAX_SELECTION}=mod.exports;
 
-test('all five storage providers are offered with read-only sign-in guidance',()=>{
- assert.deepEqual(STORAGE_PROVIDERS.map(p=>p.id),['s3','azure_blob','oci_object','sharepoint','google_drive']);
+test('all six storage providers are offered with read-only sign-in guidance',()=>{
+ assert.deepEqual(STORAGE_PROVIDERS.map(p=>p.id),['s3','azure_blob','oci_object','sharepoint','google_drive','gcs']);
  assert.match(STORAGE_PROVIDERS.find(p=>p.id==='azure_blob').auth,/read and list only/);assert.equal(MAX_SELECTION,20);
 });
 

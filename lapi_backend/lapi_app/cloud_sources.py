@@ -364,27 +364,31 @@ class SharePoint:
         return info['name'], raw, {'remote_id': item['id'], 'revision': info.get('eTag', ''), 'original_url': info.get('webUrl', '')}
 
 
+def google_identity(credentials, scope, api):
+    """Bearer headers and the service-account email for one read-only Google scope."""
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import Request
+    from google.auth.exceptions import GoogleAuthError, TransportError
+    info = json.loads(credentials['service_account'])
+    # Do not let uploaded JSON send signed assertions to arbitrary hosts.
+    info['token_uri'] = 'https://oauth2.googleapis.com/token'
+    try:
+        identity = service_account.Credentials.from_service_account_info(info, scopes=[scope])
+        identity.refresh(Request())
+    except TransportError:
+        raise SourceError('Could not reach Google sign-in. Check the server network access.') from None
+    except (GoogleAuthError, ValueError):
+        raise SourceError(f'Google rejected the service-account key. Use a current JSON key that has not been deleted, from a project with the {api} enabled.') from None
+    return {'Authorization': 'Bearer ' + identity.token}, info.get('client_email', 'the service account')
+
+
 class GoogleDrive:
     BASE = 'https://www.googleapis.com/drive/v3/files'
     FIELDS = 'id,name,mimeType,size,modifiedTime,version,parents,trashed,webViewLink,capabilities(canDownload)'
 
     def __init__(self, cfg, credentials):
-        from google.oauth2 import service_account
-        from google.auth.transport.requests import Request
-        info = json.loads(credentials['service_account'])
-        # Do not let uploaded JSON send signed assertions to arbitrary hosts.
-        info['token_uri'] = 'https://oauth2.googleapis.com/token'
-        from google.auth.exceptions import GoogleAuthError, TransportError
-        try:
-            identity = service_account.Credentials.from_service_account_info(info, scopes=['https://www.googleapis.com/auth/drive.readonly'])
-            identity.refresh(Request())
-        except TransportError:
-            raise SourceError('Could not reach Google sign-in. Check the server network access.') from None
-        except (GoogleAuthError, ValueError):
-            raise SourceError('Google rejected the service-account key. Use a current JSON key that has not been deleted, from a project with the Google Drive API enabled.') from None
-        self.headers = {'Authorization': 'Bearer ' + identity.token}
+        self.headers, self.email = google_identity(credentials, 'https://www.googleapis.com/auth/drive.readonly', 'Google Drive API')
         self.cfg = cfg
-        self.email = info.get('client_email', 'the service account')
 
     def get(self, item):
         return request_json('GET', self.BASE + '/' + segment(item), headers=self.headers, params={'fields': self.FIELDS, 'supportsAllDrives': 'true'})
@@ -450,5 +454,68 @@ class GoogleDrive:
         return item['name'], raw, {'remote_id': item['id'], 'revision': revision, 'original_url': 'https://drive.google.com/file/d/' + segment(item['id']) + '/view'}
 
 
+class GoogleCloudStorage:
+    """Bucket reads over the Cloud Storage JSON API with a read-only service-account token."""
+    BASE = 'https://storage.googleapis.com/storage/v1/b/'
+    FIELDS = 'name,size,generation,updated'
+
+    def __init__(self, cfg, credentials):
+        self.headers, self.email = google_identity(credentials, 'https://www.googleapis.com/auth/devstorage.read_only', 'Cloud Storage API')
+        self.cfg = cfg
+        self.objects = self.BASE + segment(cfg['bucket']) + '/o'
+
+    def scope(self, name):
+        if not name.startswith(self.cfg.get('prefix', '')):
+            raise SourceError('Object is outside the configured Cloud Storage prefix.')
+
+    def explain(self, error, listing):
+        # Google answers 403 when the service account lacks a role and 404 for a missing bucket or object.
+        if 'denied' in str(error):
+            raise SourceError(f'Access was denied. Grant {self.email} the Storage Object Viewer role on bucket {self.cfg["bucket"]}.') from None
+        if 'unavailable' in str(error):
+            raise SourceError('Bucket not found. Check the bucket name.' if listing else 'The cloud file was removed. Refresh the file list.') from None
+        raise error
+
+    def metadata(self, name):
+        try:
+            return request_json('GET', self.objects + '/' + segment(name), headers=self.headers, params={'fields': self.FIELDS})
+        except SourceError as error:
+            self.explain(error, False)
+
+    def browse(self, folder='', cursor=''):
+        folder = folder or self.cfg.get('prefix', '')
+        self.scope(folder)
+        if folder and not folder.endswith('/'):
+            raise SourceError('Choose a folder prefix ending in /.')
+        params = {'prefix': folder, 'delimiter': '/', 'maxResults': 100, 'fields': 'nextPageToken,prefixes,items(' + self.FIELDS + ')'}
+        if cursor:
+            params['pageToken'] = cursor
+        try:
+            response = request_json('GET', self.objects, headers=self.headers, params=params)
+        except SourceError as error:
+            self.explain(error, True)
+        items = [{'id': p, 'name': p[len(folder):].rstrip('/'), 'folder': True} for p in response.get('prefixes', [])]
+        for value in response.get('items', []):
+            key = value['name']
+            if key == folder or key.endswith('/'):
+                continue
+            name = key.rsplit('/', 1)[-1]
+            items.append({'id': key, 'name': name, 'folder': False, 'supported': supported(name), 'size': int(value.get('size', 0)), 'revision': str(value.get('generation', '')), 'modified': value.get('updated', '')})
+        return items, response.get('nextPageToken', '')
+
+    def fetch(self, item, limit):
+        self.scope(item['id'])
+        info = self.metadata(item['id'])
+        generation = str(info.get('generation', ''))
+        if item.get('revision') and generation != item['revision']:
+            raise SourceError('The cloud file changed. Refresh the file list and select it again.')
+        if int(info.get('size', 0)) > limit:
+            raise SourceError('File exceeds the configured upload size limit.')
+        # Pinning the generation means a newer upload can never be read under the selected revision.
+        url = self.objects + '/' + segment(item['id']) + '?alt=media&generation=' + quote(generation, safe='')
+        raw = download(url, self.headers, limit)
+        return item['name'], raw, {'remote_id': item['id'], 'revision': generation, 'original_url': 'gs://' + self.cfg['bucket'] + '/' + item['id']}
+
+
 def adapter(cfg, credentials):
-    return {'s3': S3, 'oci_object': S3, 'sharepoint': SharePoint, 'google_drive': GoogleDrive, 'azure_blob': AzureBlob}[cfg['provider']](cfg, credentials)
+    return {'s3': S3, 'oci_object': S3, 'sharepoint': SharePoint, 'google_drive': GoogleDrive, 'gcs': GoogleCloudStorage, 'azure_blob': AzureBlob}[cfg['provider']](cfg, credentials)
