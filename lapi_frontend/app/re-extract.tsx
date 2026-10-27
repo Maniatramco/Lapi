@@ -6,6 +6,7 @@ import {eligibleModels} from './dataset-workspace';
 import {JobProgress} from './operation-progress';
 import {useAgentConsent} from './agent-consent';
 import {suggestedExtractionName} from './extraction-name';
+import {randomId} from './random-id';
 
 type Entity=Record<string,any>;
 type Api=(path:string,method?:string,body?:unknown)=>Promise<any>;
@@ -18,7 +19,7 @@ export function ReExtractionDialog({source,documents,datasets,templates,extracti
  const [name,setName]=useState(()=>suggestedExtractionName([source.name||sourceDocs[0]?.name||'Document extraction']));
  const consent=useAgentConsent(api);
  const apiRef=useRef(api),refreshRef=useRef(onRefresh);apiRef.current=api;refreshRef.current=onRefresh;
- const key=useRef(crypto.randomUUID()),submitting=useRef(false),dialog=useRef<HTMLDialogElement>(null);
+ const key=useRef(randomId()),submitting=useRef(false),dialog=useRef<HTMLDialogElement>(null);
  const ready=sourceDocs.length===source.document_ids?.length&&sourceDocs.length>0&&sourceDocs.every(d=>d.status==='ready')&&dataset?.active!==false;
  const needsReindex=sourceDocs.some(d=>d.requires_reindex);
  const workflowJobs=(run?.workflow?.calls||[]).flatMap((call:Entity)=>call.jobs||[]).map((job:Entity)=>jobs.find(j=>j.id===job.id)||job);

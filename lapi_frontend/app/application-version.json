@@ -4,9 +4,10 @@
     {
       "version": "26.1.16.1",
       "date": "2026-10-27",
-      "title": "Oracle vector table at start-up",
+      "title": "Oracle vector table at start-up; sign-in over HTTP",
       "changes": [
-        "When Oracle is both the database and the vector store through deployment settings, Lapi creates its vector table at start-up, so readiness checks, indexing and chat work without first activating Oracle on the Storage screen."
+        "When Oracle is both the database and the vector store through deployment settings, Lapi creates its vector table at start-up, so readiness checks, indexing and chat work without first activating Oracle on the Storage screen.",
+        "Signing in and using Lapi over plain HTTP no longer fails with \"crypto.randomUUID is not a function\": request IDs fall back to crypto.getRandomValues where the browser hides randomUUID."
       ]
     },
     {

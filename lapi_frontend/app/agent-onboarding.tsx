@@ -7,6 +7,7 @@ import {WorkflowStepper} from './workflow-stepper';
 import {useAgentConsent} from './agent-consent';
 import {onboardingModelSelection} from './onboarding-draft';
 import './agent-onboarding.css';
+import {randomId} from './random-id';
 
 type Entity=Record<string,any>;
 type Api=(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;
@@ -36,7 +37,7 @@ export function AgentOnboarding({api,models,defaults,proposal={},storageKey,plan
   try{
    let external=false;
    if(!workflow&&(confirmed?.processing||!confirmed&&process)){const permission=await consent.request({roles:['embedding','extraction'],model_ids:{embedding:confirmed?.embedding_model_id||selection.embedding_model_id,extraction:confirmed?.default_extraction_model_id||selection.default_extraction_model_id}});if(!permission)return;external=permission.required;}
-   request.current ||= crypto.randomUUID();
+   request.current ||= randomId();
    let processing:Entity|null=null;
    if(!confirmed&&!workflow&&process){
     if(!files.length||files.length>20)throw new Error('Choose 1 to 20 documents.');
