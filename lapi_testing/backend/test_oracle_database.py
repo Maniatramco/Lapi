@@ -81,7 +81,6 @@ def test_oracle_claim_does_not_combine_fetch_first_and_for_update():
 
 def test_colleague_account_logs_in_and_duplicate_never_changes_password(system, monkeypatch):
     # The existing harness overrides auth; remove it to exercise actual sessions.
-    monkeypatch.setenv('LAPI_BOOTSTRAP_TOKEN', 'private-test-bootstrap')
     main.app.dependency_overrides.pop(main.auth)
     create_account('colleague', 'Colleague-test-password-123')
     login = system.api.post('/api/auth/login', json={'username': 'colleague', 'password': 'Colleague-test-password-123'})

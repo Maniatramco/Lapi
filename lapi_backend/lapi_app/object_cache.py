@@ -30,12 +30,12 @@ def purge_payloads():
     uncertain-write markers: losing them could trust a timed-out canonical PUT.
     """
     with core.document_lock('oci-cache-prune'):
-        root=core.local_store.path(ROOT+'marker').parent
+        root=core.scratch.path(ROOT+'marker').parent
         for path in root.glob('*.json'):
             with core.document_lock('oci-cache-'+path.stem):
-                try:entry=core.local_store.json(ROOT+path.name)
+                try:entry=core.scratch.json(ROOT+path.name)
                 except FileNotFoundError:continue
-                if entry.get('state')!='pending':core.local_store.delete(ROOT+path.name)
+                if entry.get('state')!='pending':core.scratch.delete(ROOT+path.name)
 
 
 def eligible(key):
@@ -70,7 +70,7 @@ class CachedObjects:
 
     def read(self, ref):
         try:
-            value = core.local_store.json(ref)
+            value = core.scratch.json(ref)
             return value if isinstance(value, dict) else {}
         except (FileNotFoundError, ValueError, UnicodeError): return {}
 
@@ -84,9 +84,9 @@ class CachedObjects:
 
     def remember(self, ref, value):
         if len(value) > MAX_ENTRY_BYTES:
-            core.local_store.put_json(ref, {'state': 'uncached'})
+            core.scratch.put_json(ref, {'state': 'uncached'})
             return
-        core.local_store.put_json(ref, {'state': 'valid',
+        core.scratch.put_json(ref, {'state': 'valid',
             'payload': base64.b64encode(value).decode(),
             'sha256': hashlib.sha256(value).hexdigest()})
 
@@ -99,7 +99,7 @@ class CachedObjects:
                 raise FileNotFoundError('Stored object unavailable')
             try: value = self.backend.get(key)
             except FileNotFoundError:
-                core.local_store.put_json(ref, {'state': 'missing', 'until': time.time() + 60})
+                core.scratch.put_json(ref, {'state': 'missing', 'until': time.time() + 60})
                 raise
             uncertain = entry.get('state') == 'pending' and (
                 entry.get('delete') or entry.get('expected_sha256') != hashlib.sha256(value).hexdigest())
@@ -115,7 +115,7 @@ class CachedObjects:
         ref, lock = self.ref(key)
         with core.document_lock(lock):
             if self.payload(self.read(ref)) == value: return
-            core.local_store.put_json(ref, {'state': 'pending','expected_sha256':hashlib.sha256(value).hexdigest()})
+            core.scratch.put_json(ref, {'state': 'pending','expected_sha256':hashlib.sha256(value).hexdigest()})
             self.backend.put(key, value)
             self.remember(ref, value)
         self.prune()
@@ -123,13 +123,13 @@ class CachedObjects:
     def delete(self, key):
         ref, lock = self.ref(key)
         with core.document_lock(lock):
-            core.local_store.put_json(ref, {'state': 'pending','delete':True})
+            core.scratch.put_json(ref, {'state': 'pending','delete':True})
             self.backend.delete(key)
-            core.local_store.put_json(ref, {'state': 'missing', 'until': time.time() + 60})
+            core.scratch.put_json(ref, {'state': 'missing', 'until': time.time() + 60})
 
     def prune(self):
         with core.document_lock('oci-cache-prune'):
-            root = core.local_store.path(ROOT + 'marker').parent
+            root = core.scratch.path(ROOT + 'marker').parent
             files = []
             for path in root.glob('*.json'):
                 try: files.append((path.stat().st_mtime_ns, path, path.stat().st_size))

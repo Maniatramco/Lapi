@@ -626,9 +626,8 @@ def remove_collections(keep=None, settings=None):
         if name == keep: continue
         with core.document_lock('unified-knowledge-'+name):
             removed['catalog_rows'] += catalog.drop(name); removed['collections'].append(name)
-    root = core.local_store.path('knowledge/marker').parent
-    for path in root.glob('*/manifest.json'):
-        if path.parent.name != keep: path.unlink(missing_ok=True)
+    for manifest_key in core.files_in('knowledge/', '*/manifest.json'):
+        if manifest_key.split('/')[1] != keep: core.local_store.delete(manifest_key)
     q, names = _store_collections(settings)
     for name in names:
         if name == keep: continue

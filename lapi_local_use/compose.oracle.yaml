@@ -18,8 +18,10 @@ x-backend: &backend
     LAPI_STORAGE_ROOT: /data
     LAPI_CONFIG_FILE: /etc/lapi/runtime.toml
     LAPI_CONFIG_PROFILE: ${LAPI_CONFIG_PROFILE:-local}
-    LAPI_MASTER_KEY: ${LAPI_MASTER_KEY:?Generate the Oracle configuration first}
-    LAPI_BOOTSTRAP_TOKEN: ${LAPI_BOOTSTRAP_TOKEN:?Generate the Oracle configuration first}
+    # Either the key itself (local development) or the OCI Vault secret that holds it.
+    LAPI_MASTER_KEY: ${LAPI_MASTER_KEY:-}
+    LAPI_MASTER_KEY_SECRET_OCID: ${LAPI_MASTER_KEY_SECRET_OCID:-}
+    LAPI_VAULT_AUTH_MODE: ${LAPI_VAULT_AUTH_MODE:-instance_principal}
     QDRANT_URL: http://qdrant:6333
     SEARCH_PROVIDER: qdrant
     MODEL_PROVIDER: ${MODEL_PROVIDER:-ollama}

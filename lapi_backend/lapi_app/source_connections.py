@@ -209,8 +209,8 @@ def install(app, auth, api):
     @app.get('/api/source-connections')
     def listing(actor=Depends(auth)):
         values = []
-        for path in core.local_store.path(ROOT + 'index').parent.glob('*.json'):
-            cfg = core.local_store.json(ROOT + path.name)
+        for key in core.files_in(ROOT, '*.json'):
+            cfg = core.local_store.json(key)
             if not visible(cfg, actor):
                 continue
             try:

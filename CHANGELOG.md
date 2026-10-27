@@ -2,6 +2,18 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.0 - 27 October 2026
+
+Containers on OCI, no setup token
+
+- First administrator: the public `POST /api/auth/setup` endpoint, the sign-in setup form and `LAPI_BOOTSTRAP_TOKEN` are removed from the backend, frontend, `.env` templates, Compose, Kubernetes and setup scripts. `python -m lapi_app.create_admin` (wrapped by `create-admin.sh`/`.ps1`) creates the first administrator from stdin and refuses once any account exists; on hosts without a shell the api creates it once at start-up from `LAPI_FIRST_ADMIN_USERNAME` and an OCI Vault secret.
+- OCI Vault: `core.secret_cipher()` reads its master key from the Vault secret in `LAPI_MASTER_KEY_SECRET_OCID` (instance or resource principal) when set; `LAPI_MASTER_KEY` still works locally; both together are refused. `python -m lapi_app.vault_master_key store|check` moves an existing key into Vault. Oracle connects with a TLS connect descriptor (`ORACLE_DSN`) and a password from Vault (`ORACLE_PASSWORD_SECRET_OCID`).
+- Stateless containers: `core.local_store` (settings, encrypted credentials, model registrations, storage routes, knowledge manifests, workspace archives) can be an Object Storage prefix (`LAPI_CONTROL_STORE=oci`); the default remains the local disk. `core.scratch` keeps only file locks and the object cache. Directory listings use `core.files_in`, control keys route to the control store, and workspace reset archives, clears and restores through stores with the same archive layout and checksums.
+- Deployment: `lapi_deploy/lapi_containers` (Terraform) provisions the VCN (public load-balancer subnet, private container subnet with NAT and service gateways), a 10 Mbps load balancer, the documents/control bucket, Vault secrets, OCIR repositories, IAM for the containers' resource principal, and one container instance running web, api, worker and Ollama (`qwen3:4b`, `nomic-embed-text`), reading the existing `lapidb`. `push-images.ps1` builds and pushes the images. `lapi_deploy/lapi_oci` (VM with bootstrap token) moves to `delete/`.
+- Tests: the backend suite runs in parallel (pytest-xdist, per-worker storage and SQLite via `lapi_testing/backend/conftest.py`, shorter temp paths for Windows) in about 4 minutes instead of about 30; `-n 0` runs serially.
+
+Validation: the full backend suite passed in parallel (1,355 passed, 11 skipped), including tests for create-admin, the removed setup endpoint, the Vault master key and database password, one-time first-admin creation and the Object Storage control store. `terraform validate` passed. Ported from the same changes developed and deployed on the earlier `remove-bootstrap-token` branch; frontend type-check and browser tests not run (no Node.js on this computer).
+
 ## v26.1.15.0 - 27 October 2026
 
 One knowledge base

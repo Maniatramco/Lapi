@@ -103,7 +103,33 @@ class FileStorage:
         if not prefix.endswith('/'):raise ValueError('A directory prefix is required')
         root=self.path(prefix)
         return [{'key':prefix+str(p.relative_to(root)).replace('\\','/'),'size':p.stat().st_size} for p in root.rglob('*') if p.is_file()]
-local_store=FileStorage()
+class ObjectControlStore:
+    """Control-plane state (settings, encrypted credentials, routes, manifests) in an
+    OCI bucket, so stateless containers keep it across restarts. Built on first use."""
+    def __init__(self):self._adapter=None
+    def _objects(self):
+        if self._adapter is None:
+            from .oci_adapters import OCIStorageAdapter
+            self._adapter=OCIStorageAdapter(prefix=os.getenv('LAPI_CONTROL_PREFIX','lapi-control'))
+        return self._adapter
+    def path(self,key):raise RuntimeError('Control state is in Object Storage and has no local path')
+    def put(self,key,data):return self._objects().put(key,data)
+    def get(self,key):return self._objects().get(key)
+    def json(self,key):return json.loads(self.get(key))
+    def put_json(self,key,data):self.put(key,json.dumps(data,ensure_ascii=False).encode())
+    def delete(self,key):return self._objects().delete(key)
+    def stat(self,key):return self._objects().stat(key)
+    def list_prefix(self,prefix):return self._objects().list_prefix(prefix)
+# scratch: this container's own disk (locks, object cache), never shared state.
+# local_store: control-plane state; the same disk unless LAPI_CONTROL_STORE=oci.
+scratch=FileStorage()
+local_store=ObjectControlStore() if os.getenv('LAPI_CONTROL_STORE','file')=='oci' else scratch
+def files_in(prefix,pattern):
+    """Keys directly under prefix whose remainder matches pattern ('*.json', '*/manifest.json')."""
+    from fnmatch import fnmatchcase
+    depth=pattern.count('/')
+    return sorted(item['key'] for item in local_store.list_prefix(prefix)
+                  if item['key'][len(prefix):].count('/')==depth and fnmatchcase(item['key'][len(prefix):],pattern))
 class RoutingStorage:
     def backend(self,key):
         from .storage_config import backend
@@ -143,8 +169,9 @@ def init():
             from .relational import upgrade_legacy
             with engine.begin() as connection:upgrade_legacy(connection,bootstrap_assignments=bootstrap_assignments)
 def secret_cipher():
-    key=os.getenv('LAPI_MASTER_KEY', os.getenv('MASTER_KEY'))
-    if not key: raise ValueError('MASTER_KEY is required to save provider credentials (generate a Fernet key)')
+    from .vault_master_key import master_key
+    key=master_key()
+    if not key: raise ValueError('Set LAPI_MASTER_KEY or LAPI_MASTER_KEY_SECRET_OCID to save provider credentials')
     return Fernet(key.encode())
 DEFAULTS={'model_provider':os.getenv('MODEL_PROVIDER','openai'),'embedding_provider':os.getenv('EMBEDDING_PROVIDER','sentence_transformers'),'model':os.getenv('LAPI_MODEL',os.getenv('OPENAI_MODEL','gpt-4.1-mini')),'embedding_model':os.getenv('EMBEDDING_MODEL','text-embedding-3-small'),'chunk_size':runtime_config.get('LAPI_CHUNK_SIZE'),'chunk_overlap':runtime_config.get('LAPI_CHUNK_OVERLAP'),'top_k':runtime_config.get('LAPI_RETRIEVED_CHUNKS'),'timeout':runtime_config.get('LAPI_TIMEOUT'),'max_upload_mb':runtime_config.get('LAPI_MAX_UPLOAD_MB'),'search_provider':os.getenv('SEARCH_PROVIDER','qdrant'),'storage_provider':os.getenv('STORAGE_PROVIDER','local'),'oci_region':os.getenv('OCI_REGION',''),'oci_project_id':'','oci_auth_mode':'api_key','oci_profile':'DEFAULT','oci_model':'','oci_vector_store_id':'','oci_storage_namespace':os.getenv('OCI_NAMESPACE',''),'oci_storage_bucket':os.getenv('OCI_BUCKET',''),'oci_storage_prefix':os.getenv('OCI_OBJECT_PREFIX','lapi'),'oci_storage_region':os.getenv('OCI_REGION',''),'oci_storage_auth_mode':os.getenv('OCI_AUTH_MODE','config_file'),'oci_storage_profile':os.getenv('OCI_PROFILE','DEFAULT'),'queue_provider':os.getenv('QUEUE_PROVIDER','database')}
 _execution=ContextVar('lapi_execution',default=None)
@@ -219,7 +246,9 @@ def document_lock(document_id,*,blocking=True):
         lock=lambda handle:fcntl.flock(handle,fcntl.LOCK_EX|(0 if blocking else fcntl.LOCK_NB))
         unlock=lambda handle:fcntl.flock(handle,fcntl.LOCK_UN)
     if not all(c.isalnum() or c in '-_' for c in document_id):raise ValueError('Invalid document identifier')
-    path=local_store.path('locks/'+document_id+'.lock');path.parent.mkdir(parents=True,exist_ok=True)
+    # Locks fence the API and worker sharing this disk; with LAPI_CONTROL_STORE=oci both
+    # must run in one container instance (one shared scratch volume).
+    path=scratch.path('locks/'+document_id+'.lock');path.parent.mkdir(parents=True,exist_ok=True)
     with open(path,'a') as handle:
         lock(handle)
         try:yield

@@ -32,6 +32,27 @@ Windows Oracle/Ollama launcher:
 ./lapi_local_use/lapi_scripts/start-oracle.ps1
 ```
 
+Create the first administrator once the API is running. There is no setup screen
+or setup token; this only works while no account exists. The scripts prompt for
+the username and password and pass them through stdin:
+
+```sh
+./lapi_local_use/lapi_scripts/create-admin.sh      # or create-admin.ps1 on Windows
+```
+
+They target the Oracle Compose configuration, like `create-colleague`. For any
+other deployment, run the module inside the API container and type the JSON on stdin:
+
+```sh
+docker compose --project-directory . --env-file .env -f lapi_local_use/compose.yaml exec -T api python -m lapi_app.create_admin
+```
+
+### OCI deployment
+
+Lapi runs on OCI Container Instances with no VM: data and vectors in Autonomous AI
+Database, files and control state in Object Storage, the master key and database
+password in OCI Vault. See [lapi_deploy/lapi_containers](../lapi_deploy/lapi_containers/README.md).
+
 Existing laptop configuration with OCI credentials and local GPU inference:
 
 ```sh

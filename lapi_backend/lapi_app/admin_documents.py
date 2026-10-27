@@ -161,7 +161,7 @@ def cleanup(id,actor,confirmation,expected_version,expected_impact):
                     saved['execution_keys']=execution_keys;core.local_store.put_json(journal_ref(id),saved)
                 if 'upload_receipts' not in saved:
                     receipt_keys={r['key'] for r in document_storage.routes() if r['key'].startswith('upload-receipts/')}
-                    receipt_keys.update('upload-receipts/'+p.name for p in core.local_store.path('upload-receipts/marker').parent.glob('*.json'))
+                    receipt_keys.update(core.files_in('upload-receipts/','*.json'))
                     saved['upload_receipts']={}
                     for key in receipt_keys:
                         try:receipt=core.store.json(key)

@@ -1,6 +1,16 @@
 {
-  "version": "26.1.15.0",
+  "version": "26.1.16.0",
   "releases": [
+    {
+      "version": "26.1.16.0",
+      "date": "2026-10-27",
+      "title": "Containers on OCI, no setup token",
+      "changes": [
+        "Lapi runs as containers on OCI Container Instances behind a load balancer, with no VM: data and vectors in the lapidb Autonomous AI Database, files and Lapi's own settings in Object Storage, and the local Ollama models alongside.",
+        "The setup screen and its bootstrap token are gone. The first administrator is created on the server (create-admin, or once at start-up from an OCI Vault secret); the sign-in page says when none exists yet.",
+        "The key that encrypts saved model keys and passwords, and the database password, can come from OCI Vault instead of server configuration."
+      ]
+    },
     {
       "version": "26.1.15.0",
       "date": "2026-10-27",
