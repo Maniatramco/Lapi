@@ -63,6 +63,7 @@ locals {
     LAPI_OLLAMA_URL                       = "http://127.0.0.1:11434"
     LAPI_AGENT_ENGINE                     = "langgraph"
     LAPI_CHAT_MODE                        = "auto"
+    LAPI_RERANKER                         = "local" # Model files are baked into the API image at /opt/lapi-reranker.
     LAPI_OCR_ENABLED                      = "false"
     LANGSMITH_TRACING                     = "false"
     LAPI_ALLOW_MOCK                       = "false"

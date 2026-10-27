@@ -2,6 +2,13 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.6 - 27 October 2026
+
+Local reranker in the cloud deployment
+
+- The API image (`lapi_backend/Dockerfile`) now downloads the pinned local reranker (`cross-encoder/ms-marco-MiniLM-L6-v2`, fixed revision, checked with `verify_assets`) to `/opt/lapi-reranker` at build time and sets `LAPI_RERANK_MODEL_DIR`; build with `INSTALL_RERANKER=false` to leave it out.
+- The OCI deployment sets `LAPI_RERANKER=local` for the api and worker containers, so chat and extraction no longer fail with "Chat reranking is unavailable".
+
 ## v26.1.16.5 - 27 October 2026
 
 Keycloak sign-in, OpenFGA permissions and multi-use models

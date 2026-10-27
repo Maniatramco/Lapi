@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.5",
+  "version": "26.1.16.6",
   "releases": [
+    {
+      "version": "26.1.16.6",
+      "date": "2026-10-27",
+      "title": "Local reranker in the cloud deployment",
+      "changes": [
+        "The API image now includes the pinned local reranker (ms-marco-MiniLM-L6-v2), and the OCI deployment turns it on, so chat and extraction no longer stop with \"Chat reranking is unavailable\"."
+      ]
+    },
     {
       "version": "26.1.16.5",
       "date": "2026-10-27",
