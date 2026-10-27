@@ -1,4 +1,5 @@
-"""A .pdf or .docx that is really something else is refused with a reason, not a generic failure."""
+"""A .pdf or .docx that only holds text (such as a saved link) is indexed as that text; one that
+is really something else is refused with a reason, not a generic failure."""
 import io
 import zipfile
 
@@ -10,6 +11,7 @@ from test_dataset_models import system, dataset, post
 
 LINK = b'https://trmx.example.com/Candidate/Todo/ProfileDownload.asp?id=abc&EmailTemplate=true'
 GENERIC = 'Processing failed; inspect service health and retry'
+JUNK = bytes(range(256)) * 4  # Neither the named format nor text.
 
 
 def pdf():
@@ -57,10 +59,27 @@ def test_wrong_contents_are_named(name, raw, expected):
         file_formats.check(name, raw)
 
 
-def test_upload_refuses_a_link_saved_as_pdf(system):
+def test_a_link_saved_as_pdf_is_indexed_as_its_text_and_never_followed(system, monkeypatch):
+    import httpx
+    monkeypatch.setattr(httpx, 'get', lambda *a, **k: pytest.fail('A link inside a document was fetched'))
     s = system; d = dataset(s)
+    assert file_formats.plain_text('hcl offer.pdf', LINK) == LINK.decode()
     response = s.api.post('/api/documents/upload', files={'files': ('hcl offer.pdf', LINK, 'application/pdf')}, data={'dataset_id': d['id'], 'allow_external': 'true'})
-    assert response.status_code == 400 and 'only contains a web link' in response.json()['detail']
+    assert response.status_code == 200, response.text
+    did = response.json()['documents'][0]['id']
+    assert worker.run_once()
+    doc = s.api.get('/api/documents/' + did).json()
+    assert doc['status'] == 'ready', doc.get('error')
+    assert s.api.get('/api/documents/' + did + '/preview').json()['text'] == LINK.decode()
+    source = s.api.get('/api/documents/' + did + '/source')
+    assert source.status_code == 200 and source.headers['content-type'].startswith('text/plain') and source.content == LINK
+    assert s.api.get('/api/documents/' + did + '/page-image').status_code == 415
+
+
+def test_upload_refuses_a_pdf_that_is_neither_pdf_nor_text(system):
+    s = system; d = dataset(s)
+    response = s.api.post('/api/documents/upload', files={'files': ('offer.pdf', JUNK, 'application/pdf')}, data={'dataset_id': d['id'], 'allow_external': 'true'})
+    assert response.status_code == 400 and 'contents are not in PDF format' in response.json()['detail']
     assert s.api.get('/api/documents').json() == [] and s.api.get('/api/jobs').json() == []
     ok = s.api.post('/api/documents/upload', files={'files': ('offer.docx', docx(), 'application/octet-stream')}, data={'dataset_id': d['id'], 'allow_external': 'true'})
     assert ok.status_code == 200, ok.text
@@ -77,8 +96,8 @@ def stored(s, d, monkeypatch, name, raw):
 
 def test_indexing_an_already_stored_bad_file_says_why(system, monkeypatch):
     s = system; d = dataset(s)
-    doc = stored(s, d, monkeypatch, 'hcl offer.pdf', LINK)
-    assert doc['status'] == 'failed' and 'only contains a web link' in doc['error'] and doc['error'] != GENERIC
+    doc = stored(s, d, monkeypatch, 'offer.pdf', JUNK)
+    assert doc['status'] == 'failed' and 'contents are not in PDF format' in doc['error'] and doc['error'] != GENERIC
 
 
 def test_indexing_a_damaged_pdf_says_it_is_damaged(system, monkeypatch):
@@ -87,16 +106,19 @@ def test_indexing_a_damaged_pdf_says_it_is_damaged(system, monkeypatch):
     assert doc['status'] == 'failed' and 'damaged and cannot be opened as a PDF' in doc['error']
 
 
-def test_connector_import_reports_the_file_problem(system, monkeypatch):
+def test_connector_import_indexes_a_text_pdf_and_reports_an_unreadable_one(system, monkeypatch):
     from test_source_connections import connection, selections
+    files = {'f1': ('hcl offer.pdf', LINK), 'f2': ('broken.pdf', JUNK)}
     class Adapter:
         def browse(self, folder='', cursor=''):
-            return [{'id': 'f1', 'name': 'hcl offer.pdf', 'folder': False, 'supported': True, 'size': len(LINK), 'revision': 'r1'}], ''
+            return [{'id': id, 'name': name, 'folder': False, 'supported': True, 'size': len(raw), 'revision': 'r1'} for id, (name, raw) in files.items()], ''
         def fetch(self, item, limit):
-            return item['name'], LINK, {'remote_id': item['id'], 'revision': 'r1', 'original_url': 'https://drive.google.com/file/d/f1/view'}
+            return item['name'], files[item['id']][1], {'remote_id': item['id'], 'revision': 'r1', 'original_url': 'https://drive.google.com/file/d/' + item['id'] + '/view'}
     monkeypatch.setattr(cloud, 'adapter', lambda cfg, secret: Adapter())
     s = system; d = dataset(s); c = connection(s, d)
-    token = selections(s, c)['items'][0]['selection']
-    result = post(s, '/api/source-connections/' + c['id'] + '/import', {'selections': [token], 'publish_to_dataset': True, 'allow_external': True})['results'][0]
-    assert result['status'] == 'failed' and 'only contains a web link' in result['message']
-    assert s.api.get('/api/documents').json() == []
+    tokens = [item['selection'] for item in selections(s, c)['items']]
+    results = post(s, '/api/source-connections/' + c['id'] + '/import', {'selections': tokens, 'publish_to_dataset': True, 'allow_external': True})['results']
+    assert results[0]['status'] == 'imported'
+    assert results[1]['status'] == 'failed' and 'contents are not in PDF format' in results[1]['message']
+    assert worker.run_once()
+    assert s.api.get('/api/documents/' + results[0]['document_id']).json()['status'] == 'ready'

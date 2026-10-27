@@ -276,7 +276,7 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
         if name.lower().endswith('.json'):
             try:json_document_text(raw)
             except ValueError as error:raise HTTPException(400,str(error))
-        if problem:=file_formats.problem(name,raw):raise HTTPException(400,problem)
+        if (problem:=file_formats.problem(name,raw)) and file_formats.plain_text(name,raw) is None:raise HTTPException(400,problem)
     merged = None; original_parts = []
     if merge_files is True and len(files)>1:
         from . import merged_documents
@@ -323,8 +323,11 @@ INLINE_TYPES={'pdf':'application/pdf','json':'application/json','txt':'text/plai
 def source_document(id:str,owner=Depends(auth)):
     from urllib.parse import quote
     r=get_record(id,owner,'document');ext=r.name.rsplit('.',1)[-1].lower()
+    raw=store.get(r.ref)
+    # A .pdf, .docx or image that only holds text (such as a saved link) opens as that text.
+    if file_formats.plain_text(r.name,raw) is not None:ext='txt'
     if ext not in INLINE_TYPES:raise HTTPException(415,'Inline original preview supports PDF, UTF-8 TXT, JSON and images. Download DOCX to review its original layout.')
-    return Response(store.get(r.ref),media_type=INLINE_TYPES[ext],headers={'Content-Disposition':"inline; filename*=UTF-8''"+quote(r.name),'Content-Security-Policy':"sandbox"})
+    return Response(raw,media_type=INLINE_TYPES[ext],headers={'Content-Disposition':"inline; filename*=UTF-8''"+quote(r.name),'Content-Security-Policy':"sandbox"})
 
 def original_pdf_page_count(raw):
     import pypdfium2 as pdfium
@@ -346,8 +349,9 @@ def original_page_image(raw,page):
 @app.get('/api/documents/{id}/page-image')
 def document_page_image(id:str,page:int=1,owner=Depends(auth)):
     r=get_record(id,owner,'document')
-    if not r.name.lower().endswith('.pdf'):raise HTTPException(415,'Page images are available for original PDF files.')
-    return original_page_image(store.get(r.ref),page)
+    raw=store.get(r.ref)
+    if not r.name.lower().endswith('.pdf') or file_formats.plain_text(r.name,raw) is not None:raise HTTPException(415,'Page images are available for original PDF files.')
+    return original_page_image(raw,page)
 
 @app.get('/api/documents/{id}/merged-sources/{key}/{action}')
 def merged_source(id:str,key:str,action:str,page:int=1,owner=Depends(auth)):

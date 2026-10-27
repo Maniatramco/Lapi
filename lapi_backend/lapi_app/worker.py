@@ -64,6 +64,9 @@ def parse_document(name,raw,*,ocr_enabled=True,progress=None,cache_id=None):
     ext=name.rsplit('.',1)[-1].lower()
     if ext=='txt':return [{'page':1,'text':raw.decode('utf-8-sig')}]
     if ext=='json':return [{'page':1,'text':json_document_text(raw)}]
+    if ext in ('pdf','docx',*file_formats.IMAGES) and (text:=file_formats.plain_text(name,raw)) is not None:
+        # The file only holds text (for example a saved link): index that text as it is.
+        return [{'page':1,'text':text,'text_origin':'native'}]
     # ZIP-based DOCX files go through the archive safety checks below first.
     if ext in ('pdf',*file_formats.IMAGES) or ext=='docx' and not raw.startswith(b'PK\x03\x04'):file_formats.check(name,raw)
     if ext in file_formats.IMAGES:

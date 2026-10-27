@@ -2,8 +2,9 @@
 before it is stored or indexed.
 
 A file's extension says nothing about its contents: a saved web link, a web page or a
-renamed archive can arrive named .pdf. Say what the file actually is, so the user knows
-to fetch the real document instead of retrying.
+renamed archive can arrive named .pdf. A file that holds plain text is indexed as that
+text (plain_text); anything else that is not the named format is refused with what the
+file actually is.
 """
 import io
 import zipfile
@@ -40,6 +41,19 @@ def _text(raw):
     except UnicodeDecodeError:
         return None
     return text if all(c.isprintable() or c.isspace() for c in text) else None
+
+
+def plain_text(name, raw):
+    """The whole file as text when a .pdf, .docx or image file actually holds plain text,
+    such as a saved web link. Lapi indexes and extracts that text as it is; it never
+    follows links found in it."""
+    if extension(name) not in ('pdf', 'docx', *IMAGES) or problem(name, raw) is None:
+        return None
+    try:
+        text = raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        return None
+    return text if text.strip() and all(c.isprintable() or c.isspace() for c in text) else None
 
 
 def _actually(raw):
