@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, ConfigDict, SecretStr
 from .. import core, dataset_models as routing, providers
-from .connection import ConnectionError, ModelConnection, validate_connection, validate_credentials
+from .connection import ConnectionError, ModelConnection, explaining_provider_errors, validate_connection, validate_credentials
 from . import parameters as model_parameters
 from .parameters import validate_parameters, validate_stage_parameters
 from .validation import temporary_credentials
@@ -300,7 +300,7 @@ def install_routes(app, auth):
         snapshot = {'settings': dict(cfg, _agent_require_tool=True), 'secret_refs': {}, 'capability': body.category}
         effective = {}
         model_parameters.clear_effective()
-        with core.execution_context(snapshot), temporary_credentials(secret):
+        with core.execution_context(snapshot), temporary_credentials(secret), explaining_provider_errors():
             try:
                 if body.category == 'chat':
                     with model_parameters.use_stage('tool_step'):

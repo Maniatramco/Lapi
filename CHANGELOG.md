@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.3 - 27 October 2026
+
+Model tests explain provider errors
+
+`ModelConnection.post` (`lapi_models/connection.py`) used to report only the HTTP status of a failed model request, so a Test Connection failure such as OpenAI's HTTP 400 gave no hint of the cause. `provider_reason()` now extracts the provider's message (OpenAI/Anthropic `error.message`, or `message`/`detail`), on one line, at most 300 characters, with the request's credentials and anything key-like (`sk-…`, `Bearer …`, long tokens) replaced by `[redacted]`. It is added only inside `explaining_provider_errors()`, which the Model Registration test endpoint uses: its requests are synthetic. Every other model call keeps the status-only message, because provider error bodies can echo prompts and document text.
+
+Validation: full backend suite in parallel, 1,361 passed, 11 skipped, including new `test_model_error_reason.py` (OpenAI and Anthropic formats, key redaction, missing reasons, reason shown only while testing a registration) and the existing no-echo tests in `test_anthropic_chat.py`.
+
 ## v26.1.16.2 - 27 October 2026
 
 A redesigned sign-in page

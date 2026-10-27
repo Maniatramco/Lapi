@@ -1,6 +1,9 @@
 """Guarded model facade: transport, schema checks, vector validation and dispatch."""
 import json
+import re
 import math
+from contextlib import contextmanager
+from contextvars import ContextVar
 import httpx
 from jsonschema import validate, ValidationError
 from .. import core
@@ -9,6 +12,37 @@ from .parameters import check_budget, validate_parameters, ParameterError, for_s
 from .validation import ConnectionError, PROTOCOLS, AUTH_MODES, validate_endpoint, validate_connection, validate_credentials, credentials
 from .provider_registry import provider
 from ..lapi_agent import token_usage
+
+_KEY_LIKE = re.compile(r'(sk-[A-Za-z0-9_\-]{6,}|Bearer\s+\S+|[A-Za-z0-9_\-]{32,})')
+# Provider error bodies can echo request content (prompts, document text), so they are
+# only shown while testing a registration, whose requests are synthetic.
+_explain_errors = ContextVar('lapi_explain_provider_errors', default=False)
+
+@contextmanager
+def explaining_provider_errors():
+    token = _explain_errors.set(True)
+    try:
+        yield
+    finally:
+        _explain_errors.reset(token)
+
+def provider_reason(response, secret=None, limit=300):
+    """The provider's own error text (OpenAI/Anthropic `error.message`, or `message`/`detail`),
+    on one line, with credentials and anything key-like removed. Empty when there is none."""
+    try:
+        body = response.json()
+    except ValueError:
+        return ''
+    error = body.get('error') if isinstance(body, dict) else None
+    text = (error.get('message') if isinstance(error, dict) else error if isinstance(error, str) else None) \
+        or (body.get('message') or body.get('detail') if isinstance(body, dict) else None)
+    if not isinstance(text, str) or not text.strip():
+        return ''
+    for value in (secret or {}).values():
+        if isinstance(value, str) and len(value) >= 8:
+            text = text.replace(value, '[redacted]')
+    text = _KEY_LIKE.sub('[redacted]', ' '.join(text.split()))
+    return text[:limit].rstrip(' .') + ('…' if len(text) > limit else '')
 
 class ModelConnection:
     def __init__(self, cfg, embedding=False, credentials_override=None):
@@ -37,7 +71,9 @@ class ModelConnection:
             with httpx.Client(timeout=self.timeout, trust_env=False, follow_redirects=False) as client:
                 response = client.post(self.c['endpoint'] + path, json=payload, headers=headers)
             if response.status_code >= 300:
-                raise ConnectionError('Model request failed (HTTP ' + str(response.status_code) + '). Check credentials, model access, quota, and protocol.')
+                reason = provider_reason(response, self.secret) if _explain_errors.get() else ''
+                raise ConnectionError('Model request failed (HTTP ' + str(response.status_code) + ')'
+                                      + (': ' + reason if reason else '') + '. Check credentials, model access, quota, and protocol.')
             return response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise ConnectionError('Model service is unavailable, timed out, or returned invalid JSON.') from exc
