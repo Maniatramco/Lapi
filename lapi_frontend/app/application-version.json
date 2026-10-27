@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.2",
+  "version": "26.1.16.3",
   "releases": [
+    {
+      "version": "26.1.16.3",
+      "date": "2026-10-27",
+      "title": "Model tests explain provider errors",
+      "changes": [
+        "When Test Connection fails in Model Registration, the message now includes the provider's own reason (for example an unsupported parameter or API), with any key removed. Errors during normal use still never show provider text, which can echo private requests."
+      ]
+    },
     {
       "version": "26.1.16.2",
       "date": "2026-10-27",
