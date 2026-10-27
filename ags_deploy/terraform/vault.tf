@@ -1,5 +1,5 @@
-# The master key that encrypts saved credentials and the database password both
-# live in OCI Vault. The app reads them at start-up with the VM's instance
+# The master key that encrypts saved credentials, the database password and the
+# first administrator's password live in OCI Vault. The app reads them at start-up with the VM's instance
 # principal; neither is written to the VM's disk or to its metadata.
 #
 # Terraform state holds these values: keep state in a private, encrypted backend.
@@ -32,15 +32,6 @@ resource "oci_kms_key" "lapi" {
 # Fernet master key: 32 random bytes, URL-safe base64.
 resource "random_bytes" "master_key" {
   length = 32
-}
-
-resource "random_password" "db_admin" {
-  length           = 24
-  min_upper        = 2
-  min_lower        = 2
-  min_numeric      = 2
-  min_special      = 2
-  override_special = "#_"
 }
 
 resource "random_password" "first_admin" {
@@ -80,9 +71,13 @@ resource "oci_vault_secret" "db_password" {
   vault_id       = local.vault_id
   key_id         = local.key_id
   secret_name    = "${var.name}-db-admin-password"
-  description    = "Lapi Autonomous Database ADMIN password"
+  description    = "ADMIN password of lapidb; set the real value as a new version in the Console"
   secret_content {
     content_type = "BASE64"
-    content      = base64encode(random_password.db_admin.result)
+    content      = base64encode("replace-in-console")
+  }
+  # The real password is added in the Console; Terraform must never overwrite it.
+  lifecycle {
+    ignore_changes = [secret_content]
   }
 }

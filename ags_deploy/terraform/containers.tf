@@ -1,5 +1,6 @@
-# Lapi on OCI Container Instances: no VM. One container instance runs web, api,
-# worker and an HTTPS proxy. Containers in one instance share localhost and the
+# Lapi on OCI Container Instances: no VM. One container instance in the private
+# subnet runs web, api and worker behind the load balancer (loadbalancer.tf).
+# Containers in one instance share localhost and the
 # "scratch" volume, which holds only file locks and caches; everything that must
 # survive a restart is in Autonomous AI Database, Object Storage and Vault.
 #
@@ -22,7 +23,6 @@ locals {
   registry  = "${var.region}.ocir.io/${data.oci_objectstorage_namespace.lapi.namespace}"
   api_image = "${local.registry}/${var.name}/api:${var.image_tag}"
   web_image = "${local.registry}/${var.name}/web:${var.image_tag}"
-  https     = var.site_address != ":80"
 
   backend_env = {
     DATABASE_PROVIDER                      = "oracle"
@@ -47,7 +47,7 @@ locals {
     MODEL_PROVIDER                         = var.model_provider
     EMBEDDING_PROVIDER                     = var.embedding_provider
     AEGIS_ALLOW_MOCK                       = "false"
-    COOKIE_SECURE                          = local.https ? "true" : "false"
+    COOKIE_SECURE                          = "false" # Set "true" once the load balancer serves HTTPS.
   }
 }
 
@@ -65,8 +65,8 @@ resource "oci_container_instances_container_instance" "lapi" {
   }
 
   vnics {
-    subnet_id             = oci_core_subnet.public.id
-    is_public_ip_assigned = true
+    subnet_id             = oci_core_subnet.private.id
+    is_public_ip_assigned = false
     display_name          = "${var.name}-app"
   }
 
@@ -114,19 +114,6 @@ resource "oci_container_instances_container_instance" "lapi" {
       AEGIS_API_LOCATION      = "oci"
       AEGIS_WORKER_LOCATION   = "oci"
       AEGIS_MODEL_LOCATION    = "cloud"
-    }
-  }
-
-  # HTTPS with an automatic certificate when site_address is a domain name
-  # pointing at this instance's public IP; plain HTTP on port 80 for ':80'.
-  containers {
-    display_name = "proxy"
-    image_url    = "docker.io/library/caddy:2.10.2-alpine"
-    command      = ["caddy", "reverse-proxy", "--from", var.site_address, "--to", "127.0.0.1:3000"]
-    volume_mounts {
-      volume_name = "scratch"
-      mount_path  = "/data"
-      sub_path    = "caddy"
     }
   }
 

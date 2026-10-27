@@ -11,14 +11,14 @@ output "image_repositories" {
 }
 
 output "public_ip" {
-  description = "Open http://<ip> (or point site_address's DNS record here). Empty until image_tag is set."
-  value       = length(data.oci_core_vnic.lapi) > 0 ? data.oci_core_vnic.lapi[0].public_ip_address : ""
+  description = "Load balancer address: open http://<ip>, or point a DNS record here."
+  value       = oci_load_balancer_load_balancer.lapi.ip_address_details[0].ip_address
 }
 
 output "database" {
   value = {
-    name             = oci_database_autonomous_database.lapi.db_name
-    private_endpoint = oci_database_autonomous_database.lapi.private_endpoint
+    name   = data.oci_database_autonomous_database.lapi.db_name
+    vcn_id = oci_core_vcn.lapi.id
   }
 }
 

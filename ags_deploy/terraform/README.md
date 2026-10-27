@@ -4,8 +4,9 @@ Lapi runs as containers on **OCI Container Instances**. There is no VM to manage
 
 | Piece | What holds it |
 |---|---|
-| web, api, worker, HTTPS proxy | One container instance (`CI.Standard.E4.Flex`), four containers sharing localhost |
-| Users, datasets, jobs, **vectors** | Oracle **Autonomous AI Database 26ai**, private endpoint, TLS (no Postgres, no Qdrant) |
+| web, api, worker | One container instance (`CI.Standard.E4.Flex`) in a private subnet, three containers sharing localhost |
+| Public entry point | 10 Mbps flexible Load Balancer with a stable IP (HTTP; add a certificate for HTTPS) |
+| Users, datasets, jobs, **vectors** | Existing Always Free **Autonomous AI Database 26ai** `lapidb`, read by Terraform, TLS (no Postgres, no Qdrant) |
 | Uploaded documents | Object Storage bucket `lapi-documents`, prefix `lapi-documents/` |
 | Settings, encrypted credentials, storage routes, archives | Same bucket, prefix `lapi-control/` (`AEGIS_CONTROL_STORE=oci`) |
 | Credential master key, database password | OCI Vault secrets, read with the container instance's resource principal |
@@ -18,8 +19,9 @@ password, so keep state private (for example in an OCI Object Storage backend).
 
 ## Files
 
-- `network.tf`: VCN, public subnet (ports 80/443 only), private subnet for the database.
-- `database.tf`: Autonomous AI Database with a private endpoint.
+- `network.tf`: VCN; public subnet for the load balancer; private subnet for the containers with NAT and service gateways.
+- `loadbalancer.tf`: the load balancer, forwarding port 80 to the web container.
+- `database.tf`: reads the existing `lapidb` (`existing_db_id`).
 - `storage.tf`: the bucket.
 - `vault.tf`: Vault and key (or reuse existing ones) plus the two secrets.
 - `iam.tf`: dynamic group for Lapi's container instances and its policy.
@@ -41,6 +43,15 @@ terraform apply -var image_tag=26.1.12.19        # starts the container instance
 terraform output public_ip
 ```
 
+Before the containers start, two one-time steps for `lapidb`:
+
+1. **Password.** In the Console open Vault `lapi-vault` > Secrets >
+   `lapi-db-admin-password` > Create secret version, and enter lapidb's ADMIN
+   password. Terraform never overwrites it.
+2. **Access list.** lapidb (Always Free) has no private endpoint. Add the VCN
+   (`terraform output database` shows `vcn_id`) to lapidb's access control list,
+   keeping the existing entries. The containers reach it through the service gateway.
+
 The first administrator (`admin_username`, default `admin`) is created once when
 the api starts. Its generated password is the Vault secret `lapi-first-admin-password`
 (Console: Identity & Security > Vault > lapi-vault > Secrets > the secret >
@@ -50,9 +61,9 @@ Version > View secret contents). Change it after signing in.
 
 - **One container instance.** The api and worker share file locks through the
   instance's `scratch` volume, so do not run two instances against the same bucket.
-- **Public IP changes** when the container instance is replaced. For a stable address
-  or a domain, put an OCI Load Balancer in front, or update the DNS record.
+- **HTTPS** is not configured yet: add a certificate and a port-443 listener to the
+  load balancer, then set `COOKIE_SECURE` to `true`.
 - **Database user.** The app connects as `ADMIN`. Create a dedicated schema user for
   production and change `ORACLE_USER` and the password secret.
-- **Cost.** Autonomous AI Database is billed per ECPU (minimum 2); Container
-  Instances per OCPU and GB of memory while running.
+- **Cost.** lapidb and a 10 Mbps load balancer are Always Free; Container Instances
+  are billed per OCPU and GB of memory while running.

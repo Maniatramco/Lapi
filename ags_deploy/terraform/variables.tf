@@ -54,12 +54,6 @@ variable "container_memory_gbs" {
   default = 16
 }
 
-variable "site_address" {
-  description = "Domain name pointing at the container instance for automatic HTTPS, or ':80' for plain HTTP."
-  type        = string
-  default     = ":80"
-}
-
 variable "admin_username" {
   description = "First administrator, created once at start-up. Its password is generated into Vault."
   type        = string
@@ -78,26 +72,9 @@ variable "embedding_provider" {
 
 # --- Autonomous AI Database ------------------------------------------------
 
-variable "db_name" {
-  description = "Database name: letters and digits only, up to 30 characters."
+variable "existing_db_id" {
+  description = "OCID of the existing Autonomous AI Database Lapi uses (lapidb)."
   type        = string
-  default     = "lapidb"
-}
-
-variable "db_version" {
-  description = "Oracle AI Database version with native vector search."
-  type        = string
-  default     = "26ai"
-}
-
-variable "db_ecpu_count" {
-  type    = number
-  default = 2
-}
-
-variable "db_storage_gbs" {
-  type    = number
-  default = 20
 }
 
 # --- Vault -------------------------------------------------------------------
