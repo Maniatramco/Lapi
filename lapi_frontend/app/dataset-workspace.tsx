@@ -101,6 +101,9 @@ export function DatasetMappings({ dataset, models, api, run, busy, reload, notif
   };
   const ocrCandidates = models.filter(m=>m.enabled!==false&&m.ocr_eligible===true);
   const selectedOcr = ocrCandidates.find(m=>m.id===ocr);
+  // Empty OCR uses the workspace OCR Default, or a vision extraction default when none is set.
+  const workspaceOcr = workspaceModel(workspace.ocr_model_id);
+  const automaticOcr = workspaceOcr ? `Workspace OCR Default · ${modelLabel(workspaceOcr)}` : 'Automatic · cloud extraction default';
   // Empty means "use the workspace Default" for chat and extraction.
   const roleReady=(capability:string,value:string,fallback?:string)=>value?candidates(capability).some(m=>m.id===value):!!workspaceModel(fallback);
   const embeddingDefault = workspaceModel(workspace.embedding_model_id || dataset.embedding_model_id);
@@ -132,19 +135,19 @@ export function DatasetMappings({ dataset, models, api, run, busy, reload, notif
           </tr>;
         })}<tr>
           <th scope="row"><label htmlFor="mapping-ocr">OCR</label><small>Scans and document images</small></th>
-          <td><select id="mapping-ocr" aria-label="OCR model" title={selectedOcr?`${modelLabel(selectedOcr)} · ${selectedOcr.provider_model}`:'Automatic · cloud extraction default'} value={ocr} onChange={e=>changeDefault('ocr',e.target.value)} disabled={busy}>
-            <option value="">Automatic · cloud extraction default</option>
+          <td><select id="mapping-ocr" aria-label="OCR model" title={selectedOcr?`${modelLabel(selectedOcr)} · ${selectedOcr.provider_model}`:automaticOcr} value={ocr} onChange={e=>changeDefault('ocr',e.target.value)} disabled={busy}>
+            <option value="">{automaticOcr}</option>
             {ocrCandidates.map(model=><option key={model.id} value={model.id}>{modelLabel(model)} · {model.provider_model}</option>)}
             {ocr&&!selectedOcr&&<option value={ocr} disabled>Choose a cloud OCR model</option>}
           </select></td>
-          <td>{selectedOcr?(selectedOcr.connection?.endpoint?.includes('api.openai.com')?'OpenAI':'Google Gemini'):'Cloud'}</td>
-          <td className="mapping-tokens">{selectedOcr?.context_limit?.toLocaleString()||'—'}</td>
-          <td className="mapping-tokens">{selectedOcr?.max_output_tokens?.toLocaleString()||'—'}</td>
-          <td><span className={`pill ${!ocr||selectedOcr?'green':'amber'}`}>{!ocr?'Automatic':selectedOcr?'Selected':'Unavailable'}</span></td>
+          <td>{(selectedOcr||workspaceOcr)?((selectedOcr||workspaceOcr)!.connection?.endpoint?.includes('api.openai.com')?'OpenAI':'Google Gemini'):'Cloud'}</td>
+          <td className="mapping-tokens">{(selectedOcr||workspaceOcr)?.context_limit?.toLocaleString()||'—'}</td>
+          <td className="mapping-tokens">{(selectedOcr||workspaceOcr)?.max_output_tokens?.toLocaleString()||'—'}</td>
+          <td><span className={`pill ${!ocr||selectedOcr?'green':'amber'}`}>{!ocr?(workspaceOcr?'Workspace Default':'Automatic'):selectedOcr?'Selected':'Unavailable'}</span></td>
         </tr></tbody>
       </table>
     </div>
-    <p className="muted small">OCR reads text from scanned PDFs and images in Word documents using cloud models only. Choose a compatible OpenAI or Gemini extraction registration. Automatic uses the compatible cloud extraction default; it never falls back to local OCR.</p>
+    <p className="muted small">OCR reads text from images, scanned PDFs and images in Word documents using cloud models only. Choose an OpenAI or Gemini model ticked for OCR in Model Registration (its test reads a sample image), or gpt-4o, gpt-4o-mini or a Gemini extraction model. Leave it empty to use the workspace OCR Default, or the compatible cloud extraction default when none is set; it never falls back to local OCR.</p>
     {ocrChanged&&<p className="notice" role="status">The next indexing job will use this OCR choice. Reindex existing documents to read their images again; their embedding model stays the same.</p>}
     <div className="mapping-availability">
       {(['chat','extraction'] as const).map(capability=><fieldset key={capability} disabled={busy||remoteChanged}>

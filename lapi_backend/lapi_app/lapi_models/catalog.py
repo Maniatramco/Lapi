@@ -17,5 +17,7 @@ PROVIDERS = (
 def choices():
     return [{'id': id, 'name': name, 'protocol': protocol, 'endpoint': endpoint,
              'region': {'bedrock': 'us-east-1', 'vertex': 'us-central1', 'oci': 'us-chicago-1'}.get(protocol, ''),
-             'auth_modes': list(AUTH_MODES[protocol]), 'categories': ['chat'] if protocol == 'anthropic' else ['chat', 'extraction', 'embedding']}
+             'auth_modes': list(AUTH_MODES[protocol]),
+             # OCR reads images through the OpenAI and Gemini adapters only.
+             'categories': ['chat'] if protocol == 'anthropic' else ['chat', 'extraction', 'embedding'] + (['ocr'] if id in ('openai', 'gemini') else [])}
             for id, name, protocol, endpoint in PROVIDERS]

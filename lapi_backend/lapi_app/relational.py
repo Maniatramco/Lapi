@@ -254,6 +254,11 @@ def audit_bulk(execute_state):
 
 def upgrade_legacy(connection, bootstrap_assignments=False):
     """Add audit/link columns to existing native DBs without replacing tables."""
+    # Nullable columns added to the workspace Defaults row after release (OCR Default).
+    from .workspace_defaults import WorkspaceDefaults
+    table=WorkspaceDefaults.__table__;existing={c['name'].lower() for c in inspect(connection).get_columns(table.name)}
+    for column in table.columns:
+        if column.name not in existing:connection.execute(text(f'ALTER TABLE {table.name} ADD {column.name} {column.type.compile(dialect=connection.dialect)}'))
     for model in (core.User,core.Login,core.Record,core.Job,UserDataset):
         table=model.__table__;existing={c['name'] for c in inspect(connection).get_columns(table.name)}
         role_added=False

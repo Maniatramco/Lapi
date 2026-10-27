@@ -9,7 +9,7 @@ from sqlalchemy import select
 from . import core
 from . import runtime_config, providers, dataset_access as access
 
-CAPABILITIES={'chat','extraction','embedding'}
+CAPABILITIES={'chat','extraction','embedding','ocr'}
 ROUTING_DEFAULTS={'mappings':[], 'default_chat_model_id':None, 'default_extraction_model_id':None, 'embedding_model_id':None, 'ocr_model_id':None, 'index_generation':0}
 MODEL_KEYS=('model_provider','model','model_connection','timeout','context_limit','max_output_tokens','extra_parameters','stage_parameters','oci_region','oci_project_id','oci_auth_mode','oci_profile','oci_model')
 EMBED_KEYS=('embedding_provider','embedding_model','embedding_connection','embedding_context_limit','embedding_extra_parameters','search_provider','oci_region','oci_project_id','oci_auth_mode','oci_profile','oci_vector_store_id','timeout','chunk_size','chunk_overlap','top_k')
@@ -96,7 +96,7 @@ def model_public(r):
     configured=(bool(snap['secret_refs'].get('connection')) or connection.get('auth_mode') in ('none','server_identity','config_profile')) if connection else p not in ('openai','oci') or bool(snap['secret_refs'].get(p)) or (p=='oci' and snap['settings'].get('oci_auth_mode')!='api_key')
     embedding=data['capabilities']==['embedding'];cfg=snap['settings']
     from .lapi_models import cloud_ocr
-    ocr_eligible='extraction' in data['capabilities'] and cloud_ocr.eligible({'settings':cfg,'provider_model':data['provider_model']})
+    ocr_eligible=cloud_ocr.ready(data,{'settings':cfg,'provider_model':data['provider_model']})
     # Parameter history is served by its own endpoint; lists carry the latest change only.
     history=data.pop('parameter_history',None) or []
     data['parameters_updated']={k:history[-1].get(k) for k in ('version','at','author')} if history else None
@@ -134,9 +134,10 @@ def routing_public(r,model_lookup=None,data=None):
         # Dataset override first, then the workspace Default.
         complete=complete and (mapped_ready(cap,out[key]) or out[key]==defaults[cap] and workspace_model_ready(out[key],cap) if out.get(key) else workspace_model_ready(defaults[cap],cap))
     if out['ocr_model_id'] not in (None,'local'):
-        complete=complete and any(m['id']==out['ocr_model_id'] and m.get('ocr_eligible') and m.get('enabled',True) and m.get('mapping_enabled',True) for m in models)
+        complete=complete and (any(m['id']==out['ocr_model_id'] and m.get('ocr_eligible') and m.get('enabled',True) and m.get('mapping_enabled',True) for m in models)
+            or out['ocr_model_id']==defaults['ocr'] and workspace_model_ready(defaults['ocr'],'ocr'))
     return out|{'dataset_id':r.id,'version':r.version,'models':models,'embedding_selection':selection,'models_complete':complete,'migration_required':'mappings' not in data,
-        'workspace_defaults':{'chat_model_id':defaults['chat'],'extraction_model_id':defaults['extraction'],'embedding_model_id':defaults['embedding']}}
+        'workspace_defaults':{'chat_model_id':defaults['chat'],'extraction_model_id':defaults['extraction'],'embedding_model_id':defaults['embedding'],'ocr_model_id':defaults['ocr']}}
 
 def dataset_public(r,model_lookup=None):
     data=dataset_config(r)
@@ -379,9 +380,10 @@ def save_mappings(r,body):
     selected_ocr=values['ocr_model_id']
     if selected_ocr=='local':raise HTTPException(400,'Dataset OCR requires a cloud OpenAI or Gemini vision model. Local OCR is not selectable.')
     if selected_ocr not in (None,'local'):
-        if selected_ocr not in eligible:raise HTTPException(400,'The OCR model must be enabled and mapped to this dataset.')
-        selected=owned(selected_ocr,r.owner,'model');public=model_public(selected)
-        if not public.get('ocr_eligible'):raise HTTPException(400,'Choose a vision-capable OpenAI or Gemini extraction registration for OCR. Embedding models cannot read images.')
+        workspace_ocr=selected_ocr==defaults['ocr'] and workspace_model_ready(selected_ocr,'ocr')
+        if selected_ocr not in eligible and not workspace_ocr:raise HTTPException(400,'The OCR model must be enabled and mapped to this dataset, or be the workspace OCR Default.')
+        selected=model_record(selected_ocr) if workspace_ocr else owned(selected_ocr,r.owner,'model');public=model_public(selected)
+        if not public.get('ocr_eligible'):raise HTTPException(400,'Choose an OpenAI or Gemini model ticked for OCR whose Test connection passed, or gpt-4o, gpt-4o-mini or a Gemini extraction model. Embedding models cannot read images.')
         md=model_data(selected);ocr_cfg=profile_snapshot(owned(md['connection_profile_id'],selected.owner,'config_profile'),md.get('connection_profile_version'))['settings']
         try:core.enforce_local_only(ocr_cfg)
         except ValueError as exc:raise HTTPException(409,str(exc)) from exc
