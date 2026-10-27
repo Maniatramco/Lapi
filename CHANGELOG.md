@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.2 - 27 October 2026
+
+A branded Ask card on sign-in
+
+The Ask step of the sign-in artwork (`lapi-banner.tsx`) is redrawn as a Lapi Agent chat card in the existing palette: a blue gradient header with the Lapi mark, "Lapi Agent", "Answers with citations" and a "3 sources" pill; the question as a right-aligned blue chat bubble; the answer in a soft bubble with the orange accent bar, "net-60" in brand blue and numbered citation markers; numbered source chips matching those markers; and "Verified against your data". The card is slightly taller (318 instead of 250 units) and stays clear of the knowledge core. Frontend only.
+
+Validation: rendered from the actual component source in a browser preview (React 18.3.1 and Babel compiling `lapi-banner.tsx`) with the real brand images; the frontend type-check, unit and browser tests were not run (no Node.js on this computer).
+
 ## v26.1.16.1 - 27 October 2026
 
 Oracle vector table at start-up; sign-in over HTTP

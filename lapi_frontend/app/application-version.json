@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.1",
+  "version": "26.1.16.2",
   "releases": [
+    {
+      "version": "26.1.16.2",
+      "date": "2026-10-27",
+      "title": "A branded Ask card on sign-in",
+      "changes": [
+        "The sign-in artwork's Ask step is now a Lapi Agent chat card: a blue header with the Lapi mark, the question as a chat bubble, the answer with numbered citations, and matching numbered source chips."
+      ]
+    },
     {
       "version": "26.1.16.1",
       "date": "2026-10-27",
