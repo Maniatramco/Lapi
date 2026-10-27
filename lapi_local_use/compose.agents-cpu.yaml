@@ -1,0 +1,14 @@
+# Apply after lapi_local_use/compose.oracle.yaml; omit lapi_local_use/compose.gpu.yaml on CPU hosts.
+services:
+  api:
+    environment:
+      LAPI_INFERENCE_DEVICE: cpu
+      LAPI_OCR_FORCE_CPU: 'true'
+  worker:
+    environment:
+      LAPI_INFERENCE_DEVICE: cpu
+      LAPI_OCR_FORCE_CPU: 'true'
+  ollama:
+    environment:
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_KEEP_ALIVE: '0'

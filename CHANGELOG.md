@@ -1,338 +1,425 @@
-# Aegis change history
+# Lapi change history
 
-The application version and in-app feature history are maintained in `ags_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is confirmed separately by its deployment receipt.
+The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
+
+## v26.1.16.6 - 27 October 2026
+
+Local reranker in the cloud deployment
+
+- The API image (`lapi_backend/Dockerfile`) now downloads the pinned local reranker (`cross-encoder/ms-marco-MiniLM-L6-v2`, fixed revision, checked with `verify_assets`) to `/opt/lapi-reranker` at build time and sets `LAPI_RERANK_MODEL_DIR`; build with `INSTALL_RERANKER=false` to leave it out.
+- The OCI deployment sets `LAPI_RERANKER=local` for the api and worker containers, so chat and extraction no longer fail with "Chat reranking is unavailable".
+
+## v26.1.16.5 - 27 October 2026
+
+Keycloak sign-in, OpenFGA permissions and multi-use models
+
+- Keycloak (`lapi_app/keycloak_auth.py`): OpenID Connect authorization code flow with PKCE against an existing Keycloak, on when `LAPI_KEYCLOAK_URL`, `LAPI_KEYCLOAK_REALM`, `LAPI_KEYCLOAK_CLIENT_ID` and `LAPI_PUBLIC_URL` are set. State, nonce and verifier travel in an encrypted, ten-minute, `SameSite=Lax` cookie; ID and access tokens are verified against Keycloak's JWKS (issuer, audience/azp, expiry, nonce). Accounts (`kc-<subject>`) are created at the first sign-in, never merged with a local account of the same name, and their role follows the Keycloak role `lapi-administrator` at every sign-in (a change ends older sessions). Sign-out returns Keycloak's end-session URL. Only same-site paths are followed after sign-in. The client secret comes from OCI Vault (`LAPI_KEYCLOAK_CLIENT_SECRET_OCID`) or a mounted file.
+- With Keycloak on, password sign-in is refused except for local administrators (break-glass); Keycloak accounts change passwords and roles in Keycloak, administrators add people in Keycloak, and a Keycloak administrator confirms account changes with a sign-in from the last ten minutes instead of a password. The sign-in page shows "Sign in with Keycloak" and folds the password form away.
+- OpenFGA (`lapi_app/authz.py`): on when `LAPI_OPENFGA_URL` is set. Administrators (`user:<id> administrator lapi:workspace`) and dataset grants (`user:<id> viewer dataset:<id>`) are tuples; `is_administrator` and dataset access ask OpenFGA, with answers cached per request. The database stays the record: the store is found or created and fully reconciled at start-up and after OpenFGA restarts (in-memory store), and each committed role or grant change is synced. No answer means HTTP 503, never access.
+- Terraform: an `openfga` container (v1.22.0, memory store, localhost only, playground off) in the container instance; Keycloak variables, an empty `lapi-keycloak-client-secret` Vault secret readable by the containers, and the `keycloak_redirect_uri` output. The database password secret now also ignores replication settings.
+- Model Registration: "Use for" replaces Category. Registrations accept `capabilities` (Chat and Extraction together; Embedding alone), parameters are validated for every use, and an edit may add or remove Chat/Extraction but not cross into Embedding. Ticking Embedding with Chat/Extraction also saves an embedding registration of the same model; Test Connection tests each use.
+
+Validation: full backend suite in parallel, 1,394 passed, 11 skipped, including new `test_keycloak_auth.py` (against a fake Keycloak signing RS256 tokens: sign-in, roles, break-glass, forged state, nonce, signature, replayed code, cancelled sign-in, name conflict, open redirect), `test_openfga_authz.py` (against a fake OpenFGA: decisions, sync, restart rebuild, shared store, stale tuples, refusal when unreachable, batching) and `test_model_uses.py`. The web image build type-checks. Deployed 27 October 2026 with OpenFGA on and Keycloak off; Keycloak was not tried against a real server.
+
+## v26.1.16.4 - 27 October 2026
+
+Choose each model's API
+
+- Setting: model connections gain `chat_api` (`chat_completions` by default, or `responses`). Validation allows Responses for `openai-compatible` and `azure-openai` Chat/Extraction models, without restricting the endpoint host (Test Connection reports a provider that does not support it); other protocols have one chat API, refuse `responses` and store nothing; embeddings ignore it. Existing models keep Chat Completions.
+- Translation (`lapi_models/providers/lapi_openai/responses.py`): Lapi keeps building Chat Completions payloads; `request()` turns them into Responses requests (messages and image parts to `input`, tool calls and outputs to `function_call`/`function_call_output`, tools, `tool_choice`, `max_output_tokens`, `reasoning.effort`, `text.format` for JSON schema, `store: false`; `seed`, `stop` and frequency/presence penalties are not sent) and `reply()` turns answers back (text, tool calls, finish reason, usage including cached and reasoning tokens).
+- Wiring: `ModelConnection.chat()` picks the API; agent tool steps and answers, `generate()` (chat and extraction) and OpenAI/Gemini OCR use it. A streamed agent answer with Responses is requested once and published in one piece.
+- Model Registration: an API field for Chat and Extraction models, with both choices for OpenAI-compatible and Azure OpenAI and the provider's single API (Messages, Converse, generateContent, OCI Generative AI chat, Ollama chat) for the others; the request always sends a value the provider accepts.
+
+Validation: full backend suite in parallel, 1,372 passed, 11 skipped, including new `test_openai_responses_api.py` (request and reply translation, validation per provider, stored setting, an agent tool step with reasoning on `/v1/responses` and on `/v1/chat/completions`, streamed answers in one piece). The web image build type-checks the form; the form was not previewed in a browser.
+
+## v26.1.16.3 - 27 October 2026
+
+Model tests explain provider errors
+
+`ModelConnection.post` (`lapi_models/connection.py`) used to report only the HTTP status of a failed model request, so a Test Connection failure such as OpenAI's HTTP 400 gave no hint of the cause. `provider_reason()` now extracts the provider's message (OpenAI/Anthropic `error.message`, or `message`/`detail`), on one line, at most 300 characters, with the request's credentials and anything key-like (`sk-…`, `Bearer …`, long tokens) replaced by `[redacted]`. It is added only inside `explaining_provider_errors()`, which the Model Registration test endpoint uses: its requests are synthetic. Every other model call keeps the status-only message, because provider error bodies can echo prompts and document text.
+
+Validation: full backend suite in parallel, 1,361 passed, 11 skipped, including new `test_model_error_reason.py` (OpenAI and Anthropic formats, key redaction, missing reasons, reason shown only while testing a registration) and the existing no-echo tests in `test_anthropic_chat.py`.
+
+## v26.1.16.2 - 27 October 2026
+
+A redesigned sign-in page
+
+- Layout (`sign-in-layout.tsx`, new `login.css` loaded last): a white form column first in reading order, then a brand-blue story panel. The panel carries the message as real text ("Ask your data. Get answers you can trust." and one sentence on what Lapi does), the diagram, and three facts (cited answers, governed access, self-hosted). The rotating "Built for" ticker is replaced by a quiet "Secure sign-in. Sessions end after 12 hours." line, matching the 12-hour session cookie.
+- Diagram (`lapi-banner.tsx`): redrawn for the blue panel in a 1200x580 space without the headline text it used to embed: glass source tiles, a white knowledge core with the Lapi mark, orange ring and orbit, and a Lapi Agent chat card (dark header with the Lapi mark, question bubble, answer with numbered citations, matching numbered source chips, "Verified against your data").
+- Form: larger 50px fields with a focus ring, a gradient Sign in button, left-aligned heading and copy. The existing `.login-card`, `.login-story`, brand-name/tagline and accessibility labels are kept for the tests.
+- Responsive: two columns from 961px; below that the form comes first and the panel follows; the facts stack below 641px; the diagram is hidden below 561px, where its labels would be under 6px.
+- `login.css` overrides the earlier sign-in layers (`readability.css`, `sign-in.css`, `lapi-theme.css`) instead of editing them; their pillar, glow and illustration rules no longer match any sign-in markup.
+
+Validation: rendered from the actual `sign-in-layout.tsx` and `lapi-banner.tsx` with all 13 application stylesheets in `layout.tsx` order (React 18.3.1 and Babel in a browser preview) at 1440x900, 1100x720, 820x1000, 375x812 and 320x900: no horizontal scrolling, form above the panel below 961px, headline 34px at 1100px, the 1100x720 panel fits the window. lucide-react 0.468.0 provides Lock, Quote, Server and ShieldCheck. The frontend type-check, unit and browser tests were not run (no Node.js on this computer).
+
+## v26.1.16.1 - 27 October 2026
+
+Oracle vector table at start-up; sign-in over HTTP
+
+`core.init()` now calls `prepare_vectors()` inside the existing schema lock: when the engine is Oracle and `SEARCH_PROVIDER` is `oracle`, it runs `oracle_vectors.prepare()`, which creates `lapi_knowledge_vectors` and its index if missing. Before, only activating Oracle on the Storage > Database screen created that table, so the container deployment (Oracle configured through environment variables) answered `/ready` with 503 and its api container was restarted by its health check about every 3–4 minutes; indexing and chat would also have failed.
+
+Sign-in over HTTP: browsers only provide `crypto.randomUUID` on secure pages (HTTPS or localhost), so on the plain-HTTP deployment every API call failed after sign-in with "crypto.randomUUID is not a function". A new `randomId()` helper (`lapi_frontend/app/random-id.ts`) uses `crypto.randomUUID` when present and otherwise builds a version-4 ID from `crypto.getRandomValues`; `page.tsx`, `admin-documents.tsx`, `agent-onboarding.tsx` and `re-extract.tsx` use it.
+
+Validation: full backend suite in parallel, 1,357 passed, 11 skipped, including new tests for when the table is prepared and that start-up calls it. The ID fallback was run on the live plain-HTTP page (not a secure context, `crypto.randomUUID` undefined): 500 unique, valid version-4 IDs. New unit test `lapi_testing/frontend/random-id.test.cjs`; the frontend unit tests and type-check were not run (no Node.js on this computer).
+
+## v26.1.16.0 - 27 October 2026
+
+Containers on OCI, no setup token
+
+- First administrator: the public `POST /api/auth/setup` endpoint, the sign-in setup form and `LAPI_BOOTSTRAP_TOKEN` are removed from the backend, frontend, `.env` templates, Compose, Kubernetes and setup scripts. `python -m lapi_app.create_admin` (wrapped by `create-admin.sh`/`.ps1`) creates the first administrator from stdin and refuses once any account exists; on hosts without a shell the api creates it once at start-up from `LAPI_FIRST_ADMIN_USERNAME` and an OCI Vault secret.
+- OCI Vault: `core.secret_cipher()` reads its master key from the Vault secret in `LAPI_MASTER_KEY_SECRET_OCID` (instance or resource principal) when set; `LAPI_MASTER_KEY` still works locally; both together are refused. `python -m lapi_app.vault_master_key store|check` moves an existing key into Vault. Oracle connects with a TLS connect descriptor (`ORACLE_DSN`) and a password from Vault (`ORACLE_PASSWORD_SECRET_OCID`).
+- Stateless containers: `core.local_store` (settings, encrypted credentials, model registrations, storage routes, knowledge manifests, workspace archives) can be an Object Storage prefix (`LAPI_CONTROL_STORE=oci`); the default remains the local disk. `core.scratch` keeps only file locks and the object cache. Directory listings use `core.files_in`, control keys route to the control store, and workspace reset archives, clears and restores through stores with the same archive layout and checksums.
+- Deployment: `lapi_deploy/lapi_containers` (Terraform) provisions the VCN (public load-balancer subnet, private container subnet with NAT and service gateways), a 10 Mbps load balancer, the documents/control bucket, Vault secrets, OCIR repositories, IAM for the containers' resource principal, and one container instance running web, api, worker and Ollama (`qwen3:4b`, `nomic-embed-text`), reading the existing `lapidb`. `push-images.ps1` builds and pushes the images. `lapi_deploy/lapi_oci` (VM with bootstrap token) moves to `delete/`.
+- Tests: the backend suite runs in parallel (pytest-xdist, per-worker storage and SQLite via `lapi_testing/backend/conftest.py`, shorter temp paths for Windows) in about 4 minutes instead of about 30; `-n 0` runs serially.
+
+Validation: the full backend suite passed in parallel (1,355 passed, 11 skipped), including tests for create-admin, the removed setup endpoint, the Vault master key and database password, one-time first-admin creation and the Object Storage control store. `terraform validate` passed. Ported from the same changes developed and deployed on the earlier `remove-bootstrap-token` branch; frontend type-check and browser tests not run (no Node.js on this computer).
+
+## v26.1.15.0 - 27 October 2026
+
+One knowledge base
+
+- All datasets now share one knowledge index built with the workspace Default embedding model: each document is embedded once, and the index catalog lives in the database instead of files on one server.
+- Model Registration marks one Default model per role (Chat, Extraction, Embedding). Datasets use the workspace Default unless they choose their own Chat or Extraction model; only models with a passing connection test can become Default.
+- Changing the Embedding Default asks for explicit confirmation, deletes the knowledge index straight away and rebuilds it; a banner on every page shows how many documents are reindexed and lets administrators retry failures. Chat answers from documents already reindexed and says the index is still building.
+- When existing datasets use different embedding models, an administrator chooses one Default before the shared index is built.
+
+## v26.1.14.0 - 27 October 2026
+
+Agentic chat, skills and memory
+
+- Lapi Agent can run as an agentic chat (LAPI_CHAT_MODE router, agentic or auto). With a cloud function-calling model such as Gemini it plans, calls several read tools in parallel, reads more evidence per step and answers in one loop; the local model keeps the routed chat.
+- Every factual sentence must cite a source read for this answer, and its numbers, dates and names must appear in that source. A failing answer is revised once; anything still unsupported is removed and the answer says how many statements were removed.
+- Follow-up questions understand earlier turns (text and citation IDs only), and answers show the agent's plan, source snippets and up to three suggested follow-up questions.
+- New Skills & memory page: built-in and custom skills (/skill), dataset answer instructions with versions (/instructions, /optimize with a Save card), model prompting guides, and a private memory note with 90-day question history that you can edit, switch off or clear.
+- Token usage is recorded for every model call with dated prices per model; each answer shows its tokens and approximate cost per step, and administrators get a Token usage report with CSV export.
+- Model Registration has a typed parameter form per stage (Chat answer, Tool steps, Extraction, Optimize) with documented Lapi defaults, suggested values, per-stage test prompts and a change history.
+- Claude and Bedrock prompt caching and an OpenAI prompt cache key keep the stable agent instructions cached between turns.
+
+## v26.1.13.6 - 27 October 2026
+
+Connect · Unify · Ask
+
+- The Lapi tagline is now Connect · Unify · Ask: the banner's middle step reads Unify, and the sign-in card uses the same tagline.
+- The sign-in form no longer sits in a card: it blends into a light page background that is cleaner behind the form and softly tinted blue and orange at the edges.
+
+## v26.1.13.5 - 27 October 2026
+
+Horizontal sign-in banner
+
+- The sign-in banner now flows left to right: data sources on the left, the knowledge core in the middle and a cited answer on the right.
+- The Lapi mark sits at the centre of the knowledge core, circled by a slowly turning ring of vector points; the banner is wider and landscape.
+
+## v26.1.13.4 - 27 October 2026
+
+Lapi brand
+
+- New Lapi brand: an L with a speech-bubble P (ask) and an orange answer dot, from Laya (harmony) and Poorni (complete).
+- The mark on white is used in the header, sign-in card and banner; the blue-tile version is the Lapi Agent icon, browser tab icon and app icon.
+- A custom lowercase lapi wordmark, with an orange dot on the i, leads the sign-in banner.
+
+Assets: `lapi_frontend/public/lapi-mark.svg`, `lapi-agent.svg`, `lapi-wordmark.svg`, `lapi-wordmark-white.svg`, `lapi-mark-180.png`, `lapi-mark-512.png` and `favicon.ico`.
+
+## v26.1.13.3 - 27 October 2026
+
+Lapi LP monogram
+
+- New Lapi LP monogram: the L and P share one stem, with a white L foot, a light-orange P bowl and a knowledge node, on a blue tile.
+- The monogram is the Lapi Agent icon everywhere (chat, workflow tracks, activity capsule) and is used in the header, sign-in card, password recovery, the sign-in banner and the browser tab icon.
+
+The mark is `lapi_frontend/public/lapi-mark.svg` (PNG copies at 180 and 512 px); the previous shield image was moved to `delete/`.
+
+## v26.1.13.2 - 27 October 2026
+
+Connect · Vectorize · Ask sign-in banner
+
+- The sign-in banner tells the Lapi story in three steps: Connect data from anywhere (documents, databases, cloud storage, apps and APIs, sheets, email), Vectorize it into one unified knowledge base, and Ask questions that come back with sources.
+- The banner is drawn in the Lapi palette with flowing blue and orange dots, scales sharply on every screen, and pauses its motion when reduced motion is requested.
+- The sign-in tagline is now Connect · Vectorize · Ask.
+
+The banner is the `LapiBanner` SVG component in `lapi_frontend/app/lapi-banner.tsx`; the previous raster banner was moved to `delete/`.
+
+## v26.1.13.1 - 27 October 2026
+
+Lapi colours: white, blue and light orange
+
+- Every screen uses the Lapi palette: white surfaces, blue for primary actions and headers, and light orange accents.
+- The sidebar is white with a blue selected item and an orange marker; page headers, workflow tracks and the Agent progress capsule use one blue band with a warm orange glow.
+- The sign-in page is light, with the banner shown as a framed card beside a white form.
+
+Colours are defined once in `lapi_frontend/app/lapi-theme.css`; remaining navy fills elsewhere were mapped to the blue scale.
+
+## v26.1.13.0 - 27 October 2026
+
+Lapi: new name and separate deployment
+
+- The application is now Lapi: sign-in page, logo, header, Agent, About, code folders, Python packages, settings and environment names all use Lapi.
+- Lapi runs on its own Always Free OCI resources: a dedicated compartment, network, server and Autonomous Database.
+
+Code, folders and settings were renamed: `lapi_*` folders, the `lapi_app` Python package, `LAPI_` settings, the `lapi_session` cookie, the `LAPI_OWNER` database owner and the `lapi_items` records table. `lapi_deploy/lapi_oci/` provisions and deploys the Always Free OCI environment.
 
 ## v26.1.12.18 - 26 October 2026
 
-v26.1.12.17 restyled only the answer workflow; Agent onboarding and other workflows still used the earlier light stepper. The shared `WorkflowStepper` now renders the same navy phase track everywhere it is used (Agent onboarding, Agent tool steps, prompt progress, upload batches, extraction and document processing, Files & processing indexing, storage and connection operations). Every step keeps its name and status visible, finished steps fill the line, dots flow into the running step, the running step carries the Aegis shield, failures are marked in red and phones get a vertical list; the running or failed step is still announced to screen readers. Frontend only; the backend is unchanged from v26.1.12.17. No schema, dependency, configuration or infrastructure changes.
+One workflow track everywhere
 
-Validation: both TypeScript checks, a production build and 287 frontend unit tests passed; the backend is byte-identical to v26.1.12.17, whose full suite passed (1,252 passed, 11 skipped). End-to-end browser suites on a fresh disposable local mock deployment (`ags_testing/scripts/smoke.py` passed without the Docker worker-restart step): 26 of 34 passed; the 8 failures are the same tests that fail on the released v26.1.12.13 build. In the local preview the Agent onboarding card and Files & processing indexing workflow showed the navy track, and all 15 workspace screens fit at 390 and 1440px without page errors. Not run: Docker Compose CI, live sign-in, real model inference and cloud publication. Publication is recorded separately.
-
-Published 26 October 2026 to the existing Mumbai application as release `release-20261026-232021-fa40e1` from commit `7dc247b7f7f591f0b543ebebd57b4c47d63b0662` in committed-source mode, web only. Web image `bom.ocir.io/bmyljaecivrj/ags-aegis-web@sha256:b2fa46c4e010b34dc1b2e363551ce8c19efef7e104f90867901fa02e44f1a568` replaced `sha256:3ee10a4d522e487616f83fa0ba6eacc2c45e2ee02ec3090668ef305f6a2ab187`; the backend image (`sha256:59b53108…`), HTTPS sidecar, model relay, configuration and schema were preserved and no database queries ran. The web rollout, configuration checks and HTTPS 200 passed, both deployments report ready, and the served page bundle reports v26.1.12.18. A live headless check of the sign-in page at 1440 and 390px found no horizontal overflow or page errors. No live sign-in, inference, upload, extraction or data writes were run.
+- Every workflow uses the navy phase track: Agent onboarding, tool steps and prompt progress, uploads, extraction and document processing, Files & processing, and storage and connection operations.
+- Each step keeps its name and status visible, finished steps fill the line, dots flow into the running step and the running step carries the Lapi shield; phones show a vertical list.
 
 ## v26.1.12.17 - 26 October 2026
 
-Aegis Agent: while work runs, a navy capsule in the sign-in banner's colours shows the Aegis shield in a spinning gradient ring, orbiting sparks, the current step as shimmering text and dots flowing to a coloured step icon; the compact form marks running tool rows. The answer workflow groups server steps into Understand request, Find evidence, Write answer and Check & save (plus Run workflow for Extract, Re-extract, Onboard and Upload). Clicking its chip opens an inline navy phase track under the agent header instead of a floating preview over the answer: finished phases fill blue-to-violet, the live phase shows the Aegis shield with a step badge, failures are marked in red, and Show all steps lists every actual step with its phase, status and time. Motion stops under reduced motion.
+Agent workflow and dataset editing
 
-Dataset editing: Edit on each dataset, Edit dataset after onboarding, and the new `/Manage` command (handled in the browser, never sent to the server) open Manage dataset with Details (name, description, active), Models (the existing mapping editor), Documents (status, upload with /Upload, add from cloud storage, Needs attention, administrator file management) and Prompts. Inside Aegis Agent it is an inline conversation card; Upload and Extract prefill `/Upload` or `/Extract`. New `PATCH /api/datasets/{id}` lets administrators rename and describe a dataset (non-administrators receive 403); models, documents, prompts, access and knowledge are unchanged. No schema, dependency, configuration or infrastructure changes.
-
-Validation: both TypeScript checks, a production build, 287 frontend unit tests and the full backend suite (1,252 passed, 11 skipped, including dataset rename access and validation) passed. End-to-end browser suites on a fresh disposable local mock deployment (guarded browser API and worker, SQLite, local reranker, production build; `ags_testing/scripts/smoke.py` passed without the Docker worker-restart step): 26 of 34 passed; the 8 failures are the same tests that fail on the released v26.1.12.13 build, recorded under v26.1.12.15. In the local preview: Manage dataset opened from Datasets and inline in Aegis Agent with /Manage (no pop-ups), its four tabs fit at 390 and 1440px, a description change saved through the API and was restored, Upload in the inline card prefilled /Upload, and an answer's workflow opened inline as the phase track. The Edit dataset button after a completed Agent onboarding is covered by unit tests only. Not run: Docker Compose CI, live sign-in, real model inference and cloud publication. Publication is recorded separately.
-
-Published 26 October 2026 to the existing Mumbai application as release `release-20261026-225731-b01759` from commit `893915fd0b56da2696fb33cc5086d817b1b29733` in committed-source mode. A first attempt (`release-20261026-224959-c0bbc2`) stopped at its pre-publication read-only cluster recheck before any image was pushed or deployment changed; a read-only `kubectl` check then showed both deployments healthy on the v26.1.12.16 images, and the rerun passed. Web image `bom.ocir.io/bmyljaecivrj/ags-aegis-web@sha256:3ee10a4d522e487616f83fa0ba6eacc2c45e2ee02ec3090668ef305f6a2ab187` replaced `sha256:6ba9932e2863b0decb5a9ae87867b159f168d56e3252b8c1c119120b4c944eeb`; backend image `bom.ocir.io/bmyljaecivrj/ags-aegis-backend@sha256:59b531083c5333d031bc612ea1dc8c2b3bd9377d2bb2e4688950111a0c355576` replaced `sha256:27f907661ad375fa8d27e363fcea913cd8a32205b1298685a9c18cd667b4d750` for api and worker. The HTTPS sidecar, model relay, configuration and schema were preserved; DB_Object=N ran no database scripts after a read-only compatibility check (13 tables, 0 active jobs). Both rollouts, configuration checks and HTTPS 200 passed, and the served page bundle reports v26.1.12.17. A live headless check of the sign-in page at 1440 and 390px found the username and password fields, no horizontal overflow and no page errors. No live sign-in, inference, upload, extraction or data writes were run.
+- While Lapi Agent works, a navy capsule shows the Lapi shield in a spinning ring with the current step, such as Searching knowledge or Writing the answer.
+- The answer workflow groups its steps into four phases: Understand request, Find evidence, Write answer and Check & save. It opens inline under the agent header as a navy phase track with the agent shield on the live phase; Show all steps keeps every actual step and its timing.
+- Edit any dataset from Datasets, or type /Manage in Lapi Agent: rename it, change its description or active state, its models, documents and prompts. In the Agent the dataset card stays in the conversation, and Upload or Extract start /Upload or /Extract there.
+- Administrators can rename and describe datasets without changing their models, documents, prompts or access.
 
 ## v26.1.12.16 - 26 October 2026
 
-Turn Jobs & activity into a monitoring view. Summary counts come from the loaded jobs: running (with queued), failed (opening the Needs attention pop-up), completed in the last 24 hours and the average time per completed job. Activity by person lists each starter's running, failed and completed jobs and last activity, and filters the list when selected. Filters cover status, person, job type and text (file, dataset or job ID). The live table shows status, job type and file or extraction name with dataset and stage, who started it, when, duration (or time so far), progress and Retry/Cancel; on phones each job becomes a labelled card.
+Jobs monitoring
 
-`GET /api/jobs` adds `started_by`, `started_via`, `updated_at` and `dataset_id`. The starter comes from the job's existing audit record (`created_by`), since jobs belong to the dataset owner. Administrators see usernames; other users see "You" for their own jobs and "Another user" otherwise, so names are not disclosed to non-administrators. Work that Aegis Agent runs on a user's behalf is recorded under the dataset owner and is shown that way. No schema, dependency, configuration or infrastructure changes.
-
-Validation: both TypeScript checks, a production build, 281 frontend unit tests and the full backend suite (1,251 passed, 11 skipped, including a new test that non-administrators never receive other users' names) passed. End-to-end browser suites ran on a fresh disposable local mock deployment (guarded browser API and worker, SQLite, local reranker, production build; `ags_testing/scripts/smoke.py` passed without the Docker worker-restart step): 26 of 34 passed. One Extract re-extraction test first failed on a Windows file lock while seeding its upload and passed when re-run. The remaining 8 are the same tests that fail on the released v26.1.12.13 build, recorded under v26.1.12.15. The local preview was checked on all 15 workspace screens at 390 and 1440px: no horizontal overflow or page errors; the Jobs Failed count opens Needs attention and the person filter works. Not run: Docker Compose CI, live sign-in, real model inference and cloud publication. Publication is recorded separately.
-
-Published 26 October 2026 to the existing Mumbai application as release `release-20261026-213944-af715b` from commit `0b5dd3e111d1cfb360bb8400676d4fc7ce9fcf1a` in committed-source mode, together with the unpublished v26.1.12.14 and v26.1.12.15 changes. Web image `bom.ocir.io/bmyljaecivrj/ags-aegis-web@sha256:6ba9932e2863b0decb5a9ae87867b159f168d56e3252b8c1c119120b4c944eeb` replaced `sha256:85e5bd42ac36768f4a2a5fb7519954df71d388f966509da629ee08aa01a62beb`; backend image `bom.ocir.io/bmyljaecivrj/ags-aegis-backend@sha256:27f907661ad375fa8d27e363fcea913cd8a32205b1298685a9c18cd667b4d750` replaced `sha256:cb8fbf5740890808d2f2ce4ad3641e3bee90a3159d6df057f5a8aec258ebccec` for api and worker. The HTTPS sidecar, model relay, configuration and schema were preserved; DB_Object=N ran no database scripts after a read-only compatibility check (13 tables, 0 active jobs). Both rollouts, configuration checks and HTTPS 200 passed, and the served page bundle reports v26.1.12.16. A live headless browser check of the sign-in page at 1440 and 390px found the username and password fields, no horizontal overflow and no page errors. No live sign-in, inference, upload, extraction or data writes were run.
+- Jobs & activity becomes a monitoring view: running and queued work, failures that need attention, jobs completed in the last 24 hours and the average time per completed job.
+- Each job shows who started it, its dataset, when it started, how long it took and its progress. Administrators see usernames; other users see You or Another user.
+- Activity by person shows each person's running, failed and completed jobs; select a person, job type or search text to filter the list.
 
 ## v26.1.12.15 - 26 October 2026
 
-Redesign the workspace screens on the approved sketches. Aegis Agent becomes a three-part workspace: a conversation rail with recent chats and New conversation, a wider thread and composer, and a context panel for knowledge, workflow and model; the welcome view offers workflow cards. Agent commands start with `/` (`/Onboard`, `/Upload`, `/Extract`, `/ReExtract`) in the menu, the browser and the server; a leading `@` is still accepted, and a leading path such as `/docs/a.pdf` stays an ordinary question. While work runs, the agent icon moves toward an icon for the live step, derived from the server's existing progress steps and running tools (search, rerank, write, check citations, upload, index, publish, extract, re-extract); motion stops under reduced motion.
+Redesigned workspace screens
 
-Every workspace screen opens with a shared brand page band. Summary counts derived from loaded records are added to Dataset, Prompt, Extract, Review (filter tiles), Jobs (status tabs and cards), Model Registration, Model Mapping (a dataset quick-pick naming missing embedding, chat or extraction mappings), Users and Files & processing (page-scoped counts, duplicate heading removed, row actions on one line). Need attention counts on Dashboard, Datasets and Files & processing, failed dataset statuses and failed jobs open a shared pop-up listing each affected file with its processing stages, the stored error, the next step and actions: Retry (the existing job retry), the screen that fixes the cause (Model Registration, Model Mapping, Storage or Files & processing), Jobs and the dataset; administrator-only fixes tell other users to ask an administrator. Buttons share one compact standard (32px, 36px on phones; brand-blue primary, white secondary, red-outlined delete; buttons on dark headers keep their light-on-dark style). New extraction moves from the top bar into the Extract and Review pages. About shows the current version, a golden-copy worked example from predefined prompts to reviewed fields, and a collapsible version history.
-
-Backend change limited to Agent command parsing and its messages (`agent_intent.py`, `agent_workspace.py`); no schema, dependency, configuration or infrastructure changes.
-
-Validation: both TypeScript checks, a production build, 279 frontend unit tests and the full backend suite (1,250 passed, 11 skipped) passed. End-to-end browser suites ran against a disposable local mock deployment (guarded browser API and worker, SQLite, local reranker, production build; seeded by `ags_testing/scripts/smoke.py`, which passed without the Docker worker-restart step): 26 of 34 passed. The 8 failures also fail on the released v26.1.12.13 build against the same deployment. Seven stop at the same step (navigation order, Home search label, Agent onboarding model selects, chat citation reply, external-processing approval, Review row lookup in the responsive check, and Dashboard Open chat in review-flow). The dataset-chat redirect test stopped earlier on a Windows file-lock race while seeding its upload, so it did not reach that step. Three tests were updated for intentional layout changes (composer width measured within the Agent's centre column, the Dashboard greeting as a second level-one heading, collapsed older About versions). The responsive check found the Dashboard Sources panel widening to 671px at 390px with an unbroken long filename; this is fixed, and every workspace screen now fits at 390 and 1440px without page errors. Not run: Docker Compose CI, live sign-in, real model inference and cloud publication. Publication is recorded separately.
+- Lapi Agent opens as a workspace: a conversation rail with recent chats, a wider thread and a context panel, with workflow cards to start Onboard, Upload, Extract or Re-extract.
+- Agent commands now start with / (/Onboard, /Upload, /Extract, /ReExtract); a leading @ is still understood. While work runs, the agent icon shows the live step: searching, reranking, writing, checking citations, uploading, indexing or extracting.
+- Every workspace screen opens with a brand page band and summary counts: Dataset, Prompt, Extract, Review, Jobs (now status tabs and cards), Model Registration, Model Mapping (with a dataset quick-pick that names missing models), Users and Files & processing.
+- Click any Need attention count or failed status to open a pop-up listing each affected file with its processing stages, the stored error, what to do next, Retry and links to the screen that fixes it. Administrator-only fixes tell other users to ask an administrator.
+- Buttons follow one compact standard across the workspace: the same size and shape, a brand-blue primary action, white secondary actions and red-outlined delete. New extraction moves from the top bar into the Extract and Review pages.
+- About shows the current version, a worked example from predefined prompts to reviewed fields and the golden copy, and a collapsible version history.
 
 ## v26.1.12.14 - 26 October 2026
 
-Dashboard opens on a brand overview in the sign-in style: greeting, an Ask box with quick add/remove dataset chips, summary counts derived only from loaded accessible records (no invented analytics), dataset cards and Sources. Asking from the overview, or sending in chat, gives Dataset Knowledge Chat the full page; selecting knowledge alone keeps the side panels, and Back to overview keeps the mounted conversation. The Add Dataset Knowledge picker is redesigned with expandable dataset cards, partial-selection counts and a scope summary. Adding knowledge starts a chat for the new scope with an in-chat note and suggested questions; earlier chats stay in history and no request runs until the user asks.
+Dashboard landing and Add knowledge
 
-Add new knowledge (Onboard > Add knowledge) ports Sprint 2 source connections and extends them: any signed-in user can connect Amazon S3, Azure Blob Storage (read/list-only container SAS), OCI Object Storage (customer secret key via the S3-compatible endpoint), SharePoint or Google Drive to a dataset they can access. Connections belong to their creator; administrators can see all. Test, browse, select up to 20 PDF/DOCX/TXT/JSON files and Vectorize after confirming dataset sharing and any external processing. Imports use the existing upload/index pipeline; a new publish step publishes the dataset's unified knowledge so files show Ready to ask only when chat can use them. Extraction and review stay separate. SDK and provider failures map to specific guidance without provider text or secrets. Non-AWS S3 endpoints skip newer checksum headers. Local storage emulator endpoints are accepted only on this computer when `AEGIS_ALLOW_LOCAL_SOURCE_ENDPOINTS=true`.
-
-Validation: both TypeScript checks, 263+ frontend unit tests, the full backend suite (1,235 passed, 11 skipped) and 49 connection/API-documentation tests passed. Dashboard, sign-in and recovery browser tests passed on a production build except the existing test that needs a live backend to reject credentials. Local walkthroughs covered S3 and Azure Blob emulators end to end. Read-only checks against real AWS, Azure, OCI, Microsoft and Google endpoints verified listing/download (AWS, Azure public data) and specific messages for wrong details; signing in with a real customer account was not tested. Snapshots only: remote changes, deletions and permissions are not synchronized. Publication is recorded separately.
+- Open Dashboard on a brand overview: greeting, an Ask box, summary counts from loaded accessible records, dataset cards and Sources. Asking gives the chat the full page; Back to overview keeps the conversation.
+- Quickly add or remove datasets from the Ask box, and choose individual files in a redesigned Add Dataset Knowledge picker. New knowledge in chat is announced with suggested questions; nothing runs until you ask.
+- Add new knowledge: any signed-in user can connect Amazon S3, Azure Blob Storage, OCI Object Storage, SharePoint or Google Drive to a dataset they can access, test it, browse and Vectorize up to 20 files. Connections are private to their owner; administrators see all.
+- Vectorize indexes copies with the dataset embedding model and publishes them to chat before showing Ready to ask. Extraction and review stay separate. Credentials are encrypted and never shown again; wrong details get specific guidance.
+- Read-only snapshots: cloud files are never changed, and later remote changes, deletions and permissions are not synchronized.
 
 ## v26.1.12.13 - 26 October 2026
 
-Redesign sign-in around the unchanged Aegis banner, superseding the light background from v26.1.10.3. The banner panel uses the banner's own edge navy (#01041E) so the artwork blends without a frame. Decorative dots follow the banner's ten traced connector curves (models on the left, knowledge sources on the right) into the shield. The form side blends navy into blue and violet with a slow horizontal shift, drifting cyan/violet light and a frosted card carrying the Aegis shield, name and tagline as live text. The banner's five platform pillars rotate horizontally beneath the form. All motion is horizontal and disabled under reduced motion, where the dots are hidden.
+Animated sign-in
 
-The sign-in screen moves into a shared `SignInLayout` component with the form before the artwork in reading and mobile order. Labels, autocomplete, focus, password visibility, recovery and authentication behavior are unchanged. Frontend only: no backend, database, configuration or model changes.
-
-Published 26 October 2026 to the existing Mumbai application as release `release-20261026-171250-d8fe09` from commit `bc4c5ccc501f3f7db6646f0c3b17fb1324190555` in committed-source mode. Web image `bom.ocir.io/bmyljaecivrj/ags-aegis-web@sha256:85e5bd42ac36768f4a2a5fb7519954df71d388f966509da629ee08aa01a62beb` replaced `sha256:9e13d003d57a5f96132d53fc545d3ceb647322d53b116753a27a18421577ae87`; the backend image (`sha256:cb8fbf57…`), HTTPS sidecar, configuration and schema were preserved and DB_Object=N ran no Oracle queries. Readiness, configuration checks and HTTPS 200 passed, and the served page bundle reports v26.1.12.13. A live headless browser check at 1440 and 390px found the shield, name and tagline, all 20 flow dots, five pillars, the loaded banner on its #01041E panel, form-first order, the password toggle, no horizontal overflow and no page errors. Before release: both type checks, 255 frontend unit tests and 13 of 14 sign-in/recovery browser tests on a production build passed; the one remaining test needs a live backend to reject credentials. No live sign-in, inference or data writes were run.
+- Show the unchanged Lapi banner on its own edge navy, with dots that travel along the banner's model and knowledge-source connector lines into the shield.
+- Blend the sign-in side from navy into blue and violet with a slow horizontal shift, drifting cyan and violet light and a frosted form card showing the Lapi shield, name and tagline.
+- Rotate the banner's five platform pillars beneath the form. All motion is horizontal and stops when the device requests reduced motion.
+- Place the sign-in form before the artwork in reading order and on mobile. Labels, autocomplete, focus, password visibility, recovery and authentication behavior are unchanged.
 
 ## v26.1.12.12 - 24 October 2026
 
-File catalog reads could wait on live model metadata for older local mappings, while overlapping timed refreshes superseded a slow initial response. Compare saved index generations, model/profile versions and OCR selections for catalog status; retain live validation when processing is submitted. Prevent quiet polling from overlapping pending catalog reads and keep background refreshes out of the global request overlay. Add slow-response and no-provider-probe regression coverage. Preserve indexing/extraction execution and the v26.1.12.11 cleanup chain. No schema, dependency, configuration or infrastructure changes.
+Reliable file catalog refresh
+
+- Show saved indexing and model mapping status without contacting model services while listing files.
+- Keep a slow file-list response visible by preventing overlapping timed refreshes.
+- Keep live model validation on retry and extraction submissions, and preserve complete document cleanup.
 
 ## v26.1.12.11 - 24 October 2026
 
-Add an administrator-only Files & processing screen under Manage workspace. Search or filter application source files and inspect pinned OCI/local storage presence, indexing/OCR progress and extraction runs. Reindex uses current dataset model mappings; New extraction reuses the saved prompt through the current-model rerun chain. Permanent deletion previews affected results/chats/workflows, requires the exact filename and unchanged impact/version, and blocks active dataset work. Remove source/merged originals, OCR, arbitrary derived files and revisions, vectors/unified knowledge entries, extraction JSON/Parquet, affected conversations/workflows, execution snapshots and processing payloads. Quarantine partial cleanup and resume from a durable plan. Preserve other originals, shared prompts/models and content-free terminal queue audit rows. Include the prepared v26.1.12.10 visible Save/New extraction changes. No schema, dependency, infrastructure or configuration changes; release evidence is recorded separately.
+Admin files and processing
+
+- List application source files and their OCI/local storage, indexing, OCR and extraction status under Manage workspace.
+- Retry indexing and start new extractions with current dataset model mappings.
+- Preview permanent document deletion and remove related originals, revisions, OCR, indexes, result files and affected chats/workflows with resumable cleanup.
+- Include visible Save and New extraction buttons from the preceding prepared release.
 
 ## v26.1.12.10 - 24 October 2026
 
-Add a labeled New extraction button to the Extract screen header so users can start the existing creation flow directly while retaining their selected dataset. Show the same label on Review. Replace shared tick-only Save controls with a Save icon and visible action text, including Save & Apply in Model Mapping, Save Model in registration, and connection/storage saves. Keep labeled actions visible on mobile and preserve disabled/submission behavior, permission checks, model routing and saved data. Frontend-only change; no backend, dependency, database or configuration changes. Local validation and publication evidence are recorded separately.
+Visible extraction and Save actions
+
+- Start a new extraction directly from the Extract screen with a labeled button.
+- Keep New extraction text visible on Review and on small screens.
+- Show labeled Save buttons in Model Mapping, model registration and settings instead of tick-only controls.
 
 ## v26.1.12.9 - 24 October 2026
 
-New Re-extract and prompt Resume requests resolve the current dataset extraction default instead of copying the previous result's explicit model ID. Reindex already resolves current embedding/OCR selections. Detect OCR model/profile changes on scanned source indexes; the Review rerun chain rebuilds those sources before creating a separate extraction with current mappings. Native text indexes do not become stale solely because OCR changed. Keep accepted job snapshots pinned for reproducibility. Compare duplicate extraction submissions with their original version's inputs even after Resume changes the model/prompt, returning the existing current run instead of duplicating it. Reject historical retries when their saved model routes differ from current mappings, when they would overwrite an already successful index/result, or when they would replay legacy local OCR. Direct callers to a fresh Reindex/Re-extract without changing old job state or payload. Preserve earlier results, original files, cloud-only OCR, consent and access checks. Regression coverage includes current-default changes while the old model remains mapped, cloud OCR changes through the API/worker rerun chain, submission pinning and unchanged historical versions. No schema, dependency, configuration or infrastructure changes.
+Rerun with current mapped models
+
+- Resolve current dataset models for each new Re-extract, prompt Resume and Reindex submission.
+- Rebuild scanned source indexes when the mapped OCR model changes before Review re-extraction.
+- Prevent historical retries from replaying outdated model mappings or damaging successful indexes/results.
+- Keep accepted jobs pinned and preserve earlier results and original files.
 
 ## v26.1.12.8 - 24 October 2026
 
-Complete cloud-only OCR with provider-specific GPT-4o/GPT-4o Mini high-detail image token estimates and the selected registration's context limit. Do not cap cloud OCR at the local OCR context setting. Count resized-service 512px tiles using official OpenAI sizing rules while preserving the complete original image payload; retain the rendering limit and reject actual over-budget pages before inference. Add landscape-size regression coverage for the selected DataLakeZones recovery. Supersedes undeployed v26.1.12.7; no dependencies, schema or runtime configuration changes.
+Cloud OCR page budgets
+
+- Use the selected OpenAI model's registered context limit for OCR.
+- Estimate GPT-4o and GPT-4o Mini image tokens with their cloud tile rules, preserving original pixels.
+- Keep cloud-only OCR selection and reject pages that exceed the registered model budget before inference.
 
 ## v26.1.12.7 - 24 October 2026
 
-Make dataset OCR cloud-only at the user's request. Remove the local OCR option from Model Mapping and reject local saves server-side. Automatic routing uses a compatible OpenAI/Gemini extraction default. New dataset execution snapshots prevent local OCR fallback; scanned content without a cloud vision registration receives a model-selection error while native text remains usable. Preserve independent OCR selection, embedding space, queued snapshots, cloud consent, original documents and strict transcription checks. Supersedes the undeployed v26.1.12.6 release plan. No database objects, dependencies, infrastructure or runtime settings change. Live deployment and the specifically authorized latest DataLakeZones recovery are recorded separately.
+Cloud-only dataset OCR
+
+- Offer only compatible OpenAI and Gemini OCR models in dataset Model Mapping.
+- Automatic OCR uses the compatible cloud extraction default, with no local model fallback.
+- Reject local OCR selections and give a clear cloud model selection message when scanned content needs OCR.
 
 ## v26.1.12.6 - 24 October 2026
 
-Add an OCR model row alongside Embedding, Chat and Extraction in each dataset's Model Mapping screen. Choose a compatible OpenAI or Gemini extraction registration independently from the extraction default, use Automatic for existing provider routing, or explicitly choose the configured local OCR service. Exclude embedding, text-only, chat-only and disabled registrations. Saving enables the selected mapping and prevents disabling it while it is used for OCR. Validate dataset ownership, mapping membership, vision compatibility, local-only policy and expected-version concurrency. Older clients that omit the OCR field preserve its saved selection. Subsequent indexing jobs pin the selected model/profile; queued jobs and retries retain their original snapshots. OCR changes preserve embedding model, pinned space and index generation; Reindex reads existing document images again. Cloud consent reflects the actual OCR destination. No database objects, dependencies, runtime settings or infrastructure change. Prepared locally; the earlier v26.1.12.5 publication plan is superseded and remains undeployed.
+Choose OCR per dataset
+
+- Choose a compatible OpenAI or Gemini OCR model independently in Model Mapping, alongside Embedding, Chat and Extraction.
+- Keep Automatic provider routing or explicitly use the configured local OCR service.
+- Apply the choice to new indexing jobs, retain queued work and embedding settings, and reindex existing documents to read their images again.
 
 ## v26.1.12.5 - 24 October 2026
 
-OpenAI extraction datasets previously sent scanned pages to local Ollama even when their extraction and embedding services were cloud-hosted. Select the pinned GPT-4o or GPT-4o Mini extraction connection for OCR on official OpenAI API endpoints, including dated model snapshots. Preserve the existing Gemini cloud and local OCR paths. Read scanned PDF pages and embedded DOCX images through the existing strict transcription schema, original retention, unreadable/incomplete output guards and provenance metadata. Disclose OpenAI as the image destination and include the OCR model and credential-profile version in consent identities. Cloud errors fail without a local provider fallback. Unsupported OpenAI extraction models fail before inference; text embedding models cannot perform OCR. Existing embeddings, dataset mappings, index generations and saved credentials are preserved. Previously queued jobs and job retries retain their saved configurations; the document Reindex action creates a new snapshot. No dependencies, database objects, infrastructure or runtime settings change. Prepared locally; tests/build and publication acceptance are recorded separately when completed.
+OpenAI OCR for cloud datasets
+
+- Read scanned PDF pages and embedded Word images with the mapped GPT-4o or GPT-4o Mini extraction model.
+- Disclose OpenAI image transmission and pin the saved model and credential version for each job.
+- Keep embeddings separate, retain original documents and transcription checks, and report cloud failures without falling back to local Ollama.
 
 ## v26.1.12.4 - 24 October 2026
 
-Aegis Agent could ask which information to summarize despite a selected dataset and an explicit knowledge-base summary request. Clarify in both routing instructions and tool-branch descriptions that broad summaries are complete information requests and that “extract a summary” requests a read-only chat answer, not an extraction job. Route knowledge-base summaries over original content and saved results within the selected scope, rather than workspace dataset catalogs or application guides. Remove the short-summary shortcut that always assumed a previous extraction answer; use normal model routing with verified scope/reference context instead. Preserve ambiguous-input clarification, processing confirmations, access/document filters, hybrid retrieval, reranking and answer/citation validation. No database or dependency changes. Published; details below.
+Summarize selected dataset knowledge
 
-Validation: 154 focused backend regressions, 246 frontend unit tests and both TypeScript checks passed. Six isolated real-provider Agent API checks passed with GPT-4o and GPT-4o Mini for the reported request, bare “summary” and an original-document summary. Real OpenAI routing and answer generation used a synthetic balance sheet; embedding and reranking were test doubles. These isolated checks are targeted; the separate deployed acceptance is recorded below.
-
-Published 24 October 2026 (Asia/Calcutta) after approval of the exact plan: release `release-20261024-161248-210e60`, source commit `c6a33d0f238563d1c951dd76c317ed78a7577c1d`, tag `v26.1.12.4`, fingerprint `a1c6077d73de64de74f13fde98068bfb111ee9aada60a6116dc23e22cbb86175`. ARM64 web digest: `sha256:046b43cf64e8aec6414df198e54870c2e5bef5ecf8c31f69e24db27c052ba8d1`; API/worker digest: `sha256:62e07cbf4ce61b82defd2901d4b56d86a8efd7388e02361d1828ec9b7b77dfe8`. Both rollouts, maintained post-release schema/configuration checks, independent exact-receipt verification, HTTPS and all five public-file byte comparisons passed. All 15 protected resources and saved runtime/database/storage settings were preserved, including sidecar/init images, volumes, replicas, strategy, models/mappings and stored documents/results. DB_Object=N; no database scripts, infrastructure changes, automatic retry or rollback.
-
-Live acceptance passed in fresh Aegis Agent conversations on the existing synthetic Balance Sheet dataset with both OpenAI GPT-4o and OpenAI GPT-4o Mini, using the exact request “hi can you extract summary from the knowledge base”. Both generated substantive financial summaries instead of asking which summary was wanted. Hybrid search, reranking, knowledge-based model generation, answer validation and saving completed. Answers preserved the financial totals and USD-thousands presentation; citations opened the saved dataset evidence. GPT-4o completed in 12 seconds with five cited sources. GPT-4o Mini completed in 20 seconds with two cited sources after one automatic citation-repair attempt; final validation passed. This is targeted acceptance on one dataset, not an every-dataset/provider quality guarantee. No uploads, extraction runs, model/default mapping writes or review-state changes were performed for these checks.
-
-Exact private receipt: `ags_deploy/deployment-records/release-20261024-161248-210e60/source/ags_deploy/deployment-records/release-20261024-161248-210e60-2f431dc9.json`. Target: existing Mumbai `ags-aegis-basic`, context `context-ags-aegis-basic-cks3v2b2eia`, namespace `aegis-oci`, https://aegis.92.4.67.183.sslip.io. The live footer reports v26.1.12.4. Read-only comparison matched 13 tables, 165 columns, 49 foreign keys and 20 indexes; the post-release schema check found zero active jobs.
+- Treat broad knowledge-base summaries as complete read-only questions scoped to the selected dataset or documents.
+- Route short summaries through the model instead of assuming a previous extraction answer.
+- Preserve hybrid retrieval, reranking, evidence citations and separate processing confirmations.
 
 ## v26.1.12.3 - 24 October 2026
 
-The Model Mapping screen previously rebuilt the enabled mapping list from only the three role defaults whenever any default changed. This removed alternative Chat/Extraction models from dataset pickers even though the backend supports multiple enabled mappings. Add explicit available-model checkboxes for Chat and Extraction, preserve all unrelated mappings and metadata when selecting a default, and prevent disabling a model used by any selected default. Saving remains dataset-scoped and uses the existing expected-version concurrency guard. Embedding mapping, pinned index generation, access checks, registrations and saved source/results are preserved. No backend, dependency or database changes.
+Multiple models per dataset
 
-Published 24 October 2026 (Asia/Calcutta) after approval of the exact plan: release `release-20261024-151741-a53c85`, source commit `60a83afc0daa14b451835c93a641f1eaa2a0b512`, tag `v26.1.12.3`, fingerprint `bcb5fad14a2487d216a7e40d444d7a0474b253bc9d09e86e2749268523760770`. Frontend-only ARM64 web digest: `sha256:7904973e9baeb4537c00aba60b13b358210c84b275a02db6f278bab4d9555d8a`; previous web digest: `sha256:2a083c2fb93dfab82902c5f5a9ca4d72c2f9421dc7ff007e5e4ac6b0ebfdcdfe`. The web rollout, maintained checks and independent receipt/baseline verification passed. All 15 protected resources, saved runtime/database/storage configuration, unselected API/worker/relay/HTTPS images, volumes, replicas and strategy were preserved. DB_Object=N; no database scripts, DDL or infrastructure changes. Readiness reports database, vector store and local reranker ready; HTTPS root and all five public files matched the candidate bytes. Live footer reports v26.1.12.3.
-
-Validation: 246 frontend unit tests, both TypeScript checks, the pinned Linux ARM64 production image build and synthetic browser save/reload/default-change acceptance passed. Native Windows build exited successfully but warned about standalone trace-copy EPERM for the existing dependency junction; the Linux image built successfully. Desktop and 320/390 px mobile controls were reviewed. No backend suite or new per-dataset provider inference was run for this frontend-only release.
-
-After image/configuration verification, the separately requested application configuration changes were completed through the authenticated UI: both GPT-4o and GPT-4o Mini Chat and Extraction registrations are enabled on Ds-Sample, SWIFT Alliance Demo, Balance Sheet, Resume and TermSheet. Each dataset was saved and reloaded; all four OpenAI mappings persisted, existing other role choices and all defaults were preserved, and every embedding model/index generation remained unchanged (generation 1). Agent and New extraction selectors showed both models on all five datasets. No documents, prompts, results or review states were changed by these availability checks, and no extraction/chat inference was submitted. GPT-4o's real function-calling and structured-schema connection tests passed during registration; this release does not assert full-document extraction quality.
-
-Exact private receipt: `ags_deploy/deployment-records/release-20261024-151741-a53c85/source/ags_deploy/deployment-records/release-20261024-151741-a53c85-18115432.json`. Target: existing Mumbai `ags-aegis-basic` cluster, `context-ags-aegis-basic-cks3v2b2eia`, namespace `aegis-oci`, https://aegis.92.4.67.183.sslip.io. No automatic retry or rollback occurred.
+- Enable several Chat and Extraction models per dataset while retaining one default for each role.
+- Keep enabled alternatives when a default changes; protect selected defaults from being disabled.
+- Preserve embedding selection, index generation and existing mapping concurrency checks.
 
 ## v26.1.12.2 - 23 October 2026
 
-Follow-up fix: real Agent acceptance after v26.1.12.1 found that non-strict tool arguments could still fail validation, document questions could select file metadata instead of text, dataset names could become filename filters, and content questions could invent saved-result predicates. Use strict function parameters only for official OpenAI and Azure endpoints, disable parallel tool selection, and represent optional wire arguments as nullable values. Remove only supported optional null values before validating canonical routes; required/unknown arguments and canonical uniqueness constraints remain enforced. Keep custom gateways and Gemini on their existing non-strict provider contracts. GPT-4o routing uses temperature 0 unless explicitly configured; answer generation settings are unchanged.
+Reliable Agent source routing
 
-Separate original content, saved results/mixed questions and semantic discovery in the canonical route schema. Original and semantic content routes cannot invent saved-field predicates. Only semantic discovery controls knowledge types; document discovery uses indexed document_chunk evidence. A named-source filter must occur in the current request, and original file filters require a supported upload extension so a dataset name or topic cannot masquerade as a filename. Selected dataset/document access scope remains authoritative. Clarification guidance distinguishes missing evidence from an unclear request; every answer still uses model generation and the required retrieval/reranking/citation stages. Processing agents retain their contracts.
-
-Three real gpt-4o-mini tests through the full local Agent API, synthetic upload/index, selected registration, scoped hybrid retrieval, reranking and cited answer validation passed for broad, named-file and explicit semantic-search questions. Each inspected document_chunk evidence and correctly stated that the synthetic ACK does not confirm settlement/beneficiary credit. Embeddings and reranking used deterministic isolated test doubles; real OpenAI routing and answer generation were used. Validation: 216 focused offline backend tests, all 239 frontend unit tests and both application/test TypeScript checks passed. Regressions cover strict nullable arguments, unknown/required values, custom-gateway compatibility, canonical example validity, original and semantic passage selection, inferred filenames, scoped full Agent answers, Gemini/Claude/native providers, registrations, contexts and streaming. The three full real-model cases passed again on the final source. An initial image candidate passed the strict backend source/package probe, ARM64 production build and 12 frontend asset checks. Final About review found an older release-note punctuation entry had been decoded using the Windows locale; restore the full baseline history with explicit UTF-8 while leaving Agent code unchanged. The earlier candidate tag is retained; the corrected source uses a new review tag. The corrected source subsequently passed the final ARM64 builds, image inspection and local About review; publication and live acceptance are recorded below.
-
-Published 24 October 2026 (Asia/Calcutta) after approval of the amended exact plan: release `release-20261023-235621-a1b9c0`, commit `207d10b6739a7ec272baca5a1c8e5962988984cd`, source tag `v26.1.12.2-review2`, fingerprint `dfa605b03739f68bf312aaf28014d58914e15f39d84b92935eb46687e3cd7f91`. The earlier v26.1.12.2 tag was retained unmoved. Immutable web digest: `sha256:2a083c2fb93dfab82902c5f5a9ca4d72c2f9421dc7ff007e5e4ac6b0ebfdcdfe`; API/worker digest: `sha256:dcaea23dc46e7c0a2da934eea38bdd157bd9570343e34d4c7bcd3175366d38f1`. All 124 backend source files and 105 package versions matched the tested source/production dependencies. The pinned ARM64 production builds and strict-router image smoke passed. Both rollouts completed, followed by maintained and independent receipt/configuration checks. All 15 protected-resource fingerprints, saved runtime/database/storage configuration, mappings, volumes and sidecar/init images were preserved. Schema comparison passed (13 tables, 165 columns, 49 foreign keys, 20 indexes; zero active jobs). DB_Object=N; no DDL, infrastructure or configuration changes. Previous v26.1.12.1 image digests remain recorded in the receipt; no automatic retry or rollback occurred.
-
-HTTPS and all 12 public assets returned HTTP 200 and matched the approved candidate bytes. The live footer reported v26.1.12.2. Three real GPT-4o Mini tests in new deployed Agent conversations passed on existing synthetic SWIFT Alliance Demo knowledge: (1) whether the network acknowledgement proves final settlement, (2) what the original Cedar-SWIFT-Network-ACK.txt says about settlement, and (3) explicit indexed-text semantic search about settlement and beneficiary credit. Answers correctly stated that an ACK does not confirm settlement or beneficiary credit; each citation opened the matching original indexed ACK passage. Live workflow evidence showed scoped hybrid retrieval, actual deployed reranking, model generation and validation completed. Broad/named-file/semantic answers took approximately 8/6/7 seconds and reported routing plus generation token usage. No production uploads, extraction or mapping changes were performed. These three acceptance cases do not establish all-model routing quality or a full repository-suite pass; optional local Ollama inference was not tested.
-
-Exact private receipt: `ags_deploy/deployment-records/release-20261023-235621-a1b9c0/source/ags_deploy/deployment-records/release-20261023-235621-a1b9c0-2b4f984e.json`. The outer run directory retains the plan/result. Target remains the existing Mumbai `ags-aegis-basic` cluster, `aegis-oci` namespace and public HTTPS endpoint. The source-freeze timestamp in the release ID is retained; the completion date above uses the user's timezone.
+- Use strict OpenAI and Azure routing arguments, with nullable optional values normalized before canonical validation.
+- Separate original document questions, semantic search and saved extraction filters so content questions retrieve indexed passages.
+- Keep dataset/topic names out of filename filters, preserve selected access scope, and retain hybrid search, reranking and citation validation.
 
 ## v26.1.12.1 - 23 October 2026
 
-Local candidate: fix OpenAI and Azure OpenAI Agent routing requests rejected with HTTP 400 / invalid_function_parameters because the canonical route schema uses a top-level oneOf. Publish the alternatives as separately named object functions, validate returned arguments against both the selected branch and original route schema, then restore the canonical name. Preserve the exact provider function name/call ID when continuing a tool conversation. No route is widened and malformed, cross-branch or undeclared calls fail closed. Existing Gemini/native provider contracts, dataset scope, hybrid retrieval, reranking, citation validation, registration credentials and model mappings are preserved.
+OpenAI Agent routing compatibility
 
-Validation: 169 focused backend tests passed, including actual Agent routing through object-only function declarations, OpenAI/Azure branch restoration, malformed/cross-branch/undeclared call rejection, provider-name/call-ID round trips, scoped hybrid retrieval, reranking and citation validation. Existing Gemini, native Claude/cloud providers, registration, context and streaming regressions passed. All 239 frontend unit tests and application/test TypeScript checks passed. A real gpt-4o-mini probe accepted the patched routing schemas for original-document and model-metadata queries and generated a cited answer from synthetic evidence (four reported calls, 8,859 input / 185 output tokens). A broader natural-language question produced a valid clarification in an earlier probe; this patch does not claim deterministic routing or model-quality guarantees. Database/schema and configuration preflight passed; production remains v26.1.12.0 pending approval. Exact-image builds and live fixed-Agent acceptance remain pending. Unrelated cloud-source working-tree changes are excluded from this isolated patch release.
-
-Published v26.1.12.1 to the existing Mumbai application after approval of release `release-20261023-231451-25d09d`, commit `eec85ae8dd9bac008ef39fdfc49311f12942c857`, source fingerprint `58779ee83362633eb407e635dce7b99cb7cf3952c81862da3ca255229c02fa2f`. Web digest `sha256:4d87a4aa56904c211a74498d08a13aaa951a93d4941014e71e2f75b392382ceb`; API/worker digest `sha256:8fd3cf973a6f76f4feb53b957386faa128c34e21cb58abf0753ed78d979cafe8`. Both rollouts and independent receipt/configuration verification passed, all 15 protected resources and sidecar images were preserved, the 13-table/165-column/49-FK/20-index schema matched with no active jobs, and all 12 live HTTPS assets matched the candidate bytes. DB_Object=N; no schema scripts, infrastructure or application settings changed. API startup took several minutes before readiness. Live Agent acceptance resolved HTTP 400 but exposed the remaining issues documented in v26.1.12.2; a fully reliable cited-Agent result is not claimed for v26.1.12.1. Exact private receipt: `ags_deploy/deployment-records/release-20261023-231451-25d09d/source/ags_deploy/deployment-records/release-20261023-231451-25d09d-93a4707c.json`.
+- Fix OpenAI and Azure OpenAI Agent routing by declaring each route alternative as an object-shaped function.
+- Validate returned arguments against the selected branch and canonical route, and retain provider function names when continuing a tool conversation.
+- Preserve dataset access, hybrid retrieval, reranking, cited answer validation and existing model registrations.
 
 ## v26.1.12.0 - 23 October 2026
 
-Local candidate: direct Anthropic Claude Chat registration, using the official Messages API, an encrypted versioned API key, the supplied model ID and optional workspace ID. Test Connection validates an actual schema-valid Agent tool call before the UI enables saving. Map the saved Chat model and select it in Agent or Dashboard Dataset Knowledge Chat; new runs use the selected registration without global activation or reindexing. Existing Embedding and Extraction mappings stay separate.
+Direct Claude for Agent chat
 
-Native tool definitions/results, private thinking signatures, completed text events, provider token usage, context budgets and sanitized failure handling are supported. Endpoint validation restricts this protocol to `https://api.anthropic.com/v1`. API version `2026-10-21` is explicit; no removed sampling overrides or model-specific forced tool choice is sent. Required tool calls remain enforced by Aegis. Knowledge scope, hybrid retrieval, reranking, citations and processing-agent contracts are preserved.
-
-Validation: 186 focused backend tests passed (181 integration/regression checks plus five final Claude failure guards), including native tool/result round trips, encrypted profile routing and rotation, Agent and Dashboard grounded answers, Dashboard general-chat disclosure, endpoint/workspace validation, required tool probes, budget/timeout guards and sanitized provider errors. HTTP model responses are mocked; grounded integration tests invoke hybrid retrieval with a deterministic reranker test double, not a real model-quality evaluation. All 239 frontend unit tests, application/test TypeScript checks and the production Next.js build passed. Interactive browser checks at desktop and 390px mobile confirmed the Claude option, Chat-only category, optional workspace, masked empty key field, disabled save before testing and no horizontal field overflow. The local visual preview uses a synthetic GET-only catalog and cannot save credentials or invoke a provider; actual backend registration and chat routes are covered by the isolated integration tests. Private preview evidence is under `ags_runtime/workflow-preview/claude-direct-v26.1.12.0/`.
-
-A broader repository run against an earlier working snapshot was stopped; no full-suite pass is claimed. Real-key acceptance, provider permissions/quota, real reranker/model quality and deployment are pending. The verified live frontend remains v26.1.11.0. No live registrations, credentials, workloads or database objects have been changed for this candidate.
-
-Published to the existing Mumbai application after exact-plan approval. Release `release-20261023-205517-79e486` used committed source `776e9496fd5fddc325969bce03fb002af4bdca31`, fingerprint `8f53b4d5f6e7195652952d9b6fafb73a69f0623a958fccdedd8baecc3059b408`, and Linux ARM64 images. The exact candidate backend passed an offline native Claude chat/tool/header/workspace smoke check with zero external requests; all 105 installed package versions matched the previous backend and 124 Python/TOML files matched the frozen source. Candidate desktop/mobile checks and all 12 public assets passed before publication.
-
-Published web digest: `sha256:be2ef426a296cbd007a95928811272689b3cc68c04ca09bad09bad1e10551d00`. Published API/worker digest: `sha256:c29343fd1a6a2bb8406b76d4733ac84588191cef8a843326a0618588e3f7bfbc`. Both deployments rolled out successfully. The maintained release completed, independent receipt/configuration verification passed, all 15 protected-resource fingerprints and sidecar/init images were preserved, and source/runtime settings fingerprints matched. Read-only Oracle comparison matched 13 tables, 165 columns, 49 foreign keys and 20 indexes, with no active jobs at the release checks. `DB_Object=N`: no database scripts or schema changes were performed.
-
-Live HTTPS serves v26.1.12.0; all seven scripts, three stylesheets and two supplied images returned HTTP 200 and matched the candidate bytes. The existing authorized session loaded the Claude provider with Chat-only category, official endpoint, optional workspace and masked empty key field; save stayed disabled before testing. Desktop and 390px form layout checks passed without overflow. The API `/ready` reported healthy database, vector store and loaded reranker. An unauthenticated HTTPS GET to Anthropic's Models endpoint from the API returned HTTP 401, confirming TLS reachability only; no credentials or inference request were sent. No real Claude key/model/quota test, registration write, upload, extraction or cited-chat inference acceptance was run. The full repository test suite remains uncompleted; focused coverage is recorded above.
-
-The exact private receipt is `ags_deploy/deployment-records/release-20261023-205517-79e486/source/ags_deploy/deployment-records/release-20261023-205517-79e486-61d7def9.json`; the outer run directory retains the approved plan, authorization, result and candidate/live evidence. Previous web digest `sha256:3620a7d08d6d283172614570d90c17a4a6812d4ed26f598dd1be4023065aa949` and API/worker digest `sha256:dbf01b3cdd04aa1a351f74df5b009b7685eb499ba21734ffb3fd6105c06fd7f8` remain recorded for an approved compatible rollback. No automatic rollback was performed or enabled.
+- Register a direct Anthropic Claude Chat model using its API key, exact model ID and optional workspace ID.
+- Test native function calling before saving, map the model to datasets and select it for Agent or Dataset Knowledge Chat.
+- Preserve scoped knowledge retrieval, reranking, citation checks and existing Embedding, Extraction and processing models.
 
 ## v26.1.11.0 - 23 October 2026
 
-- Arrange authorized datasets in a vertical left panel, Dataset Knowledge Chat in the larger centre panel and Sources in the right panel.
-- Move the included-knowledge summary and picker action into the chat panel; keep side panels visible during dataset selection and reserve chat expansion for its explicit control.
-- Give each list its own scroll area and use panel view buttons on smaller screens while preserving the mounted conversation and draft.
-- Preserve access/scoped source selection, busy guards, dataset drag/drop, metadata navigation and the existing chat/retrieval and processing contracts.
+A roomier three-panel Dashboard
 
-Local validation: all 237 frontend unit tests, both app/test TypeScript checks and the native Next.js production build passed. Production-preview browser checks used four synthetic authorized datasets and 13 sample indexed files at 1440×900, 1132×840, 920×668, 390×844 and 320×740. Desktop checks confirmed left datasets / larger centre chat / right Sources, independent source scrolling, explicit chat expansion/restoration, composer above the footer and no page or horizontal overflow at the tested desktop sizes. Mobile panel switching retained the mounted chat draft; source search, source exclusion while adding another dataset and picker cancellation passed. Selecting knowledge kept the side panels visible.
-
-At the initial local preview, the live frontend remained v26.1.10.3. No real authentication, model request, database or processing write was used. Backend suites, the terminal Playwright suites, production ARM64 image and live authenticated acceptance were not run for this preview. Existing browser specifications were updated for explicit expansion; unit and interactive browser checks exercised the changed behavior. Source-selection helpers, server authorization/retrieval contracts and processing agents are unchanged. Private screenshots and evidence are under `ags_runtime/workflow-preview/dashboard-three-panel-v26.1.11.0/`.
-
-Deployment, 23 October 2026: approved frontend-only plan `release-20261023-201117-abe540` published source commit `70e68ec47904d8e5496a8c7d4e67d111be9432d9` to the existing Mumbai application. Source fingerprint: `ea91564c8130a20695560a7a83388c4cc483d0131bc0f3f34232faaa74436a55`. Immutable web digest: `sha256:3620a7d08d6d283172614570d90c17a4a6812d4ed26f598dd1be4023065aa949`. Windows prerequisites, read-only target/registry checks and the pinned Linux ARM64 production build passed. The exact image passed root, seven-script, stylesheet, favicon, version, supplied-image and archive-exclusion checks. Four exact-image browser checks verified the three-column desktop layout, right-panel collapse, explicit expansion and mobile panel switching with the same draft and mounted chat. The earlier 237 frontend unit tests, both TypeScript checks, native build and five-width local UI checks apply to this unchanged feature source.
-
-The maintained deployment launcher completed successfully with the user's approval of the shown Dashboard. The web rollout succeeded; both deployments are ready. All 15 protected-resource fingerprints, runtime configuration and unselected images were preserved. Database release action was skip: the release tooling ran no Oracle queries, database scripts or DDL. API, worker, relay, Caddy image, model mappings, persistent data, routing and infrastructure are unchanged. Backend, database, deployment and corresponding backend/deployment test sources match the prior live release. The earlier focused deployment/chat regression result (123 tests plus 34 subtests) applies to those unchanged trees; it was not rerun here. No full backend suite or terminal Playwright-suite pass is claimed for this release.
-
-Live HTTPS, seven scripts, three stylesheets and both supplied images returned HTTP 200 and matched the exact candidate byte-for-byte, serving v26.1.11.0. In the existing authorized signed-in browser session, the Dashboard loaded four permitted datasets and 13 source rows without changing selections. Desktop checks at 1132px confirmed left datasets, larger centre chat, right Sources, an enabled model selector, no chat catalog error, composer above the footer and no horizontal overflow. Opening chat kept both side panels visible and did not send a question. Live 390px Sources / Knowledge Chat view switching retained the mounted chat and fit the composer above the footer. No new credentials were submitted. These were read-only catalog/layout checks; model inference, generated answers, uploads, extraction and other write workflows were not exercised.
-
-The previous v26.1.10.3 web digest `sha256:3c594ecee188aeb68771738232ae9c5b1bc37dc59836dc3510e7096be483606a` and image map are retained for a separately approved compatible rollback. The feature commit remains reversible through Git; a source revert alone does not change production. Exact private receipt: `ags_deploy/deployment-records/release-20261023-201117-abe540/source/ags_deploy/deployment-records/release-20261023-201117-abe540-e4cb0ceb.json`. Plan, result, authorization reference, candidate/live screenshots and checks, asset hashes and before/after fingerprints are beside it. Prerequisite report: `ags_runtime/deployment-setup/setup-20261023-144038-f9552999/result.json`.
+- Arrange authorized datasets on the left, Dataset Knowledge Chat in the centre and Sources on the right.
+- Keep dataset and source panels visible when selecting knowledge; expand chat only when requested.
+- Use separate Datasets, Knowledge Chat and Sources views on smaller screens while preserving the conversation and draft.
 
 ## v26.1.10.3 - 23 October 2026
 
-- Restore the white-toned sign-in page background with subtle blue and cyan accents coordinated with the supplied banner.
-- Preserve the banner file and its image styling, the removed duplicate sign-in branding, form controls and shared Agent shield.
+Restore the light sign-in background
 
-Local validation: all 236 frontend unit tests, both app/test TypeScript checks and the native Next.js production build passed. Production-preview browser checks at 1280px, 390px and 320px confirmed the light background, loaded unchanged banner, absent duplicate branding, mobile form-first layout and no horizontal overflow. Empty-field validation and password visibility controls passed. Root and seven initial JavaScript assets returned HTTP 200 and served v26.1.10.3. Supplied banner and shield bytes match the prior Git source exactly.
-
-At the initial local preview, the live frontend remained v26.1.10.2. Checks used a loopback fixture with no real authentication, model inference or data writes; backend regressions and OCI image builds were not repeated for this CSS correction. Private screenshots and results are under `ags_runtime/workflow-preview/light-sign-in-v26.1.10.3/`.
-
-Deployment, 23 October 2026: approved frontend-only plan `release-20261023-193621-1fe433` published source commit `1beaf8accf71eb19d444342320ea455830639e77` to the existing Mumbai application. Source fingerprint: `183a82b49cc3d431410fcf7c533a930938ebef88392547cddd6c978ada6e9aa7`. Immutable web digest: `sha256:3c594ecee188aeb68771738232ae9c5b1bc37dc59836dc3510e7096be483606a`. Prerequisites, target preflight and the pinned Linux ARM64 production build passed. The exact image passed version, root/seven-script, stylesheet, branding/favicons and archive-exclusion checks. Candidate desktop (1280px) and mobile (390px) browser checks confirmed the white-toned background, unchanged full-color banner, removed duplicate branding, mobile form-first layout and no overflow.
-
-The maintained deployment launcher completed successfully with the user's publication approval. The web rollout succeeded and both deployments are ready. All 15 protected-resource fingerprints, deployment configuration and unselected images were preserved. Database action was skip: no Oracle queries, scripts or DDL ran. Backend, database, deployment and test source trees match the prior live release. The prior focused deployment/chat regression result (123 tests plus 34 subtests) applies to those unchanged trees; it was not rerun for this CSS-only correction, and no full backend suite pass is claimed.
-
-Live HTTPS, seven scripts, three stylesheets and both supplied images returned HTTP 200 and matched the exact candidate byte-for-byte, serving v26.1.10.3. The single shield favicon and retired Agent asset's HTTP 404 were checked. Live signed-out desktop/mobile rendering passed for the light background, loaded unchanged banner, removed duplicate branding, form placement and no horizontal overflow. Live authenticated screens, model inference, generated replies and upload/extraction writes were not tested. API, worker, relay, Caddy image, model mappings, persistent data, routing and infrastructure remain unchanged.
-
-The previous v26.1.10.2 web digest `sha256:fefbb484035854362f5090090f4eb0eb7866a3804f83662f773a91bc93bce5e6` and previous image map are retained for a separately approved compatible rollback. The source correction is independently reversible through Git; source reverts do not themselves change production. Exact private receipt: `ags_deploy/deployment-records/release-20261023-193621-1fe433/source/ags_deploy/deployment-records/release-20261023-193621-1fe433-7bfacfaf.json`. Saved plan/result, before/after fingerprints, candidate/live screenshots, browser checks and asset hashes are beside it. Prerequisite report: `ags_runtime/deployment-setup/setup-20261023-140549-939a8195/result.json`.
+- Keep the sign-in page white-toned with subtle blue and cyan background accents matching the supplied banner.
+- Preserve the banner image, removed duplicate sign-in branding and supplied shield throughout the application.
 
 ## v26.1.10.2 - 23 October 2026
 
-- Point the shared `AgentLogo` component to the supplied Aegis shield logo, covering navigation, chat welcome/replies, Dashboard knowledge chat, workflow guidance and the floating Agent shortcut.
-- Preserve existing dimensions, accessible/decorative labels and workflow status icons. No chat, inference, authorization, onboarding or processing behavior changes.
-- Archive the previous Agent WebP under `delete/ags_frontend/public/`, outside application builds and active test discovery.
+Use the supplied shield for Lapi Agent
 
-Local validation: all 236 frontend unit tests, both app/test TypeScript checks and the native Next.js production build passed. Read-only synthetic-workspace browser checks verified the supplied shield in the Agent welcome screen, navigation, floating shortcut, Dashboard knowledge-chat heading/empty state and expanded workflow guidance. Checks covered 1280px desktop and 390px mobile rendering, unchanged dimensions/accessible labels, no horizontal overflow and shortcut navigation. A production-built Agent page spot check passed; root and seven scripts returned HTTP 200, served v26.1.10.2 and contained no reference to the retired image. The retired public URL returns 404. The old artwork archive matches its previous Git bytes, and the supplied shield/banner files are unchanged. The complete staged patch passed a reverse-apply check.
-
-At the initial local preview, this Agent identity update had not been deployed. Checks used a loopback synthetic account/catalog. No question, model call, upload, extraction or real authentication was performed. Chat reply avatars use the same shared component but were not exercised through generated replies. Private evidence is under `output/playwright/agent-logo-v26.1.10.2/`.
-
-Deployment, 23 October 2026: the approved frontend-only plan `release-20261023-190927-4b4f8c` published source commit `f8e54553e055652d67b0272902985696be013f3e` to the existing Mumbai application, including the v26.1.10.1 sign-in refinement. Source fingerprint: `747140597070f18924e839697c2c9ddd68b4a5bbb44e4caa321368c67e0ae8b7`. Immutable web digest: `sha256:fefbb484035854362f5090090f4eb0eb7866a3804f83662f773a91bc93bce5e6`. Prerequisites, read-only target checks and the pinned Linux ARM64 production build passed. The exact image passed HTTP/version/favicon/archive-exclusion checks and seven candidate browser checks covering desktop/mobile sign-in, shared Agent marks, navigation, shortcut and About version.
-
-The interactive controller was interrupted before publication. After the user's explicit approval, the unchanged prepared source fingerprint, exact image, target, readiness and protected baseline were rechecked. The unchanged maintained PowerShell helper published that same image without rebuilding. Focused isolated deployment and chat regressions passed **123 tests plus 34 subtests**. The full backend suite was not repeated for this frontend-only release; backend, database, deployment and test source trees match the prior live source. The 236 frontend unit tests, both TypeScript checks and native production build also passed.
-
-The web rollout succeeded and both deployments are ready. All 15 protected-resource fingerprints, runtime settings and unselected images were preserved. Database action was skip: no Oracle queries, DDL or database scripts ran. API, worker, relay, Caddy image, saved model mappings, persistent data, routing and infrastructure are unchanged. Live HTTPS, seven JavaScript files, three stylesheets and both supplied images returned HTTP 200 and match the exact candidate byte-for-byte. The served version is v26.1.10.2; the single shield favicon and retired Agent asset's HTTP 404 were verified. Live signed-out desktop (1280px) and mobile (390px) checks passed: the repeated branding is absent, navy background matches the banner, the banner loads with unchanged image styling, mobile form comes first and there is no horizontal overflow.
-
-Signed-in Agent branding was checked with synthetic data in the exact candidate. Live authenticated screens, generated replies, physical mobile hardware, provider inference, password recovery operations and upload/extraction writes were not tested. The supplied banner and shield files remain unchanged. The previous live web digest `sha256:beed7e773ab938256069ca6757560220db5b35a390038f51b1ef33ab753ecc57` and image map are retained for a separately approved compatible rollback. Source commits remain reversible with Git; later edits may require conflict resolution, and a source revert alone does not change production.
-
-Exact private receipt: `ags_deploy/deployment-records/release-20261023-190927-4b4f8c/source/ags_deploy/deployment-records/release-20261023-190927-4b4f8c-46500ccb.json`. Saved plan, interrupted-controller record, resumed result/log, candidate/live evidence and configuration fingerprints are beside it. Focused regression output is under `output/playwright/agent-logo-v26.1.10.2/release-focused.log`.
+- Use the supplied Lapi shield wherever the shared Agent identity appears: navigation, welcome screens, chat replies, workflow guidance and the floating shortcut.
+- Archive the previous Agent artwork; preserve existing icon sizes, accessible labels, chat behavior and workflow status icons.
 
 ## v26.1.10.1 - 23 October 2026
 
-- Remove the repeated logo, Aegis name and tagline from the sign-in card above Welcome back / Create your workspace.
-- Match the page background to the existing banner’s dark navy edges, with a subtle navy glow. Preserve the original banner file and its full-color rendering without opacity, masks, filters, blend modes or cropping.
-- Preserve the white sign-in card, form controls, mobile form-first placement and signed-in platform identity.
+A blended sign-in background
 
-Local validation: all 236 frontend unit tests, both app/test TypeScript checks and the native Next.js production build passed. Browser checks at 920×668 (the commented viewport), 1280×720, 390×844 and 320×740 confirmed removal of the repeated branding, navy page background, no horizontal overflow and mobile form-first placement. Empty-field validation and password visibility controls passed. The production-built preview also passed a focused browser check; root and seven scripts returned HTTP 200 and served v26.1.10.1. Banner bytes match the deployed source exactly (SHA-256 `f29e999f2ceb4a295f56052aabc7b38a409093712a1b936f5c344eddf7d34685`); its image styling and original asset are unchanged. The complete staged patch passed a reverse-apply check.
-
-This adjustment was first checked as a local preview and subsequently included in the v26.1.10.2 deployment above; no separate v26.1.10.1 deployment is claimed. Checks used a signed-out loopback fixture with no real accounts, model calls or data writes. Real authentication, bootstrap account creation and processing workflows were not exercised. Private screenshots and evidence are under `output/playwright/sign-in-blend-v26.1.10.1/`.
+- Remove the repeated Lapi logo and tagline above the sign-in heading.
+- Match the sign-in page background to the supplied bannerâ€™s navy tones without changing, cropping, fading or blending the banner image.
 
 ## v26.1.10.0 - 23 October 2026
 
-- Add the supplied Aegis shield logo to sign-in, the workspace header, navigation, password recovery and browser icons. Preserve the separate Aegis Agent identity.
-- Display the supplied portrait banner without cropping or blending. Keep sign-in alongside it on desktop and first on mobile.
-- Archive the prior logo, sign-in illustration and file-based browser icon under `delete/ags_frontend/`, outside application builds and active test discovery. Keep attachment originals and generated preview evidence ignored.
-- Keep the branding and version history update together in a single reversible commit. No backend, model, dataset, access, chat or processing contracts change.
+Lapi platform branding
 
-Local validation: all 236 frontend unit tests, both application/test TypeScript checks and the native Next.js production build passed. Browser checks covered the full desktop banner, loaded transparent logo, empty-field validation, password visibility/keyboard focus, 390px and 320px mobile layout with the form first and no horizontal overflow, synthetic-session workspace header/navigation, shared About/footer version and the password recovery header logo. Production preview checks confirmed the single new favicon, sign-out and sign-in rendering. Root, both branding assets, password recovery and all seven initial script assets returned HTTP 200. Supplied images are byte-identical to the attachments; archived public artwork matches the preceding commit. The complete staged patch passed a reverse-apply check and its reversed temporary index exactly matched the preceding Git tree.
-
-At the initial local preview, no OCI deployment or Git push had been performed for this version. Browser sessions used an isolated loopback synthetic API with no real accounts, database, provider inference, chat replies, uploads or extraction writes. An initially incomplete storage-status fixture was corrected before signed-in checks passed. Password recovery was checked for branding only; recovery operations, physical mobile hardware, Docker image builds and full application end-to-end workflows were not tested. Private screenshots, HTTP checks and fixture request evidence are under `output/playwright/branding-v26.1.10.0/`.
-
-Deployment, 23 October 2026: the approved frontend-only plan `release-20261023-182726-42c5c5` published Sprint1 source commit `e94de294cdd591554abbc593122b3f2a2e4479b2` to the existing Mumbai application. Source fingerprint: `8abf487622761159c5749a51f8e9f453eb3b0a9d1c53d71cde15d276ec593019`. Immutable web digest: `sha256:beed7e773ab938256069ca6757560220db5b35a390038f51b1ef33ab753ecc57`. Windows prerequisite checks, read-only target/registry checks and the pinned Linux ARM64 production-image build passed. The exact image passed root/asset/version/favicon checks, archive-exclusion checks and five focused browser checks for sign-in validation, 390px/320px layouts/password visibility, synthetic-session header/navigation branding and About version.
-
-The local interactive controller and broad backend regression run were interrupted before publication; the broad run reached 39% without a completed-suite result, so no full-suite pass is claimed. After the user's explicit publication approval, the prepared source fingerprint, exact image ID, destination, readiness and protected baseline were rechecked unchanged. The same maintained PowerShell release helper then published the already tested image without rebuilding or changing the approved plan. Focused isolated deployment and chat regressions passed **123 tests plus 34 subtests**. Backend source matches the prior deployed source exactly. The prior 236 frontend unit tests, both TypeScript checks and native production-build results remain applicable to this unchanged feature commit.
-
-The web rollout succeeded. Both existing deployments are ready; all 15 protected-resource fingerprints, runtime settings and unselected images were preserved. Database action was skip: no Oracle queries, database scripts or DDL were run. API, worker, relay, Caddy image, saved model mappings, persistent data, routing and infrastructure are unchanged. Live HTTPS, all seven initial JavaScript files, three stylesheets and both branding images returned HTTP 200 and matched the exact candidate byte-for-byte; the served version is v26.1.10.0. The supplied logo/banner bytes and the single new favicon were verified. Live signed-out desktop (1280px) and mobile (390px) checks passed for loaded images, form/banner placement and no horizontal overflow.
-
-Signed-in branding was checked with synthetic session data in the exact candidate; live authenticated screens, physical mobile hardware, model inference, password recovery operations and upload/extraction write workflows were not tested. No automatic rollback was used. The previous live frontend digest `sha256:926c9f46002a857d88549ec577efb9fe07cc30fd8f0c2d617f694f25ce49bea7` and previous image map are retained for a separately approved live rollback. Source rollback remains available by reverting the feature commit; later documentation edits can require conflict resolution, and reverting Git alone does not change the live image.
-
-Exact private receipt: `ags_deploy/deployment-records/release-20261023-182726-42c5c5/source/ags_deploy/deployment-records/release-20261023-182726-42c5c5-bb8a6c7a.json`. The saved plan, interrupted-controller record, resumed result/publication log, candidate/live screenshots, asset hashes and before/after fingerprints are beside the release record. Focused test output is under `output/playwright/branding-v26.1.10.0/release-focused.log`; the partial broad-run log is retained separately.
+- Use the supplied Lapi shield logo in the sign-in page, workspace header, navigation, password recovery and browser icon.
+- Display the supplied platform banner in full beside sign-in on desktop and below the form on mobile.
+- Archive the previous artwork and keep this frontend branding change independently reversible in Git.
 
 ## v26.1.9.1 - 21 October 2026
 
-- Remove the inner rectangular border, focus outline and tinted background from the Dashboard Dataset Knowledge Chat input, overriding the generic workspace form styling only for this composer.
-- Retain the rounded outer focus indicator and the existing native textarea, keyboard controls, draft, model selection and chat behavior.
+A cleaner Dataset Knowledge Chat input
 
-Initial validation: targeted local browser checks with synthetic data passed at 1440px, 390px and 320px widths. The focused input has no border, outline or shadow and a transparent background; the outer composer retains its focus border and ring. Multiline typing, draft retention across viewport changes, keyboard focus on the model selector, visible input and no horizontal overflow were verified. No question was submitted or model call made. Private screenshots and results are under `ags_runtime/workflow-preview/chat-composer-v26.1.9.1/`.
-
-Deployment, 21 October 2026: the explicitly approved frontend-only plan `release-20261021-171340-dd1998` published Sprint1 commit `07efd42e6f1975d898910a69d12db74544dcd04b` to the existing Mumbai application. Frozen source fingerprint: `18d039df329196d329fa83960105cd9a41c52d1f35fbc3cfeea5b90309200f31`; immutable web digest: `sha256:926c9f46002a857d88549ec577efb9fe07cc30fd8f0c2d617f694f25ce49bea7`. Release validation passed 236 frontend unit tests, both application/test TypeScript checks, the Linux ARM64 production build and 1,077 isolated backend regression tests (5 skipped). The exact publication image started locally and passed root/seven-script checks and focused-input browser inspection using synthetic data. The web rollout completed; both deployments are ready, and protected configuration/runtime fingerprints and every unselected image match the pre-release baseline. Live HTTPS, seven JavaScript assets and the stylesheet return HTTP 200 and match the tested candidate byte-for-byte; v26.1.9.1 and the scoped composer CSS rule are present.
-
-Backend, database, saved settings/model mappings, persistent data, routing and infrastructure are preserved. No Oracle queries, DDL, provider inference or upload/extraction writes were selected. The Chrome automation connection was unavailable and the in-app live tab was at sign-in, so authenticated post-release browser interaction was not verified. Physical mobile hardware and full live write/provider workflows remain untested. The exact receipt is retained privately at `ags_deploy/deployment-records/release-20261021-171340-dd1998/source/ags_deploy/deployment-records/release-20261021-171340-dd1998-de6deeb2.json`, with the reviewed plan, result, candidate screenshot and post-release asset/configuration evidence beside the release record. No automatic rollback was used.
+- Remove the inner rectangular border, focus outline and background from the Dashboard chat input.
+- Keep the rounded outer composer focus indicator and existing keyboard, draft and chat behavior.
 
 ## v26.1.9.0 - 19 October 2026
 
-- Add connected-record exploration with scoped, cancellable expand/collapse requests and preserved existing node positions.
-- Add D3 network arrangement, a lineage layout and pinned positions, preserving mouse, touch and keyboard movement.
-- Highlight neighbours, filter entity types, toggle relationship labels, zoom at the pointer with the wheel and separate parallel relationships with curved links. Keep the mobile heading compact and interaction controls at 44px.
-- Keep exact catalog totals distinct from the bounded visible scene; preserve existing API access checks and read-only processing boundaries.
-- Include the ISC notices for the bundled D3 force-layout modules. No Neo4j service, new database or paid cloud feature is required.
+Explore metadata as a connected graph
 
-Pre-deployment validation: all 236 frontend unit tests, both app/test TypeScript checks and six isolated metadata API tests passed. Sixteen targeted local browser checks covered expansion and collapse, shared neighbours, preserved positions, pinning and manual dragging, network/lineage layouts, highlighting, search, dataset scope, labels/type filters, wheel zoom and 390px/320px controls. The Linux ARM64 production image built and started successfully; the page and all seven script assets returned HTTP 200, the served assets contain v26.1.9.0, and five production-browser checks passed for loading, expansion, pinning, mouse movement and 390px touch movement/controls. Preview tests used loopback synthetic metadata and made no model calls. The fixture log's parseable entries contain only GETs and no chat reply calls; two incomplete log fragments were excluded. Physical mobile/pen hardware, live provider inference and the full application browser suite were not tested. Private local evidence is retained under `ags_runtime/workflow-preview/metadata-explorer-v26.1.9.0/`.
-
-Deployment, 19 October 2026: the explicitly approved frontend-only plan `release-20261019-213637-0446f2` published Sprint1 commit `63f6a4b55c6f17916bd865fc82fa6d32673727ef` to the existing Mumbai application. Committed source fingerprint: `a769496e5d3f9f0679644a893d078e1f25978bbde16ca267d6b4d1835d7abf0b`; immutable web digest: `sha256:5cd4d2250ec8837abb3c9ed79bfac4bd7a0e4f699bb6a2a3c1328f7d270ef0fc`. The exact publication image also passed startup/seven-asset checks and three candidate-browser checks before publication. The web rollout and both deployment readiness checks passed; protected configuration/runtime fingerprints and all unselected images matched. Backend, database objects, models, data, routing and infrastructure were unchanged. No Oracle queries, DDL, provider inference or upload/extraction writes were selected. Live HTTPS and all seven initial scripts returned HTTP 200 and matched the tested candidate byte-for-byte; the served assets and signed-in footer show v26.1.9.0.
-
-Twelve targeted read-only live graph checks passed: the 46-record/102-relationship catalog, eight-document drilldown, expansion with preserved positions, pinning, mouse movement with following links, lineage, filters/labels, 390px touch controls/movement, controlled desktop/mobile arrangement isolation, collapse and connected extraction focus. Chrome restarted during verification; checks resumed in a fresh tab with the existing signed-in session. An initial coordinate comparison spanning other UI actions and a responsive transition differed; controlled responsive-only and touch-movement repeats preserved the separate desktop arrangement. Mobile checks used emulation; physical devices, live provider/write workflows and the full application browser suite remain untested. The exact receipt is retained privately at `ags_deploy/deployment-records/release-20261019-213637-0446f2/source/ags_deploy/deployment-records/release-20261019-213637-0446f2-122f45f8.json`, with the plan/result and live screenshots beside the release record. No automatic rollback was used.
+- Explore records and expand or collapse their saved connections in place, using the existing access-scoped metadata API.
+- Arrange the graph as a network or lineage; pin nodes to preserve their positions during automatic layout.
+- Highlight neighbouring records, filter entity types, toggle relationship labels, zoom with the wheel and inspect parallel links separately.
+- Keep mouse, touch and keyboard node movement, scoped counts and read-only processing boundaries. No Neo4j service or paid cloud feature is required.
 
 ## v26.1.8.0 - 19 October 2026
 
-- Move every Metadata Relationships category or record node independently with a mouse, touch or pen, with edges and labels following its position.
-- Preserve background panning and zoom. Fit the arranged nodes into view or restore the current view with an icon-only reset control; keep 44px camera controls on mobile.
-- Support arrow-key adjustments, larger Shift steps, individual Home reset and Enter/Space inspection, with accessible instructions and move announcements.
-- Keep layouts separate for dataset scope, record/filter view and desktop/mobile while the explorer is open. Preserve arrangements across refresh and graph/list switches.
-- Clean up released/cancelled pointers and reset gestures; dragging does not open record details. No API, metadata, model, governance or processing changes.
+Arrange metadata relationship nodes
 
-Validation: all 220 frontend unit tests (including 10 new graph regressions), both app/test TypeScript checks and 20 targeted local browser checks passed. Browser coverage included all six category nodes, individual/connected records, following edges/labels, movement at 140% zoom, independent background panning, fit, keyboard movement and inspection, repeated reset, list/refresh retention, scoped layouts, 390px touch drag/cancellation/tap and 320px controls. The pinned Linux ARM64 production image also built and started successfully; root and all seven script assets returned HTTP 200, v26.1.8.0 was found in the served assets, and four production-build browser spot checks passed for modal loading, mouse drag, reset and touch drag. Preview tests used loopback synthetic metadata; the request log contains only GETs and no chat reply calls. Physical mobile/pen hardware, live OCI data/provider inference and the full application browser suite were not tested. Private evidence is retained under `ags_runtime/workflow-preview/metadata-nodes-v26.1.8.0/`. No OCI deployment was performed; the live frontend remains v26.1.2.2.
+- Drag each category or record node independently with a mouse, touch or pen; connections and labels follow its position.
+- Pan the background, zoom, fit the arranged graph to the screen or restore its starting layout with the reset icon.
+- Use arrow keys to adjust a focused node, Shift for larger steps and Home to reset that node. Enter or Space opens its details.
+- Keep separate arrangements for scoped desktop and mobile views while the explorer is open, including across list switches and refresh. No metadata or model calls are changed.
 
 ## v26.1.2.2 - 19 October 2026
 
-- Refine [#18](https://github.com/Maniatramco/Aegis/issues/18): replace the visible Show/Hide sources and Restore Dashboard/Expand chat labels with compact icons.
-- Retain descriptive tooltips, accessible labels and 44px mobile touch targets. Preserve the existing layout behavior and selected knowledge, draft and conversation.
+Compact chat layout controls
 
-Validation: all 210 frontend unit tests and both app/test TypeScript checks passed. Targeted desktop and 390px mobile browser checks verified icon-only controls with descriptive tooltips, 44px mobile touch targets, preserved draft/conversation and selected knowledge across layout changes, no horizontal overflow, and the composer above the footer. No backend changes, real model inference or OCI rollout were performed; the preview uses synthetic data. The complete browser regression suite was not run for this styling refinement.
-
-Deployment after source validation: on 19 October 2026, frontend v26.1.2.2 from `ags_sprint1` source commit `147adb9f9c7a5a1049061c8045953897a7011760` was published to the existing Mumbai `aegis-oci` installation under approved release `release-20261019-192624-b8d433`. The saved source snapshot fingerprint is `333862501765bb024390c4133a4e7d1741629d0cf6234d465b5db26d4b3afba2`; the immutable web image digest is `sha256:bd9b7f1b713d1f46717a7fbe72f9f9bb811aa63fd454a66ccdde48cdd13c1fac`. The ARM64 production image, local startup and seven script assets passed. Web rollout, both deployments at 1/1 readiness, exact image/configuration preservation, public HTTPS 200 and all seven live script assets passed; v26.1.2.2 was verified in the served application assets. As explicitly approved, this Sprint1 frontend omits the separate governance screens while retaining the existing backend image and saved governance settings. API, worker, sidecar images, infrastructure, model mappings and data were preserved. No Oracle queries or database scripts were selected. Authenticated live Dashboard interaction remains unverified because the browser requires sign-in; no model inference, uploads or extraction writes were run. Exact private plan, result, receipt and smoke-check records are retained under this release's ignored deployment-records directory. The source version tag remains unchanged.
-
-Subsequent end-to-end verification on 19 October 2026: 19 authenticated live Dashboard checks and 15 isolated production-image browser/API checks passed, alongside 53 focused backend regressions. Live checks covered indexed-file filtering, expansion/focus, accessible icon controls, draft and saved-conversation preservation, picker cancellation, combined scope with exclusions, empty selection, history, keyboard use, 390px/320px layouts, About history and the existing metadata explorer. A fresh request audit of the source/layout/picker/history cycle captured no mutations or API errors; a longer earlier capture was truncated and is not claimed complete. The identical ARM64 frontend image was also connected to an isolated real API, SQLite, local vector retrieval and the pinned CPU ONNX reranker, with guarded mock embeddings/answer generation and blocked external networking. That path verified synthetic upload/indexing, unpublished-knowledge failure/retry, exact two-dataset/two-document sends, hybrid retrieval, complete-catalog counts, citation validation/source access, general-answer disclosure, conversation/history/reload restoration and sign-out. No cloud model calls were initiated by these tests; existing saved live messages may be displayed. Corrected dataset-toggle browser-test selectors because successful auto-expansion hides their controls before check/uncheck can re-resolve them. Native HTML5 drag delivery could not be verified by the browser-control tool; its drop-handler unit tests had passed previously. The full application browser suite, fresh live provider inference, live upload/extraction and model accuracy were not evaluated. Private results, attempt notes and screenshots are retained under `ags_runtime/workflow-preview/e2e-v26.1.2.2/`. Application code, deployed image and immutable version tag are unchanged by this test/documentation update.
+- Use icons for showing or hiding Sources and expanding or restoring the Dashboard chat layout.
+- Keep descriptive tooltips, accessible labels and larger mobile touch targets for the layout controls.
+- Preserve the selected knowledge, draft and conversation when changing the layout.
 
 ## v26.1.2.1 - 19 October 2026
 
-- Fix [#18](https://github.com/Maniatramco/Aegis/issues/18): expand Dataset Knowledge Chat after indexed knowledge is included, collapsing the surrounding dataset cards, Sources and guidance.
-- Keep the included knowledge summary and Add Dataset Knowledge available, with Show sources and Restore Dashboard controls. Keep the existing chat mounted across layout changes so drafts and conversations survive.
-- Focus the composer when chat opens, without generating an overview or sending a question automatically. Preserve existing dataset/document scopes, exclusions, busy guards, authorization and retrieval workflows.
-- Fit the conversation into the available desktop/mobile workspace and retain the full Dashboard for empty, inactive or unindexed knowledge choices.
+Give Dataset Knowledge Chat more room
 
-Validation: all 210 frontend unit tests, 25 Dashboard Dataset Knowledge Chat backend regressions and both TypeScript configurations passed. Targeted browser checks with synthetic API responses verified automatic expansion, composer focus, source inspection, picker cancellation, preserved drafts/conversations, and a visible composer without horizontal overflow at 1440px, 390px and 320px widths. No Send occurred before explicit submission; the one synthetic submission retained exactly two datasets and 25 selected documents. The maintained browser regression suite was updated and typechecked, but not run as a complete suite. The optimized Next.js build compiled and generated routes; Windows EPERM while copying a standalone dependency symlink leaves standalone packaging unverified. Full backend testing, real model inference and OCI rollout were not performed.
+- Expand Dataset Knowledge Chat after indexed knowledge is included through the picker, dataset cards, checkboxes or drag and drop.
+- Collapse dataset cards, Sources and guidance around the conversation. Keep the knowledge summary and Add Dataset Knowledge available.
+- Inspect sources or restore the Dashboard without resetting the chat draft, selected knowledge or conversation. Focus the composer when chat opens; send no question automatically.
+- Fit the expanded conversation and composer within the desktop and mobile workspace.
 
 ## v26.1.2.0 - 18 October 2026
 
-- Added a Dashboard header action for the on-demand Metadata Relationships explorer.
-- Added a read-only, access-scoped lineage API covering datasets, documents, extractions, saved prompt versions, reviews and model mappings.
-- Preserved combined-document lineage and distinguished pinned extraction model versions from current dataset mappings.
-- Added scoped counts, category drill-down, search, paginated records, graph/list views, zoom, pan and mobile record details.
-- Applied Aegis blue and navy branding to the light graph canvas, nodes, relationships, controls and list view.
-- Completed the API reference entries for the five existing Dashboard Dataset Knowledge Chat routes, including scope, history and streaming behavior.
-- Registered metadata routes before the API documentation catalog is finalized so their descriptions appear in the exported contract.
-- Preserved Dashboard chat state and existing onboarding, extraction and review workflows. No graph database, schema change or inference is required.
-- Built from saved metadata catalog records and version snapshots, independently of the knowledge vector store. OCI deployment remains separate.
+Explore metadata relationships
 
-Validation: 60 backend regression and API documentation tests, 207 frontend unit tests and app/test TypeScript checks passed. Local browser checks with isolated synthetic data covered dataset scope and counts, empty selection, record search, graph/list views, zoom, saved extraction navigation to Review, preserved chat drafts/source selection and mobile record details. Both Linux ARM64 images built with maintained pinned dependencies; production web startup and seven script assets returned HTTP 200, and backend provider imports, syntax and pip dependency checks passed.
-
-Deployment: Published on 18 October 2026 from app source commit `1280406c365de7b429ece2c989474110c34321b7`, release `release-20261018-111729-f3a940`, to the existing Mumbai `aegis-oci` namespace. Web, API and worker rollouts completed; exact image, configuration fingerprint, database schema, readiness and HTTPS checks passed. Authenticated live browser checks verified v26.1.2.0, 46 metadata records / 102 relationships across three accessible datasets, extraction pagination and mobile details. No database DDL or infrastructure/configuration changes were performed. Live model inference and upload/extraction write tests were not run. Private receipts remain outside Git.
+- Open Metadata Relationships from the Dashboard Knowledge Source header, on demand.
+- Explore access-scoped datasets, documents, saved extraction runs, prompt versions, review revisions and mapped models.
+- Inspect records and relationships with dataset selection, search, graph/list views, zoom, pan and mobile details.
+- Lapi blue and navy relationship graph on a light canvas, with matching controls and record details.
+- Read-only metadata inspection preserves Dashboard chat and processing workflows; no model calls, graph database or schema changes are required.
 
 ## v26.1.1.0 - 17 October 2026
 
-- Moved **Add Dataset Knowledge** to a sticky toolbar outside the scrolling Sources list. It stays available when Sources is collapsed.
-- Added dataset checkboxes so Dashboard chat can combine multiple datasets, with the included dataset and indexed-source counts shown next to the action.
-- Added dataset-card drag and drop into Sources. Adding knowledge preserves existing file selections, excludes inaccessible, inactive, unindexed and stale sources, and prevents duplicate inclusions.
-- Added **About** navigation and a footer version link, with version-by-version feature notes.
-- Kept the original Aegis Agent, Dataset onboarding, extraction/re-extraction, model mappings and backend APIs unchanged.
+Dataset knowledge, within easy reach
 
-Validation: 207 frontend unit tests, 4 browser checks and app/test TypeScript checks passed. Browser scope, drag/drop, scroll and mobile checks used synthetic data. Rendered previews reviewed. The user has authorized version tags and GitHub pushes after relevant checks pass, without repeated approval. Live deployment is tracked separately by its receipt.
+- Add Dataset Knowledge stays visible in a sticky toolbar while sources and chat scroll, including when Sources is collapsed.
+- Combine multiple datasets using the Include dataset checkboxes or the indexed-file picker.
+- Drag dataset cards into Sources to include their accessible indexed files, preserving other selected sources.
+- Find the current version and version-by-version feature history on the About screen.
 
-## v26.1.0.0 - baseline through 17 October 2026
+## v26.1.0.0 - 17 October 2026
 
-The base version was introduced on 16 October. Releases through commit `0116318` used this version; historical changes are recorded together rather than assigning versions retroactively.
+Lapi baseline and Dashboard foundation
 
-- Document onboarding, uploads, extraction, review, re-extraction, model registration/mappings and the original Aegis Agent.
-- Dashboard with onboarded dataset cards, permitted Unified Knowledge sources, and a separate read-only Dataset Knowledge Chat with scoped history.
-- On-demand chat initialization, no automatic summary on page load, and compact knowledge-source counts and citations.
-- General greetings and self-contained questions answered by the selected chat model without knowledge lookup; dataset, private, mixed and uncertain questions retain hybrid retrieval, CPU reranking and citation validation.
-- Compact Connections footer with Local/GCP hosting metadata. Original inline Dataset onboarding restored; the extra onboarding screen removed.
-
-## Maintaining each release
-
-1. Increment the four-part application version for an approved release: a feature increments the third component; a fix increments the fourth.
-2. Add a dated feature entry in `application-version.json` and this file. Keep prior entries intact and update the current README version.
-3. Test the actual changes, review the rendered local result for UI changes, and record the evidence and its limits.
-4. After the relevant end-to-end checks pass, commit the release, create an annotated `vVERSION` tag when a versioned repository release is requested, and push to the approved branch without asking again. Record the exact commit and any deployment receipt; never move an existing version tag.
+- Document onboarding, uploads, model mappings, extraction, review and the original Lapi Agent.
+- Dashboard with dataset cards, permitted Unified Knowledge sources and a separate read-only Dataset Knowledge Chat.
+- Chat opens on demand. Greetings and self-contained general questions use the selected model without knowledge lookup; dataset questions retain retrieval, reranking and citations.
+- Compact Connections footer with model hosting details. Original Dataset onboarding remains in its existing workspace.

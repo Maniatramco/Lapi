@@ -1,4 +1,0 @@
-interface:
-  display_name: "Aegis Setup and OCI Deployment"
-  short_description: "Set up Windows and deploy Aegis to prepared OCI"
-  default_prompt: "Use $aegis-deploy to prepare my Windows prerequisites, verify my selected OCI destination, and build and deploy Aegis after I approve the exact release plan."

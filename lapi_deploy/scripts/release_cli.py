@@ -1,0 +1,841 @@
+"""Interactive, input-file driven Lapi release. No infrastructure provisioning.
+
+Run through deploy.ps1. All external mutation is below the explicit PUBLISH
+checkpoint; CONNECT permits read-only target discovery. No --yes bypass exists.
+"""
+import argparse
+import copy
+import datetime
+import hashlib
+import importlib.util
+import json
+from pathlib import Path, PurePosixPath
+import re
+import shutil
+import subprocess
+import sys
+from types import SimpleNamespace
+import urllib.request
+import uuid
+import zipfile
+
+
+ROOT = Path(__file__).resolve().parents[2]
+FIELDS = {'SourcePath', 'Ref', 'Kubeconfig', 'Context', 'Namespace', 'Registry',
+          'RegistryNamespace', 'Platform', 'AppUrl', 'DatabaseAction', 'WalletPath',
+          'DatabaseOwner', 'ServiceAlias', 'ExpectedService', 'SqlclPath',
+          'BackupReference', 'ValidationReference', 'DeployFrontend', 'DeployBackend',
+          'DB_Object', 'DB_ReleaseFile', 'DBAdminUser', 'SchemaTablespace', 'SchemaQuotaMB'}
+BOOLEAN_FIELDS = {'DeployFrontend', 'DeployBackend'}
+
+
+def module_from(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+GUARD = module_from(Path(__file__).with_name('check-code-release.py'), 'release_guard')
+SCHEMA = module_from(Path(__file__).with_name('oci_schema_check.py'), 'oci_schema_check')
+ORACLE_RELEASE = module_from(Path(__file__).with_name('oracle_release.py'), 'oracle_release')
+
+
+class DeploymentStopped(RuntimeError):
+    pass
+
+
+class Runner:
+    last_receipt = None
+
+    def capture(self, arguments, *, cwd=None, input_text=None, timeout=60):
+        result = subprocess.run(arguments, cwd=cwd, input=input_text, text=True,
+                                encoding='utf-8', errors='replace', capture_output=True, timeout=timeout)
+        if result.returncode:
+            raise DeploymentStopped(Path(str(arguments[0])).name+' failed; inspect existing access and the reported phase. Sensitive command output was withheld.')
+        return result.stdout
+
+    def interactive(self, arguments, *, cwd=None):
+        result = subprocess.run(arguments, cwd=cwd)
+        if result.returncode:
+            raise DeploymentStopped('The interactive tool failed; no dependent step was started')
+
+    def stream(self, arguments, *, cwd=None):
+        self.last_receipt = None
+        receipts = []
+        with subprocess.Popen(arguments, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              text=True, encoding='utf-8', errors='replace') as process:
+            for line in process.stdout:
+                print(line, end='', flush=True)
+                prefix = 'Previous images and destination saved: '
+                if line.strip().startswith(prefix):
+                    receipts.append(line.strip()[len(prefix):])
+                    if len(receipts) == 1:
+                        self.last_receipt = receipts[0]
+            code = process.wait()
+        if code:
+            raise DeploymentStopped('Application release failed; inspect the saved phases/images before retrying. No automatic rollback was attempted')
+        if len(receipts) != 1:
+            raise DeploymentStopped('The release did not report exactly one receipt; inspect current images before any retry')
+        return Path(receipts[0])
+
+
+def ask(label, default='', input_fn=input):
+    result = input_fn(label+(f' [{default}]' if default else '')+': ').strip()
+    return result or default
+
+
+def confirm(token, message, input_fn=input):
+    print(message)
+    if input_fn(f'Type {token} to continue: ').strip() != token:
+        raise DeploymentStopped('Not approved. No dependent action was started')
+
+
+def require_pattern(value, pattern, label):
+    if not re.fullmatch(pattern, value):
+        raise DeploymentStopped('Invalid '+label)
+    return value
+
+
+def flag(value, label, legacy_bool=False):
+    if legacy_bool and isinstance(value, bool):
+        return value
+    if not isinstance(value, str) or value.strip().upper() not in ('Y', 'N'):
+        raise DeploymentStopped(label+' must be Y or N')
+    return value.strip().upper() == 'Y'
+
+
+def load_inputs(path):
+    if path is None:
+        return {}
+    path = path.resolve(strict=True)
+    data = json.loads(path.read_text(encoding='utf-8-sig'))
+    if not isinstance(data, dict) or set(data)-FIELDS:
+        raise DeploymentStopped('Input JSON contains unsupported fields. Use the non-secret example; passwords/tokens are not accepted in this file')
+    for key, value in data.items():
+        if key in BOOLEAN_FIELDS or key == 'DB_Object':
+            flag(value, key, key in BOOLEAN_FIELDS)
+        elif not isinstance(value, str):
+            raise DeploymentStopped(key+' must be a string')
+    for field in ('SourcePath', 'Kubeconfig', 'WalletPath'):
+        if data.get(field):
+            candidate = Path(data[field]).expanduser()
+            data[field] = str(candidate if candidate.is_absolute() else (path.parent/candidate).resolve())
+    return data
+
+
+def release_helper(source):
+    # Source refs frozen before the folder cleanup retain the original layout.
+    for relative in ('lapi_deploy/scripts/deploy-lapi-code.ps1',
+                     'lapi_deploy/deploy-lapi-code.ps1'):
+        helper = source/relative
+        if helper.is_file():
+            return helper
+    raise DeploymentStopped('The selected commit lacks required release files: lapi_deploy/scripts/deploy-lapi-code.ps1')
+
+
+def export_commit(source_root, ref, directory, runner):
+    commit = runner.capture(['git', '-C', str(source_root), 'rev-parse', '--verify', '--end-of-options', ref+'^{commit}']).strip()
+    require_pattern(commit, r'[a-f0-9]{40,64}', 'source commit')
+    archive = directory/'source.zip'
+    runner.capture(['git', '-C', str(source_root), 'archive', '--format=zip', '--output', str(archive), commit])
+    source = directory/'source'
+    with zipfile.ZipFile(archive) as package:
+        for member in package.infolist():
+            path = PurePosixPath(member.filename)
+            if path.is_absolute() or '..' in path.parts or '\\' in member.filename:
+                raise DeploymentStopped('Invalid source archive path')
+        package.extractall(source)
+    for relative in ('lapi_frontend/Dockerfile', 'lapi_backend/Dockerfile', 'lapi_database/install.sql',
+                     'lapi_database/deploy-oci-database.ps1'):
+        if not (source/relative).is_file():
+            raise DeploymentStopped('The selected commit lacks required release files: '+relative)
+    release_helper(source)
+    return source, commit
+
+
+# Only application/database build inputs and the existing image-release helper
+# enter local snapshots. Private inputs, runtime state and archives stay outside.
+LOCAL_SOURCE_ROOTS = ('lapi_frontend', 'lapi_backend', 'lapi_database')
+LOCAL_HELPERS = ('lapi_deploy/scripts/deploy-lapi-code.ps1', 'lapi_deploy/deploy-lapi-code.ps1')
+LOCAL_EXCLUDED_PARTS = {'.git', '.venv', 'node_modules', '.next', '__pycache__', '.pytest_cache',
+                        'coverage', 'playwright-report', 'test-results', 'screenshots',
+                        'secrets', 'backups', 'data', 'local-models', 'lapi_runtime', 'delete'}
+
+
+def local_source_path(root, name):
+    relative = PurePosixPath(name)
+    if relative.is_absolute() or '..' in relative.parts or '\\' in name or not relative.parts:
+        raise DeploymentStopped('Invalid local source path')
+    if relative.parts[0] not in LOCAL_SOURCE_ROOTS and name not in LOCAL_HELPERS:
+        return None
+    lowered = [part.lower() for part in relative.parts]
+    filename = lowered[-1]
+    if (any(part in LOCAL_EXCLUDED_PARTS for part in lowered) or filename.startswith('.env')
+            or filename.startswith('wallet') or filename.startswith('kubeconfig')
+            or filename == 'lapi-oci-inputs.json'
+            or Path(filename).suffix in {'.pem','.key','.p12','.pfx','.jks','.db','.sqlite','.sqlite3','.pyc','.log','.tsbuildinfo'}):
+        return None
+    path = root.joinpath(*relative.parts)
+    # Never follow a symlink/junction into private files, another checkout or a cycle.
+    for part in (path, *path.parents):
+        if part == root: break
+        if (part.is_symlink() or (part.exists() and getattr(part.lstat(), 'st_file_attributes', 0) & 0x400)
+                or (hasattr(part, 'is_junction') and part.is_junction())):
+            raise DeploymentStopped('Local source contains a symbolic link/junction; use regular source files')
+    if not path.exists():
+        return None  # A saved deletion must remain deleted in the snapshot.
+    if not path.resolve(strict=True).is_relative_to(root) or not path.is_file():
+        raise DeploymentStopped('Local source is not a regular file inside SourcePath')
+    return path
+
+
+def local_source_inventory(root, runner):
+    names = runner.capture(['git','-C',str(root),'ls-files','--cached','--others',
+                            '--exclude-standard','-z','--',*LOCAL_SOURCE_ROOTS,*LOCAL_HELPERS]).split('\0')
+    inventory = {}
+    for name in sorted(set(names)-{''}):
+        path = local_source_path(root, name)
+        if path is not None:
+            inventory[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return inventory
+
+
+def export_working_tree(source_root, directory, runner):
+    source_root = source_root.resolve(strict=True)
+    command = ['git','-C',str(source_root),'rev-parse','--verify','HEAD^{commit}']
+    commit = runner.capture(command).strip()
+    require_pattern(commit, r'[a-f0-9]{40,64}', 'base source commit')
+    inventory = local_source_inventory(source_root, runner)
+    source = directory/'source'
+    source.mkdir(exist_ok=False)
+    for name, expected in inventory.items():
+        path = local_source_path(source_root, name)
+        if path is None:
+            raise DeploymentStopped('Saved source changed while creating the snapshot; rerun deployment')
+        contents = path.read_bytes()
+        if hashlib.sha256(contents).hexdigest() != expected:
+            raise DeploymentStopped('Saved source changed while creating the snapshot; rerun deployment')
+        target = source.joinpath(*PurePosixPath(name).parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(contents)
+    if local_source_inventory(source_root, runner) != inventory or runner.capture(command).strip() != commit:
+        raise DeploymentStopped('Saved source changed while creating the snapshot; rerun deployment')
+    for relative in ('lapi_frontend/Dockerfile','lapi_backend/Dockerfile','lapi_database/install.sql',
+                     'lapi_database/deploy-oci-database.ps1'):
+        if not (source/relative).is_file():
+            raise DeploymentStopped('Saved source lacks required release files: '+relative)
+    release_helper(source)
+    (directory/'source-manifest.json').write_text(json.dumps(
+        {'mode':'working-tree','base_commit':commit,'files':inventory},indent=2),encoding='utf-8')
+    return source, commit
+
+def source_fingerprint(source):
+    hashes = {}
+    for prefix in ('lapi_frontend', 'lapi_backend', 'lapi_database'):
+        for path in sorted((source/prefix).rglob('*')):
+            if path.is_file():
+                hashes[path.relative_to(source).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    hashes['release-helper'] = hashlib.sha256(release_helper(source).read_bytes()).hexdigest()
+    return GUARD.fingerprint(hashes)
+
+
+def compare_protected(before, after):
+    for field in ('context', 'server', 'namespace', 'resources'):
+        if before[field] != after[field]:
+            raise DeploymentStopped('Target/configuration changed during preparation: '+field)
+    if set(before['deployments']) != set(after['deployments']):
+        raise DeploymentStopped('Deployment set changed during preparation')
+    for name, item in before['deployments'].items():
+        current = after['deployments'][name]
+        if any(item[key] != current[key] for key in ('uid', 'configuration_sha256', 'images')):
+            raise DeploymentStopped('Deployment settings/images changed during preparation: '+name)
+
+
+def infer_registry(deployments, components=('frontend', 'backend')):
+    prefixes = set()
+    for name, containers in GUARD.APP_CONTAINERS.items():
+        if ('frontend' if name == 'lapi-web' else 'backend') not in components:
+            continue
+        for container in containers:
+            parts = deployments[name]['images'][container].split('/')
+            if len(parts) < 3:
+                return '', ''
+            prefixes.add((parts[0], parts[1]))
+    return next(iter(prefixes)) if len(prefixes) == 1 else ('', '')
+
+
+def infer_platform(nodes, deployments, requested=''):
+    choices = set()
+    for node in nodes:
+        if node.get('spec', {}).get('unschedulable'):
+            continue
+        if not any(item.get('type') == 'Ready' and item.get('status') == 'True' for item in node.get('status', {}).get('conditions', [])):
+            continue
+        labels = node['metadata'].get('labels', {})
+        choices.add(labels.get('kubernetes.io/os', '')+'/'+labels.get('kubernetes.io/arch', ''))
+    if not choices <= {'linux/arm64', 'linux/amd64'} or not choices:
+        raise DeploymentStopped('Cannot verify a supported ready-node architecture')
+    if len(choices) == 1:
+        platform = next(iter(choices))
+        if requested and requested != platform:
+            raise DeploymentStopped('Requested image platform differs from the ready nodes')
+        return platform
+    if not requested or requested not in choices or not all(
+            item['spec']['template']['spec'].get('nodeSelector', {}).get('kubernetes.io/arch') == requested.split('/')[1]
+            for item in deployments):
+        raise DeploymentStopped('Mixed architectures need existing matching node placement; this script will not change it')
+    return requested
+
+
+def infer_url(resources):
+    hosts = set()
+    for item in resources:
+        if item['kind'] == 'ConfigMap' and 'Caddyfile' in item.get('data', {}):
+            match = re.search(r'(?m)^\s*([A-Za-z0-9][A-Za-z0-9.-]+)\s*\{', item['data']['Caddyfile'])
+            if match:
+                hosts.add('https://'+match[1])
+    return next(iter(hosts)) if len(hosts) == 1 else ''
+
+
+def ps_literal(value):
+    return "'"+str(value).replace("'", "''")+"'"
+
+
+def empty_owner_driver(wallet, owner, alias, service, log):
+    for path in (wallet, log):
+        if any(character in str(path) for character in ('"', '\r', '\n')):
+            raise DeploymentStopped('SQLcl paths cannot contain quotes or line breaks')
+    require_pattern(owner, r'[A-Z][A-Z0-9_$#]{0,127}', 'database owner')
+    require_pattern(alias, r'[A-Za-z0-9_.-]+', 'wallet alias')
+    require_pattern(service, r'[A-Za-z0-9_.-]+', 'full database service')
+    if owner in ('SYS', 'SYSTEM'):
+        raise DeploymentStopped('Use the prepared application owner')
+    return f'''SET ECHO OFF
+SET VERIFY OFF
+SET DEFINE OFF
+SET SERVEROUTPUT ON
+WHENEVER OSERROR EXIT FAILURE ROLLBACK
+WHENEVER SQLERROR EXIT FAILURE ROLLBACK
+SET CLOUDCONFIG "{wallet}"
+CONNECT {owner}@{alias}
+SPOOL "{log}"
+SET TRANSACTION READ ONLY;
+DECLARE
+  objects NUMBER; available NUMBER; privileges NUMBER; probe NUMBER;
+BEGIN
+  IF USER <> '{owner}' OR SYS_CONTEXT('USERENV','CURRENT_SCHEMA') <> '{owner}'
+     OR LOWER(SYS_CONTEXT('USERENV','SERVICE_NAME')) <> LOWER('{service}') THEN
+    RAISE_APPLICATION_ERROR(-20001,'Wrong destination owner/service');
+  END IF;
+  SELECT COUNT(*) INTO objects FROM user_objects;
+  IF objects <> 0 THEN RAISE_APPLICATION_ERROR(-20002,'Fresh installation requires an empty owner'); END IF;
+  SELECT COUNT(*) INTO privileges FROM session_privs WHERE privilege='CREATE TABLE';
+  IF privileges=0 THEN RAISE_APPLICATION_ERROR(-20003,'CREATE TABLE privilege is missing'); END IF;
+  SELECT COUNT(*) INTO available FROM user_ts_quotas q,user_users u
+    WHERE q.tablespace_name=u.default_tablespace AND (q.max_bytes=-1 OR q.max_bytes>q.bytes);
+  SELECT COUNT(*) INTO privileges FROM session_privs WHERE privilege='UNLIMITED TABLESPACE';
+  IF available=0 AND privileges=0 THEN RAISE_APPLICATION_ERROR(-20004,'Prepared owner needs quota'); END IF;
+  SELECT LENGTH(CAST('x' AS VARCHAR2(32767 BYTE))) INTO probe FROM dual;
+  SELECT CASE WHEN CAST(TRUE AS BOOLEAN) THEN 1 ELSE 0 END INTO probe FROM dual;
+  IF probe<>1 THEN RAISE_APPLICATION_ERROR(-20005,'SQL BOOLEAN unavailable'); END IF;
+  SELECT VECTOR_DISTANCE(TO_VECTOR('[1,0]'),TO_VECTOR('[1,0]'),COSINE) INTO probe FROM dual;
+  IF probe<>0 THEN RAISE_APPLICATION_ERROR(-20006,'Native vector support unavailable'); END IF;
+  DBMS_OUTPUT.PUT_LINE('LAPI_EMPTY_OWNER_OK|{owner}|{service}|0');
+END;
+/
+ROLLBACK;
+SPOOL OFF
+EXIT SUCCESS
+'''
+
+
+class Workflow:
+    requires_powershell = True
+
+    def __init__(self, values, check_only=False, runner=None, input_fn=input, working_tree=False):
+        self.values = dict(values)
+        self.working_tree = working_tree
+        self.frontend = flag(values.get('DeployFrontend', 'Y'), 'DeployFrontend', True)
+        self.backend = flag(values.get('DeployBackend', 'Y'), 'DeployBackend', True)
+        self.db_release = None
+        self.db_release_done = False
+        self.components = [name for name, selected in (('frontend', self.frontend), ('backend', self.backend)) if selected]
+        self.check_only = check_only
+        self.runner = runner or Runner()
+        self.input = input_fn
+        self.phase = 'local preparation'
+        self.record = {'state': 'preparing', 'phases': [], 'database_installed': False}
+        self.directory = None
+        self.connect_approved = False
+        self.publish_approved = False
+
+    def value(self, key, label, default='', required=True):
+        value = self.values.get(key, '').strip()
+        if not value:
+            value = ask(label, default, self.input)
+        if required and not value:
+            raise DeploymentStopped('Required input missing: '+key)
+        self.values[key] = value
+        return value
+
+    def save(self, phase):
+        self.phase = phase
+        self.record['phases'].append({'phase': phase, 'at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat()})
+        print('\n'+phase, flush=True)
+        if self.directory:
+            (self.directory/'result.json').write_text(json.dumps(self.record, indent=2), encoding='utf-8')
+
+    def kubectl(self, arguments, input_text=None, timeout=50):
+        if not self.connect_approved:
+            raise DeploymentStopped('CONNECT approval is required before target inspection')
+        self.check_target_file()
+        request_timeout = '0' if arguments[:2] == ['rollout', 'status'] else '25s'
+        command = ['kubectl', '--kubeconfig', str(self.options.kubeconfig), '--context', self.options.context,
+                   '--request-timeout='+request_timeout, '-n', self.options.namespace, *arguments]
+        return self.runner.capture(command, input_text=input_text, timeout=timeout)
+
+    def check_target_file(self):
+        if hashlib.sha256(self.options.kubeconfig.read_bytes()).hexdigest() != self.kubeconfig_hash:
+            raise DeploymentStopped('Kubeconfig changed after target selection; select and approve the destination again')
+
+    def target_json(self, arguments, input_text=None):
+        return json.loads(self.kubectl(arguments, input_text))
+
+    def prepare(self):
+        action = self.values.get('DatabaseAction', '').lower()
+        if 'DB_Object' in self.values and action:
+            raise DeploymentStopped('Use DB_Object and DB_ReleaseFile, or legacy DatabaseAction; do not mix them')
+        if 'DB_Object' in self.values or not action:
+            selected = self.values.get('DB_Object') or ask('DB_Object: run database release file? Y/N', 'N', self.input)
+            action = 'release' if flag(selected, 'DB_Object') else 'skip'
+        if action not in ('skip', 'verify', 'install', 'release'):
+            raise DeploymentStopped('DatabaseAction must be skip, verify or install')
+        if action == 'skip' and not self.components:
+            raise DeploymentStopped('Nothing selected: enable frontend/backend or choose a database action')
+        self.action = action
+        root_value = self.values.get('SourcePath') or str(ROOT)
+        self.source_root = Path(root_value).expanduser().resolve(strict=True)
+        ref = 'HEAD' if self.working_tree else (self.values.get('Ref') or 'lapi_sprint1')
+        require_pattern(ref, r'[A-Za-z0-9_][A-Za-z0-9_./-]*', 'source ref')
+        self.release = 'release-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:6]
+        self.directory = self.source_root/'lapi_deploy/deployment-records'/self.release
+        self.directory.mkdir(parents=True, exist_ok=False)
+        if self.working_tree:
+            self.source, self.commit = export_working_tree(self.source_root, self.directory, self.runner)
+            self.record.update(source_mode='working-tree', source_reference='Saved local files; JSON Ref is ignored',
+                               source_manifest=str(self.directory/'source-manifest.json'))
+            print('Source: saved local files (no commit required); base commit '+self.commit, flush=True)
+        else:
+            self.source, self.commit = export_commit(self.source_root, ref, self.directory, self.runner)
+            self.record.update(source_mode='committed', source_reference=ref)
+        self.source_hash = source_fingerprint(self.source)
+        if len(self.components) == 1 and 'LAPI_COMPONENT_SELECTION_V1' not in release_helper(self.source).read_text(encoding='utf-8-sig'):
+            raise DeploymentStopped('The selected source commit predates component selection; choose a commit containing the updated release helper')
+        self.powershell = shutil.which('pwsh') or shutil.which('powershell')
+        if not self.powershell and (self.requires_powershell or action == 'install'):
+            raise DeploymentStopped('PowerShell is required for the existing release helpers')
+        self.record.update(source_commit=self.commit, source_fingerprint=self.source_hash,
+                           database_action=action, components=self.components, release=self.release,
+                           regression_tests='Not run by this CLI; operator evidence required')
+        if action in ('install', 'release'):
+            self.wallet = Path(self.value('WalletPath', 'Destination wallet ZIP path')).expanduser().resolve(strict=True)
+            self.db_owner = self.value('DatabaseOwner', 'Destination application schema/owner').upper()
+            self.alias = self.value('ServiceAlias', 'Destination wallet service alias')
+            self.service = self.value('ExpectedService', 'Full server database service name')
+            if action == 'release':
+                release_name = self.value('DB_ReleaseFile', 'Database release JSON path', 'lapi_database/release.json')
+                release_path = Path(release_name).expanduser()
+                if release_path.is_absolute():
+                    if release_path.is_relative_to(self.source_root):
+                        release_path = self.source/release_path.relative_to(self.source_root)
+                else:
+                    release_path = self.source/release_path
+                manifest = ORACLE_RELEASE.ReleaseFile(self.source, release_path.resolve(strict=True))
+                (self.directory/'database-release.json').write_text(release_path.read_text(encoding='utf-8-sig'), encoding='utf-8')
+                self.db_release = ORACLE_RELEASE.DatabaseRelease(SCHEMA, manifest, self.wallet, self.db_owner, self.alias, self.service,
+                    self.values.get('DBAdminUser') or 'ADMIN', self.values.get('SchemaTablespace') or 'DATA', self.values.get('SchemaQuotaMB') or '256')
+                self.record.update(database_release_file=release_name, database_release_sha256=manifest.fingerprint)
+            else:
+                self.sqlcl = shutil.which(self.values.get('SqlclPath') or 'sql')
+                if not self.sqlcl:
+                    raise DeploymentStopped('SQLcl must already be installed for a fresh schema installation')
+                self.database_args = ['-WalletPath', str(self.wallet), '-UserName', self.db_owner,
+                                  '-ServiceAlias', self.alias, '-ExpectedService', self.service,
+                                  '-SqlclPath', self.sqlcl]
+                self.ps_helper(self.source/'lapi_database/deploy-oci-database.ps1', self.database_args+['-CheckOnly'])
+            if not self.components:
+                self.record.update(owner=self.db_owner, service_name=self.service, wallet_alias=self.alias)
+                return
+        kubeconfig = Path(self.value('Kubeconfig', 'Existing destination kubeconfig path')).expanduser().resolve(strict=True)
+        self.kubeconfig_hash = hashlib.sha256(kubeconfig.read_bytes()).hexdigest()
+        local = json.loads(self.runner.capture(['kubectl', '--kubeconfig', str(kubeconfig), 'config', 'view', '-o', 'json']))
+        contexts = {item['name']: item['context'] for item in local.get('contexts', [])}
+        if not contexts:
+            raise DeploymentStopped('This kubeconfig contains no contexts')
+        context = self.values.get('Context', '')
+        if not context:
+            if len(contexts) == 1:
+                context = next(iter(contexts))
+            else:
+                print('Local kubeconfig contexts: '+', '.join(sorted(contexts)))
+                context = self.value('Context', 'Choose the destination context')
+        if context not in contexts:
+            raise DeploymentStopped('The selected context is absent from the supplied kubeconfig')
+        clusters = {item['name']: item['cluster'] for item in local.get('clusters', [])}
+        server = clusters[contexts[context]['cluster']]['server']
+        from urllib.parse import urlsplit
+        parsed = urlsplit(server)
+        if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+            raise DeploymentStopped('The existing Kubernetes server must be a credential-free HTTPS endpoint')
+        namespace = self.values.get('Namespace') or 'lapi-oci'
+        require_pattern(namespace, r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', 'namespace')
+        self.options = SimpleNamespace(kubeconfig=kubeconfig, context=context, namespace=namespace)
+        self.record.update(context=context, server=server, namespace=namespace)
+
+    def ps_helper(self, path, arguments, stream=False):
+        command = [self.powershell, '-NoProfile', '-File', str(path), *arguments]
+        return self.runner.stream(command) if stream else self.runner.interactive(command)
+
+    def approve_connection(self):
+        if self.action in ('install', 'release') and not self.components:
+            confirm('CONNECT', 'Read-only database access requested: '+self.db_owner+'@'+self.service+
+                    ('; existing administrator '+self.db_release.admin if self.action == 'release' else '')+
+                    ' (wallet alias '+self.alias+'). No Kubernetes access or table creation during discovery.', self.input)
+            self.connect_approved = True
+            return
+        self.check_target_file()
+        database_scope = ('; owner '+self.db_owner+'@'+self.service+'; existing administrator '+self.db_release.admin if self.action == 'release' else '')
+        confirm('CONNECT', 'Read-only access requested: '+self.record['context']+' / '+self.record['server']+
+                ' / namespace '+self.record['namespace']+'. Database action: '+self.action+
+                database_scope+
+                '. No table creation, image publishing or configuration changes during discovery.', self.input)
+        self.connect_approved = True
+
+    def metadata_preflight(self):
+        deployments = self.target_json(['get', 'deployment', 'lapi-web', 'lapi-api-worker', '-o', 'json'])['items']
+        records = {item['metadata']['name']: GUARD.deployment_record(item) for item in deployments}
+        if set(records) != set(GUARD.APP_CONTAINERS):
+            raise DeploymentStopped('Prepared Lapi Deployments are missing. This command does not provision them')
+        resources = self.target_json(['get', GUARD.CONFIG_RESOURCES, '-o', 'json'])['items']
+        snapshot = {'context': self.options.context, 'server': self.record['server'],
+                    'namespace': self.options.namespace, 'deployments': records, 'resources': GUARD.resource_records(resources)}
+        if not hasattr(self, 'initial_metadata'):
+            if not self.components:
+                self.url, self.platform = None, None
+                return snapshot
+            nodes = self.target_json(['get', 'nodes', '-o', 'json'])['items']
+            selected_deployments = [item for item in deployments if ('frontend' if item['metadata']['name'] == 'lapi-web' else 'backend') in self.components]
+            self.platform = infer_platform(nodes, selected_deployments, self.values.get('Platform', ''))
+            registry, namespace = infer_registry(records, self.components)
+            self.registry = self.values.get('Registry') or registry or self.value('Registry', 'Existing OCIR host')
+            self.registry_namespace = self.values.get('RegistryNamespace') or namespace or self.value('RegistryNamespace', 'Existing registry namespace')
+            require_pattern(self.registry, r'[A-Za-z0-9.-]+', 'registry host')
+            require_pattern(self.registry_namespace, r'[A-Za-z0-9_-]+', 'registry namespace')
+            self.url = self.values.get('AppUrl') or infer_url(resources)
+            if not self.url:
+                ingress = self.target_json(['get', 'ingress', '-o', 'json']).get('items', [])
+                hosts = {rule['host'] for item in ingress for rule in item.get('spec', {}).get('rules', []) if rule.get('host')}
+                self.url = 'https://'+next(iter(hosts)) if len(hosts) == 1 else self.value('AppUrl', 'Existing application HTTPS URL')
+            from urllib.parse import urlsplit
+            parsed = urlsplit(self.url)
+            if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise DeploymentStopped('Provide the existing credential-free HTTPS application URL; this command does not configure DNS/TLS')
+            self.web_image = f'{self.registry}/{self.registry_namespace}/lapi-web:{self.release}'
+            self.backend_image = f'{self.registry}/{self.registry_namespace}/lapi-backend:{self.release}'
+        return snapshot
+
+    def snapshot(self):
+        if not self.connect_approved:
+            raise DeploymentStopped('CONNECT approval is required before target inspection')
+        self.check_target_file()
+        snapshot = GUARD.collect(self.options)
+        GUARD.require_ready(snapshot)
+        if self.backend:
+            GUARD.validate_source(snapshot, self.source)
+        return snapshot
+
+    def verify_database(self):
+        result = self.target_json(['exec', '-i', 'deployment/lapi-api-worker', '-c', 'api', '--', 'python', '-B', '-'], SCHEMA.inspection_script(self.source))
+        totals = SCHEMA.verify_schema(self.source, result)
+        for input_key, result_key in (('DatabaseOwner', 'owner'), ('ExpectedService', 'service_name'), ('ServiceAlias', 'wallet_alias')):
+            expected = self.values.get(input_key, '')
+            if expected and expected.casefold() != result[result_key].casefold():
+                raise DeploymentStopped('Saved application database differs from the requested '+input_key)
+        if self.action in ('install', 'release') and (result['owner'].upper() != self.db_owner or result['service_name'].casefold() != self.service.casefold()):
+            raise DeploymentStopped('Prepared application connection does not point to the installed database; no configuration was changed')
+        if result['active_jobs'] and self.backend:
+            raise DeploymentStopped('Active database jobs exist; let them finish before releasing')
+        return dict(totals, owner=result['owner'], service_name=result['service_name'], wallet_alias=result['wallet_alias'], active_jobs=result['active_jobs'])
+
+    def verify_empty_owner(self, number):
+        if not self.connect_approved:
+            raise DeploymentStopped('CONNECT approval is required before database inspection')
+        log = self.directory/f'empty-owner-{number}.log'
+        driver = self.directory/f'empty-owner-{number}.sql'
+        driver.write_text(empty_owner_driver(self.wallet, self.db_owner, self.alias, self.service, log), encoding='utf-8')
+        wrapper = self.directory/f'empty-owner-{number}.ps1'
+        wrapper.write_text("$ErrorActionPreference='Stop'\n& "+ps_literal(self.sqlcl)+" -L /nolog "+ps_literal('@"'+str(driver)+'"')+"\nexit $LASTEXITCODE\n", encoding='utf-8-sig')
+        print('SQLcl will privately prompt for the destination password (read-only empty-owner check).')
+        self.ps_helper(wrapper, [])
+        marker = f'LAPI_EMPTY_OWNER_OK|{self.db_owner}|{self.service}|0'
+        if not log.is_file() or marker not in log.read_text(encoding='utf-8-sig', errors='replace').splitlines():
+            raise DeploymentStopped('The read-only empty-owner success marker is missing')
+        return {'owner': self.db_owner, 'service_name': self.service, 'wallet_alias': self.alias,
+                'existing_objects': 0, 'action': 'Create thirteen application tables only'}
+
+    def inspect_image_ids(self):
+        ids = {}
+        images = ([self.web_image] if self.frontend else [])+([self.backend_image] if self.backend else [])
+        for image in images:
+            data = json.loads(self.runner.capture(['docker', 'image', 'inspect', image]))
+            if len(data) != 1 or data[0]['Os']+'/'+data[0]['Architecture'] != self.platform:
+                raise DeploymentStopped('A prepared image has the wrong platform')
+            ids[image] = data[0]['Id']
+        return ids
+
+    def build(self):
+        if self.frontend:
+            self.runner.interactive(['docker', 'build', '--platform', self.platform, '-t', self.web_image, str(self.source/'lapi_frontend')])
+        if self.backend:
+            self.runner.interactive(['docker', 'build', '--platform', self.platform,
+                                     '--build-arg', 'INSTALL_LOCAL_EMBEDDINGS=false', '--build-arg', 'INSTALL_CLOUD_MODELS=true',
+                                     '--build-arg', 'INSTALL_ORACLE=true', '--build-arg', 'INSTALL_OCI=true',
+                                     '-t', self.backend_image, str(self.source/'lapi_backend')])
+        self.image_ids = self.inspect_image_ids()
+
+    def approve_publication(self):
+        confirm('PUBLISH', 'Review the saved plan above. Approval covers this exact source, target, images and database action. '
+                +('Selected Recreate deployments restart pods and can briefly interrupt the app. ' if self.components else 'No application images or pods will be changed. ')+
+                'Infrastructure, configuration, model mappings and data are preserved; no automatic rollback.', self.input)
+        self.publish_approved = True
+
+    def install_database(self):
+        if not self.publish_approved:
+            raise DeploymentStopped('PUBLISH approval is required before schema installation')
+        self.record['database_install_attempted'] = True
+        if self.action == 'release':
+            self.save('Running only the approved database release file; DDL may commit partially')
+            def checkpoint(phase):
+                self.record['database_completed_objects'] = list(self.db_release.applied)
+                self.save(phase)
+            result = self.db_release.apply(self.db_plan, self.publish_approved, checkpoint)
+            self.db_release_done = True
+            self.record.update(database_release_result=result, database_completed_objects=list(self.db_release.applied))
+            return
+        self.save('Running the guarded schema installer; DDL can commit partially on failure')
+        self.ps_helper(self.source/'lapi_database/deploy-oci-database.ps1', self.database_args)
+        self.record['database_installed'] = True
+
+    def release_images(self):
+        if not self.publish_approved:
+            raise DeploymentStopped('PUBLISH approval is required before image publication')
+        self.check_target_file()
+        arguments = ['-SourcePath', str(self.source), '-Kubeconfig', str(self.options.kubeconfig),
+                     '-Context', self.options.context, '-Namespace', self.options.namespace,
+                     '-Registry', self.registry, '-RegistryNamespace', self.registry_namespace,
+                     '-Platform', self.platform, '-Release', self.release, '-SkipBuild']
+        if len(self.components) == 1:
+            arguments += ['-Components', self.components[0].capitalize()]
+        receipt = self.ps_helper(release_helper(self.source), arguments, stream=True).resolve(strict=True)
+        expected_directory = (self.source/'lapi_deploy/deployment-records').resolve()
+        if receipt.parent != expected_directory:
+            raise DeploymentStopped('The reported receipt is outside this invocation source directory')
+        return receipt
+
+    def wait_after_schema(self):
+        print('Waiting up to five minutes per existing deployment for readiness; no restart or configuration repair is performed.')
+        for deployment in ('lapi-api-worker', 'lapi-web'):
+            self.kubectl(['rollout', 'status', 'deployment/'+deployment, '--timeout=5m'], timeout=330)
+        snapshot = self.snapshot()
+        compare_protected(self.initial_metadata, snapshot)
+        return snapshot
+
+    def check_database_selection(self):
+        if self.action == 'release' and not self.db_release_done:
+            current = self.db_release.discover()
+            if current['fingerprint'] != self.db_plan['fingerprint']:
+                raise DeploymentStopped('Database changed during preparation; review a new database plan')
+            return current['summary']
+        if self.action != 'skip' or self.backend:
+            result = self.verify_database()
+            if self.action == 'skip':
+                result['action'] = 'Database scripts skipped; read-only backend compatibility verified'
+            return result
+        return {'action': 'Skipped; no Oracle queries or database scripts selected'}
+
+    def present_plan(self):
+        plan = self.directory/'plan.json'
+        plan.write_text(json.dumps(self.record, indent=2), encoding='utf-8')
+        print('\nDEPLOYMENT PLAN\n'+json.dumps(self.record, indent=2))
+        print('Private plan: '+str(plan))
+        self.approve_publication()
+
+    def run_schema_only(self):
+        self.save('Awaiting read-only database connection approval')
+        self.approve_connection()
+        self.save('Read-only empty database owner preflight')
+        if self.action == 'release':
+            self.db_plan = self.db_release.discover()
+            database = self.db_plan['summary']
+        else:
+            database = self.verify_empty_owner(1)
+        self.record.update(database=database, components=[], application_release='Not selected')
+        if self.check_only:
+            self.record.update(state='preflight-only', builds='Not run', publication='Not attempted')
+            self.save('Read-only database preflight completed; no changes made')
+            print(json.dumps(self.record, indent=2)+'\nRecord: '+str(self.directory/'result.json'))
+            return self.record
+        if self.action == 'release' and not self.db_plan['actions'] and not database['create_schema']:
+            self.record.update(state='verified-only', publication='Nothing missing; no DDL required')
+            self.save('All listed database objects already match; no changes needed')
+            print(json.dumps(self.record, indent=2)+'\nRecord: '+str(self.directory/'result.json'))
+            return self.record
+        self.record.update(state='awaiting-publication-approval',
+                           planned_actions=(['Execute only missing objects from the reviewed release file in its listed order',
+                                             'Create the application schema/user only if missing and explicitly enabled in the release file',
+                                             'Preserve matching objects; stop on conflicts; verify every listed object'] if self.action == 'release' else
+                                            ['Install thirteen tables in the verified empty owner using the guarded installer',
+                                             'Require the installer completed-schema success marker; no image build, push or Kubernetes commands']),
+                           validation_reference=self.value('ValidationReference', 'Schema script validation/CI evidence for this source (operator reference)'),
+                           backup_reference=self.values.get('BackupReference', '').strip() or None)
+        self.present_plan()
+        if source_fingerprint(self.source) != self.source_hash:
+            raise DeploymentStopped('Approved source changed; approval is no longer valid')
+        if self.action == 'install':
+            self.verify_empty_owner(2)
+        self.install_database()
+        self.record.update(state='complete', database_verification=('Every listed release object verified; matching objects preserved' if self.action == 'release' else 'Guarded installer completed all schema postchecks and success marker'),
+                           application_checks='Not selected; no application deployment was performed')
+        self.save('Database release file completed; frontend and backend untouched' if self.action == 'release' else 'Database schema installation completed; frontend and backend untouched')
+        print('Record: '+str(self.directory/'result.json'))
+        return self.record
+
+    def run(self):
+        try:
+            self.prepare()
+            if self.action in ('install', 'release') and not self.components:
+                return self.run_schema_only()
+            self.save('Awaiting read-only connection approval')
+            self.approve_connection()
+            self.save('Read-only target and database preflight')
+            self.initial_metadata = self.metadata_preflight()
+            if self.action == 'release':
+                self.db_plan = self.db_release.discover()
+                self.database = self.db_plan['summary']
+                if self.backend and self.database['active_jobs']:
+                    raise DeploymentStopped('Active database jobs exist; let them finish before releasing')
+                self.baseline = None if self.db_plan['actions'] or self.database['create_schema'] else self.snapshot()
+                if self.baseline:
+                    compare_protected(self.initial_metadata, self.baseline)
+            elif self.action != 'install':
+                self.baseline = self.snapshot()
+                compare_protected(self.initial_metadata, self.baseline)
+                self.database = self.check_database_selection()
+            else:
+                self.database = self.verify_empty_owner(1)
+                self.baseline = None
+            self.record.update(database=self.database, components=self.components, public_url=self.url, platform=self.platform,
+                               previous_images={name: item['images'] for name, item in self.initial_metadata['deployments'].items()},
+                               preserved_configuration='Fingerprints recorded; no infrastructure/configuration mutation is permitted',
+                               model_checks='Model/relay configuration preserved; provider inference is not run by this CLI')
+            if self.check_only:
+                self.record.update(state='preflight-only', builds='Not run', publication='Not attempted')
+                print(json.dumps(self.record, indent=2))
+                self.save('Read-only preflight completed; no release attempted')
+                return self.record
+            if not self.components:
+                self.record.update(state='verified-only', builds='Not run', publication='Not selected')
+                self.save('Database verification completed; no application release selected')
+                print(json.dumps(self.record, indent=2))
+                return self.record
+            self.backup = self.values.get('BackupReference', '').strip() or None
+            self.validation = self.values.get('ValidationReference') or self.value('ValidationReference', 'Regression/CI evidence for this source (operator reference; tests are not run here)')
+            self.save('Building local release images; nothing is published')
+            self.build()
+            if source_fingerprint(self.source) != self.source_hash:
+                raise DeploymentStopped('Exported source changed during preparation')
+            self.record.update(images=self.image_ids, backup_reference=self.backup, validation_reference=self.validation,
+                               planned_actions=[('Apply only the reviewed release-file objects; skip matching objects; create missing schema if enabled' if self.action == 'release' else 'Install thirteen tables in the verified empty owner' if self.action == 'install' else 'Database scripts skipped; compatibility verification required for backend' if self.action == 'skip' else 'Verify existing schema; no DDL'),
+                                                'Verify preserved app configuration/readiness before publishing',
+                                                'Push only selected images: '+', '.join(self.components),
+                                                'Update api and worker images, await readiness' if self.backend else 'Backend images unchanged',
+                                                'Update web image, await readiness' if self.frontend else 'Frontend image unchanged',
+                                                'Compare configuration fingerprints and unselected images; verify HTTPS'],
+                               readiness='Verified' if self.baseline else 'Conditional: app readiness and saved-connection verification must pass after schema installation',
+                               state='awaiting-publication-approval')
+            compare_protected(self.initial_metadata, self.metadata_preflight())
+            if self.baseline:
+                GUARD.compare(self.baseline, self.snapshot())
+                self.check_database_selection()
+            self.present_plan()
+            self.save('Rechecking the approved source, target and local image IDs')
+            if source_fingerprint(self.source) != self.source_hash or self.inspect_image_ids() != self.image_ids:
+                raise DeploymentStopped('Approved source/images changed; approval is no longer valid')
+            compare_protected(self.initial_metadata, self.metadata_preflight())
+            if self.action in ('install', 'release'):
+                if self.action == 'install':
+                    self.verify_empty_owner(2)
+                self.save('Installing the explicitly approved empty-owner schema')
+                self.install_database()
+                self.save('Checking app readiness and saved connection after schema installation')
+                self.baseline = self.wait_after_schema()
+                self.database = self.check_database_selection()
+                self.record['database'] = self.database
+            else:
+                GUARD.compare(self.baseline, self.snapshot())
+                self.check_database_selection()
+            (self.directory/'baseline.json').write_text(json.dumps(self.baseline, indent=2), encoding='utf-8')
+            self.save('Publishing reviewed images for selected components: '+', '.join(self.components))
+            receipt = self.release_images()
+            self.record['receipt'] = str(receipt)
+            self.save('Verifying released images, preserved configuration and database schema')
+            released = json.loads(receipt.read_text(encoding='utf-8-sig'))
+            GUARD.compare(self.baseline, self.snapshot(), released, components=self.components)
+            self.check_database_selection()
+            with urllib.request.urlopen(self.url, timeout=20) as response:
+                if response.status != 200:
+                    raise DeploymentStopped('Application HTTPS check did not return HTTP 200')
+            self.record.update(state='complete', https_status=200, web_image=released.get('web_image'), backend_image=released.get('backend_image'))
+            self.save('Release completed; configuration checks passed')
+            print('Application: '+self.url+'\nReceipt: '+str(receipt)+'\nRecord: '+str(self.directory/'result.json'))
+            print('No inference or upload/extraction write tests were run. No infrastructure or configuration changes were made by this command.')
+            return self.record
+        except (Exception, KeyboardInterrupt) as error:
+            self.record.update(state='stopped', stopped_at_phase=self.phase, error=type(error).__name__)
+            if self.db_release:
+                self.record['database_completed_objects'] = list(self.db_release.applied)
+            if getattr(self.runner, 'last_receipt', None):
+                self.record['reported_receipt'] = str(self.runner.last_receipt)
+            if self.directory:
+                (self.directory/'result.json').write_text(json.dumps(self.record, indent=2), encoding='utf-8')
+                print('Stopped. Review phase/receipt before retrying: '+str(self.directory/'result.json'), file=sys.stderr)
+                if self.record.get('database_installed'):
+                    print('The approved schema was installed before the failure. Do not rerun a fresh install over it.', file=sys.stderr)
+                elif self.record.get('database_install_attempted'):
+                    print('Schema DDL was attempted and may have committed partially. Inspect the result record and owner before any retry.', file=sys.stderr)
+            raise
+        finally:
+            if self.db_release:
+                self.db_release.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--inputs', type=Path, help='Non-secret destination JSON; missing values are prompted/discovered')
+    parser.add_argument('--check-only', action='store_true', help='Read-only target/schema preflight; no builds, DDL, push or rollout')
+    parser.add_argument('--working-tree', action='store_true', help='Freeze saved local application/database files, including non-ignored new files; Ref is ignored')
+    options = parser.parse_args()
+    try:
+        Workflow(load_inputs(options.inputs), options.check_only, working_tree=options.working_tree).run()
+    except (DeploymentStopped, ORACLE_RELEASE.OracleReleaseError, GUARD.ReleaseCheckError, SCHEMA.SchemaMismatch, OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+        print('Lapi deployment stopped: '+str(error), file=sys.stderr)
+        return 1
+    except (KeyboardInterrupt, EOFError):
+        print('Lapi deployment cancelled; inspect the private record before retrying.', file=sys.stderr)
+        return 130
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

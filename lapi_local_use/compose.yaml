@@ -1,0 +1,110 @@
+name: lapi
+x-backend: &backend
+  build:
+    context: ./lapi_backend
+    args:
+      INSTALL_LOCAL_EMBEDDINGS: ${INSTALL_LOCAL_EMBEDDINGS:-true}
+      INSTALL_CLOUD_MODELS: ${INSTALL_CLOUD_MODELS:-true}
+  restart: unless-stopped
+  environment: &backend-env
+    DATABASE_URL: postgresql+psycopg://lapi:${POSTGRES_PASSWORD:?Run lapi_local_use/lapi_scripts/setup.sh first}@db:5432/lapi
+    LAPI_STORAGE_ROOT: /data
+    LAPI_CONFIG_FILE: /etc/lapi/runtime.toml
+    LAPI_CONFIG_PROFILE: ${LAPI_CONFIG_PROFILE:-default}
+    # Either the key itself (local development) or the OCI Vault secret that holds it.
+    LAPI_MASTER_KEY: ${LAPI_MASTER_KEY:-}
+    LAPI_MASTER_KEY_SECRET_OCID: ${LAPI_MASTER_KEY_SECRET_OCID:-}
+    LAPI_VAULT_AUTH_MODE: ${LAPI_VAULT_AUTH_MODE:-instance_principal}
+    QDRANT_URL: http://qdrant:6333
+    MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
+    EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-sentence_transformers}
+    SEARCH_PROVIDER: ${SEARCH_PROVIDER:-qdrant}
+    LAPI_ALLOW_MOCK: ${LAPI_ALLOW_MOCK:-false}
+    LAPI_LOCAL_ONLY: ${LAPI_LOCAL_ONLY:-false}
+    LAPI_MODEL_ENDPOINT_HOSTS: ${LAPI_MODEL_ENDPOINT_HOSTS:-}
+    HF_HOME: /data/model-cache
+    OCI_REGION: ${OCI_REGION:-}
+    OCI_NAMESPACE: ${OCI_NAMESPACE:-}
+    OCI_BUCKET: ${OCI_BUCKET:-}
+    OCI_OBJECT_PREFIX: ${OCI_OBJECT_PREFIX:-lapi}
+    OCI_AUTH_MODE: ${OCI_AUTH_MODE:-config_file}
+    OCI_CONFIG_FILE: /run/oci/config
+    OCI_PROFILE: ${OCI_PROFILE:-DEFAULT}
+    OCI_QUEUE_ID: ${OCI_QUEUE_ID:-}
+    OCI_QUEUE_ENDPOINT: ${OCI_QUEUE_ENDPOINT:-}
+  volumes:
+    - storage:/data
+    - ./lapi_backend/lapi_app/lapi_config/runtime.toml:/etc/lapi/runtime.toml:ro
+  depends_on:
+    db:
+      condition: service_healthy
+    qdrant:
+      condition: service_started
+  networks: [private, outbound]
+services:
+  web:
+    build: ./lapi_frontend
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      LAPI_DEPLOYMENT_TARGET: local
+      LAPI_API_LOCATION: local
+      LAPI_WORKER_LOCATION: local
+      LAPI_MODEL_LOCATION: ${LAPI_MODEL_LOCATION:-unknown}
+    ports:
+      - '127.0.0.1:${LAPI_PORT:-3000}:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/auth/status').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 10s
+    # A publishable bridge is required for the localhost-bound UI port.
+    # Database/vector services stay exclusively on the internal network.
+    networks: [private, edge]
+  api:
+    <<: *backend
+    command: uvicorn lapi_app.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready',timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 10
+      start_period: 20s
+  worker:
+    <<: *backend
+    command: python -m lapi_app.worker
+    depends_on:
+      api:
+        condition: service_healthy
+  db:
+    image: postgres:17.11-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lapi
+      POSTGRES_USER: lapi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run lapi_local_use/lapi_scripts/setup.sh first}
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U lapi -d lapi']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [private]
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    restart: unless-stopped
+    volumes: [qdrant:/qdrant/storage]
+    networks: [private]
+volumes:
+  postgres:
+  storage:
+  qdrant:
+networks:
+  private:
+    internal: true
+  outbound: {}
+  edge: {}

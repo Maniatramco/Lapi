@@ -1,0 +1,67 @@
+"""OpenAI page transcription using the dataset's pinned extraction connection."""
+import base64
+import hashlib
+import json
+import math
+from .... import core, runtime_config
+from ...cloud_ocr import provider, eligible
+from ...connection import ModelConnection
+from ...parameters import for_stage
+from ....lapi_agent import token_usage
+
+
+def configure(snapshot, limits):
+    cfg = snapshot['settings']
+    connection = cfg.get('model_connection') or {}
+    if provider(snapshot) != 'openai' or not eligible(snapshot):
+        raise ValueError('OpenAI OCR requires a mapped GPT-4o or GPT-4o Mini extraction model; embedding models cannot read images.')
+    identity = {key: snapshot.get(key) for key in ('model_id', 'model_version', 'connection_profile_id', 'connection_profile_version', 'provider_model')}
+    identity.update(connection=connection, parameters=cfg.get('extra_parameters', {}))
+    if (cfg.get('stage_parameters') or {}).get('extraction'):
+        identity['stage_parameters'] = cfg['stage_parameters']['extraction']
+    return limits | {'provider': 'openai', 'model': snapshot['provider_model'],
+        'endpoint': connection['endpoint'], 'protocol': 6, 'execution': snapshot,
+        'timeout': min(limits['timeout'], cfg['timeout']),
+        'context': cfg.get('context_limit') or runtime_config.get('LAPI_DEFAULT_MODEL_CONTEXT_TOKENS'),
+        'output': min(limits['output'], cfg.get('max_output_tokens') or runtime_config.get('LAPI_DEFAULT_MODEL_OUTPUT_TOKENS')),
+        'digest': hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest(),
+        'digest_type': 'configuration'}
+
+
+def visual_tokens(width, height, model):
+    # Official high-detail GPT-4o sizing: 2048 square, then at most 768 short
+    # side, then 512 tiles. Estimate only; preserve original inference pixels.
+    scale=min(1,2048/max(width,height))
+    width=max(1,math.floor(width*scale));height=max(1,math.floor(height*scale))
+    if min(width,height)>768:
+        scale=768/min(width,height)
+        width=max(1,math.floor(width*scale));height=max(1,math.floor(height*scale))
+    base,tile=(2833,5667) if model.startswith('gpt-4o-mini') else (85,170)
+    return base+tile*math.ceil(width/512)*math.ceil(height/512)
+
+
+def available(cfg):
+    with core.execution_context(cfg['execution']):
+        ModelConnection(core.settings())  # Validate pinned credentials; no inference.
+    return cfg
+
+
+def transcribe(image, cfg, instruction, schema):
+    with core.execution_context(cfg['execution']):
+        settings = core.settings()
+        adapter = ModelConnection(settings)
+        # Extraction stage with the documented OCR default (temperature 0.1);
+        # a value set in Model Registration wins.
+        extra = for_stage(settings, 'extraction', adapter.c['protocol'], adapter.c, purpose='ocr')
+        payload = {'model': adapter.model, 'max_completion_tokens': cfg['output'], **extra,
+            'messages': [{'role': 'system', 'content': instruction}, {'role': 'user', 'content': [
+                {'type': 'text', 'text': 'Transcribe every visible line. Return only text and unreadable in the requested JSON.'},
+                {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(image).decode('ascii'), 'detail': 'high'}}]}],
+            'response_format': {'type': 'json_schema', 'json_schema': {'name': 'page_transcription', 'strict': True, 'schema': schema}}}
+        call = token_usage.attempt(protocol=adapter.c['protocol'], parameters={'max_completion_tokens': cfg['output'], **extra})
+        data = adapter.chat(payload)
+        token_usage.record(data, adapter.c['protocol'], call)
+    choice = data['choices'][0]
+    message = choice.get('message') or {}
+    return {'done': choice.get('finish_reason') == 'stop' and not message.get('refusal'),
+        'message': {'content': message.get('content')}, 'done_reason': choice.get('finish_reason')}
