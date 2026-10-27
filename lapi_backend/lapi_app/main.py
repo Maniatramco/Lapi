@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, validate, ValidationError, SchemaEr
 from .core import *
 from . import providers, reranker, workflow, temporary_files, dataset_models as routing
 from .json_documents import json_document_text
+from . import file_formats
 from . import dataset_access as access
 from .admin_documents import lifecycle_guard
 
@@ -275,6 +276,7 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
         if name.lower().endswith('.json'):
             try:json_document_text(raw)
             except ValueError as error:raise HTTPException(400,str(error))
+        if problem:=file_formats.problem(name,raw):raise HTTPException(400,problem)
     merged = None; original_parts = []
     if merge_files is True and len(files)>1:
         from . import merged_documents
