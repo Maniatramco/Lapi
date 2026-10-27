@@ -1,6 +1,17 @@
 {
-  "version": "26.1.14.0",
+  "version": "26.1.15.0",
   "releases": [
+    {
+      "version": "26.1.15.0",
+      "date": "2026-10-27",
+      "title": "One knowledge base",
+      "changes": [
+        "All datasets now share one knowledge index built with the workspace Default embedding model: each document is embedded once, and the index catalog lives in the database instead of files on one server.",
+        "Model Registration marks one Default model per role (Chat, Extraction, Embedding). Datasets use the workspace Default unless they choose their own Chat or Extraction model; only models with a passing connection test can become Default.",
+        "Changing the Embedding Default asks for explicit confirmation, deletes the knowledge index straight away and rebuilds it; a banner on every page shows how many documents are reindexed and lets administrators retry failures. Chat answers from documents already reindexed and says the index is still building.",
+        "When existing datasets use different embedding models, an administrator chooses one Default before the shared index is built."
+      ]
+    },
     {
       "version": "26.1.14.0",
       "date": "2026-10-27",

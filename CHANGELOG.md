@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.15.0 - 27 October 2026
+
+One knowledge base
+
+- All datasets now share one knowledge index built with the workspace Default embedding model: each document is embedded once, and the index catalog lives in the database instead of files on one server.
+- Model Registration marks one Default model per role (Chat, Extraction, Embedding). Datasets use the workspace Default unless they choose their own Chat or Extraction model; only models with a passing connection test can become Default.
+- Changing the Embedding Default asks for explicit confirmation, deletes the knowledge index straight away and rebuilds it; a banner on every page shows how many documents are reindexed and lets administrators retry failures. Chat answers from documents already reindexed and says the index is still building.
+- When existing datasets use different embedding models, an administrator chooses one Default before the shared index is built.
+
 ## v26.1.14.0 - 27 October 2026
 
 Agentic chat, skills and memory
