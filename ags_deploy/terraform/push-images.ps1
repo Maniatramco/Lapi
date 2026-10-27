@@ -7,9 +7,16 @@ param(
     [string]$Username
 )
 $ErrorActionPreference = 'Stop'
+# A shell opened before Terraform was installed with winget has an old PATH.
+$terraform = (Get-Command terraform -ErrorAction SilentlyContinue).Source
+if (-not $terraform) {
+    $terraform = Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Links\terraform.exe", "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Hashicorp.Terraform*\terraform.exe" -ErrorAction SilentlyContinue |
+        Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $terraform) { throw 'Terraform not found. Install it (winget install Hashicorp.Terraform) or open a new terminal.' }
 Push-Location $PSScriptRoot
 try {
-    $registry = terraform output -raw registry
+    $registry = & $terraform output -raw registry
     if (-not $registry) { throw 'Run terraform apply first so the registry and repositories exist.' }
     $registryHost = $registry.Split('/')[0]
     $namespace = $registry.Split('/')[1]
@@ -18,7 +25,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'docker login failed.' }
 
     $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
-    $repositories = terraform output -json image_repositories | ConvertFrom-Json
+    $repositories = & $terraform output -json image_repositories | ConvertFrom-Json
     $api = "$($repositories.api):$Tag"
     $web = "$($repositories.web):$Tag"
     docker build --platform linux/amd64 -t $api `
