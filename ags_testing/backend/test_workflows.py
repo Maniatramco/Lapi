@@ -229,3 +229,20 @@ def test_create_admin_command_only_creates_the_first_administrator(monkeypatch,c
         admin=s.scalar(select(User));assert (admin.id,admin.username,admin.role)==('administrator','admin','administrator')
     with pytest.raises(ValueError,match='already configured'):command.create_admin('intruder','another-test-pass')
     with Session() as s:assert [u.username for u in s.scalars(select(User))]==['admin']
+
+
+def test_first_admin_from_environment_is_created_once(monkeypatch):
+    from ags_app import create_admin as command, vault_master_key
+    from sqlalchemy import select
+    monkeypatch.setattr(vault_master_key,'read_secret',lambda secret_id:'vault-admin-password')
+    assert command.ensure_from_environment() is False  # Not configured: nothing happens.
+    monkeypatch.setenv('AEGIS_FIRST_ADMIN_USERNAME','owner')
+    monkeypatch.setenv('AEGIS_FIRST_ADMIN_PASSWORD_SECRET_OCID','ocid1.vaultsecret.oc1..admin')
+    assert command.ensure_from_environment() is True
+    with Session() as s:
+        admin=s.scalar(select(User));assert (admin.username,admin.role)==('owner','administrator')
+        assert password_hash  # Stored hashed, never as the secret value.
+        assert admin.password_hash!='vault-admin-password'
+    monkeypatch.setenv('AEGIS_FIRST_ADMIN_USERNAME','someone-else')
+    assert command.ensure_from_environment() is False
+    with Session() as s:assert [u.username for u in s.scalars(select(User))]==['owner']

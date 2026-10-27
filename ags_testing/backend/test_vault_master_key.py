@@ -74,3 +74,15 @@ def test_store_creates_a_base64_secret_and_rejects_bad_keys():
     assert (fake.details.vault_id, fake.details.key_id, fake.details.secret_name) == ('ocid1.vault', 'ocid1.key', 'lapi-master-key')
     with pytest.raises(vault.MasterKeyUnavailable):
         vault.store('c', 'v', 'k', 'n', 'short', client=FakeVaults())
+
+
+def test_autonomous_database_url_uses_dsn_and_vault_password(monkeypatch):
+    from ags_app.database import database_url
+    monkeypatch.setattr(vault, '_client', lambda service, **_: FakeSecrets('Db-password-from-vault-1'))
+    dsn = '(description=(address=(protocol=tcps)(port=1522)(host=abc.adb.ap-mumbai-1.oraclecloud.com))(connect_data=(service_name=x_low.adb.oraclecloud.com)))'
+    url = database_url(None, {'DATABASE_PROVIDER': 'oracle', 'ORACLE_USER': 'LAPI', 'ORACLE_DSN': dsn,
+                              'ORACLE_PASSWORD_SECRET_OCID': 'ocid1.vaultsecret.oc1..db'})
+    assert (url.drivername, url.username, url.password, url.host, url.query['dsn']) == ('oracle+oracledb', 'LAPI', 'Db-password-from-vault-1', None, dsn)
+    from sqlalchemy.dialects.oracle.oracledb import OracleDialect_oracledb
+    args, kwargs = OracleDialect_oracledb().create_connect_args(url)
+    assert kwargs['dsn'] == dsn and kwargs['password'] == 'Db-password-from-vault-1'

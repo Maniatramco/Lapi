@@ -13,8 +13,7 @@ def adapter(destination):
 
 
 def routes():
-    root=core.local_store.path('storage-routes/marker').parent
-    return [core.local_store.json('storage-routes/'+p.name) for p in root.glob('*.json')]
+    return [core.local_store.json(key) for key in core.files_in('storage-routes/','*.json')]
 
 
 def inventory(prefixes,keys=()):

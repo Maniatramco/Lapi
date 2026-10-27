@@ -5,6 +5,7 @@ an existing workspace is never taken over. Passwords are not accepted as
 command-line arguments or printed.
 """
 import json
+import os
 import sys
 from sqlalchemy import select
 from . import core
@@ -23,6 +24,29 @@ def create_admin(username, password):
                 raise ValueError('An administrator is already configured; no account was changed.')
             session.add(core.User(id='administrator', username=username,
                                   password_hash=core.password_hash(password), role='administrator'))
+
+
+def ensure_from_environment():
+    """Create the first administrator at start-up on hosts without a shell (Container Instances).
+
+    Uses AEGIS_FIRST_ADMIN_USERNAME and the OCI Vault secret in
+    AEGIS_FIRST_ADMIN_PASSWORD_SECRET_OCID. Does nothing once any account exists.
+    """
+    username = os.getenv('AEGIS_FIRST_ADMIN_USERNAME', '').strip()
+    secret_id = os.getenv('AEGIS_FIRST_ADMIN_PASSWORD_SECRET_OCID', '').strip()
+    if not username or not secret_id:
+        return False
+    with core.Session() as session:
+        if session.scalar(select(core.User)):
+            return False
+    from .vault_master_key import read_secret
+    try:
+        create_admin(username, read_secret(secret_id))
+    except ValueError as error:
+        if 'already configured' in str(error):
+            return False  # The worker or another start created it first.
+        raise
+    return True
 
 
 def main():

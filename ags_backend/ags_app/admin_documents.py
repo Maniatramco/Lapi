@@ -105,9 +105,8 @@ def recorded_mapping_matches(row,index,configuration,models):
 def cleanup_knowledge(ids):
     from . import providers
     from qdrant_client.models import PointIdsList
-    root=core.local_store.path('knowledge/marker').parent
-    for path in root.glob('*/manifest.json'):
-        name=path.parent.name
+    for manifest_key in core.files_in('knowledge/','*/manifest.json'):
+        name=manifest_key.split('/')[1]
         with core.document_lock('unified-knowledge-'+name):
             ref='knowledge/'+name+'/manifest.json';manifest=core.local_store.json(ref)
             removed={key for key,value in manifest.get('points',{}).items() if
@@ -176,7 +175,7 @@ def cleanup(id,actor,confirmation,expected_version,expected_impact):
                     saved['execution_keys']=execution_keys;core.local_store.put_json(journal_ref(id),saved)
                 if 'upload_receipts' not in saved:
                     receipt_keys={r['key'] for r in document_storage.routes() if r['key'].startswith('upload-receipts/')}
-                    receipt_keys.update('upload-receipts/'+p.name for p in core.local_store.path('upload-receipts/marker').parent.glob('*.json'))
+                    receipt_keys.update(core.files_in('upload-receipts/','*.json'))
                     saved['upload_receipts']={}
                     for key in receipt_keys:
                         try:receipt=core.store.json(key)

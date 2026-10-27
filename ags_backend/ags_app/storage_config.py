@@ -57,7 +57,8 @@ def route(key, create=False):
                 try:destination=core.local_store.json(route_ref(entity+'/'+suffix))['destination'];break
                 except FileNotFoundError:pass
     # Legacy local objects keep their original location after a provider switch.
-    if destination is None and (core.local_store.path(key).is_file() or entity and core.local_store.path(entity).is_dir()):
+    # (Only a disk-based control store can have them.)
+    if destination is None and core.local_store is core.scratch and (core.local_store.path(key).is_file() or entity and core.local_store.path(entity).is_dir()):
         destination={'storage_provider':'local','local_storage_path':str(core.DATA)}
     if destination is None:destination=active()
     if create:
@@ -73,6 +74,7 @@ class DirectoryStorage(core.FileStorage):
         return target
 
 def backend(key,create=False):
+    if key.startswith(CONTROL) and core.local_store is not core.scratch:return core.local_store
     destination=route(key,create)
     if destination['storage_provider']!='oci':return DirectoryStorage(destination.get('local_storage_path'))
     from .object_cache import CachedObjects,eligible

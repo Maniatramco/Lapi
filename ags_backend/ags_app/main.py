@@ -22,6 +22,8 @@ async def lifespan(app):
     from .vault_master_key import master_key, SECRET_ENV
     if os.getenv(SECRET_ENV):master_key()  # Fail at startup, not on the first saved credential.
     init()
+    from .create_admin import ensure_from_environment
+    ensure_from_environment()
     from . import reranker
     if reranker.enabled():
         import asyncio

@@ -1,6 +1,16 @@
 {
-  "version": "26.1.12.19",
+  "version": "26.1.12.20",
   "releases": [
+    {
+      "version": "26.1.12.20",
+      "date": "2026-10-27",
+      "title": "Runs on OCI Container Instances",
+      "changes": [
+        "Lapi can run as stateless containers on OCI Container Instances with no VM: settings, encrypted credentials and storage routes can live in Object Storage, and data and vectors in Oracle Autonomous AI Database.",
+        "The Autonomous Database password and the first administrator's password can come from OCI Vault; the first administrator is created once at start-up.",
+        "Terraform in ags_deploy/terraform provisions the network, Autonomous AI Database, bucket, Vault secrets, container registry, IAM and the container instance."
+      ]
+    },
     {
       "version": "26.1.12.19",
       "date": "2026-10-27",

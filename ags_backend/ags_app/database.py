@@ -19,6 +19,16 @@ def database_url(storage_root, environ=None):
                 password = Path(env['ORACLE_PASSWORD_FILE']).read_text(encoding='utf-8').strip()
             except OSError:
                 raise ValueError('Cannot read the configured Oracle password file.') from None
+        if env.get('ORACLE_PASSWORD_SECRET_OCID'):
+            # Autonomous Database password held in OCI Vault, read with the server's identity.
+            from .vault_master_key import read_secret
+            password = read_secret(env['ORACLE_PASSWORD_SECRET_OCID'])
+        if env.get('ORACLE_DSN'):
+            # Full TLS connect descriptor, e.g. an Autonomous Database private-endpoint profile.
+            if not env.get('ORACLE_USER') or not password:
+                raise ValueError('Oracle requires ORACLE_USER and a password with ORACLE_DSN.')
+            return URL.create('oracle+oracledb', username=env['ORACLE_USER'], password=password,
+                              query={'dsn': env['ORACLE_DSN']})
         if not env.get('ORACLE_HOST') or not env.get('ORACLE_USER') or not password:
             raise ValueError('Oracle requires ORACLE_HOST, ORACLE_USER and ORACLE_PASSWORD.')
         try:

@@ -39,17 +39,21 @@ def _valid(key):
         return False
 
 
-def _fetch(secret_id, client=None):
+def read_secret(secret_id, client=None):
+    """Return the current text of an OCI Vault secret; service details are not echoed."""
     client = client or _client('secrets', auth_mode=_auth_mode())
     try:
         content = client.get_secret_bundle(secret_id).data.secret_bundle_content.content
-        key = base64.b64decode(content).decode().strip()
+        return base64.b64decode(content).decode().strip()
     except OCIProviderUnavailable:
         raise
     except Exception:
-        # Service errors can echo request details; report only what to check.
-        raise MasterKeyUnavailable('The master key could not be read from OCI Vault. Check the secret OCID, '
+        raise MasterKeyUnavailable('A secret could not be read from OCI Vault. Check the secret OCID, '
                                    'region and that this server may read secret bundles in the vault.') from None
+
+
+def _fetch(secret_id, client=None):
+    key = read_secret(secret_id, client)
     if not _valid(key):
         raise MasterKeyUnavailable('The OCI Vault secret does not contain a valid master key.')
     return key
