@@ -71,13 +71,14 @@ resource "oci_vault_secret" "db_password" {
   vault_id       = local.vault_id
   key_id         = local.key_id
   secret_name    = "${var.name}-db-admin-password"
-  description    = "ADMIN password of lapidb; set the real value as a new version in the Console"
+  description    = "ADMIN password of lapidb (Vault-generated; copy it into lapidb's Administrator password)"
   secret_content {
     content_type = "BASE64"
     content      = base64encode("replace-in-console")
   }
-  # The real password is added in the Console; Terraform must never overwrite it.
+  # Vault generates the real password (DBAAS_DEFAULT_PASSWORD template, enabled
+  # outside Terraform); Terraform must never overwrite it or the generation setting.
   lifecycle {
-    ignore_changes = [secret_content]
+    ignore_changes = [secret_content, enable_auto_generation, secret_generation_context, description]
   }
 }
