@@ -6,3 +6,4 @@ crash.log
 plan.txt
 apply.txt
 *.tfplan
+tfplan

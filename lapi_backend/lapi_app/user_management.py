@@ -12,6 +12,12 @@ _attempts = {}
 
 
 def verify_password(user, value):
+    from . import keycloak_auth
+    if keycloak_auth.managed(user.id):
+        # No Lapi password exists to re-enter: a sign-in within ten minutes confirms instead.
+        if not keycloak_auth.recently_signed_in(user.id):
+            raise HTTPException(401, 'Sign in with Keycloak again to confirm this change.')
+        return
     now = time.monotonic()
     attempts = [stamp for stamp in _attempts.get(user.id, []) if stamp > now - 300]
     if len(attempts) >= 10:
@@ -51,10 +57,23 @@ class DeleteUser(BaseModel):
     current_password: SecretStr = Field(min_length=1, max_length=200)
 
 
+def keycloak_refuses(message):
+    from . import keycloak_auth
+    if keycloak_auth.enabled():
+        raise HTTPException(409, message)
+
+
+def keycloak_owns_password(user):
+    from . import keycloak_auth
+    if keycloak_auth.managed(user.id):
+        raise HTTPException(409, 'This account signs in with Keycloak; change its password in Keycloak.')
+
+
 def public_user(user):
     return {key: getattr(user, key) for key in (
         'id', 'username', 'role', 'created_at', 'updated_at', 'created_by', 'updated_by')
-    } | {'is_admin': user.role == 'administrator'}
+    } | {'is_admin': user.role == 'administrator',
+         'sign_in': 'keycloak' if user.id.startswith('kc-') else 'password'}
 
 
 def matched_password(body):
@@ -163,6 +182,7 @@ def install(app, auth):
 
     @router.post('/api/users')
     def create_user(body: CreateUser, owner=Depends(administrator)):
+        keycloak_refuses('People are added in Keycloak. They appear here after their first sign-in.')
         password = matched_password(body)
         with core.document_lock('administrator-auth'), account_audit(owner):
             with core.Session.begin() as session:
@@ -190,6 +210,7 @@ def install(app, auth):
                 user = session.get(core.User, user_id)
                 if not user:
                     raise HTTPException(404, 'User not found.')
+                keycloak_owns_password(user)
                 user.password_hash = core.password_hash(password)
                 session.execute(delete(core.Login).where(core.Login.owner == user.id))
         return {'ok': True, 'sessions_revoked': True}
@@ -211,6 +232,8 @@ def install(app, auth):
                 verify_password(actor,body.current_password.get_secret_value())
                 user=next((user for user in accounts if user.id==user_id),None)
                 if not user:raise HTTPException(404,'User not found.')
+                from . import keycloak_auth
+                if keycloak_auth.managed(user.id):raise HTTPException(409,'Keycloak sets this role: add or remove the Keycloak role '+keycloak_auth._settings()['admin_role']+'. Lapi applies it at the next sign-in.')
                 if user.role==body.role:return {'user':public_user(user),'sessions_revoked':False}
                 if user.role=='administrator' and body.role=='user' and sum(account.role=='administrator' for account in accounts)<=1:
                     raise HTTPException(409,'Keep at least one administrator. Promote another user before changing this role.')
@@ -229,6 +252,7 @@ def install(app, auth):
                 user = session.get(core.User, owner)
                 if not user:
                     raise HTTPException(401, 'Sign in required.')
+                keycloak_owns_password(user)
                 verify_password(user, body.current_password.get_secret_value())
                 user.password_hash = core.password_hash(password)
                 session.execute(delete(core.Login).where(core.Login.owner == owner))

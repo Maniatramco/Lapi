@@ -22,6 +22,10 @@ def dataset_ids(actor, session):
         return set(session.scalars(live))
     if not session.get(core.User, actor) and request_actor.get() is None:
         return set(session.scalars(live.where(core.Record.owner == actor)))
+    from . import authz
+    if authz.enabled():
+        # Intersect in Python: Oracle limits IN lists to 1000 values.
+        return set(session.scalars(live)) & authz.viewable_datasets(actor)
     return set(session.scalars(select(relational.UserDataset.dataset_id).where(relational.UserDataset.user_id == actor,relational.UserDataset.enabled == True,relational.UserDataset.dataset_id.in_(live))))
 
 

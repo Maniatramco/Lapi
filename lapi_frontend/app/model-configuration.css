@@ -107,3 +107,8 @@ body:has(.agent-shortcut) .dataset-mappings>.mapping-actions{padding-right:90px}
   .model-mapping-screen .mapping-dataset-select{padding:12px}.dataset-mappings>.panel-head{padding:12px}.mapping-table{max-height:55dvh}.mapping-table table{min-width:850px}.mapping-category-column{width:120px}.mapping-table :is(th,td){padding:9px 10px}.dataset-mappings>.mapping-actions{padding:10px 12px}.mapping-actions>.small{flex-basis:100%}body:has(.agent-shortcut) .dataset-mappings>.mapping-actions{padding-right:80px}
   .registration-test-consent { align-items: flex-start; }
 }
+/* "Use for": one model can serve several roles. */
+.registration-uses { border: 0; padding: 0; margin: 0 0 16px; min-width: 0; }
+.registration-uses legend { padding: 0; margin-bottom: 8px; font-weight: 600; }
+.registration-uses .row { gap: 8px 18px; }
+.registration-uses small { display: block; margin-top: 6px; color: var(--muted); }

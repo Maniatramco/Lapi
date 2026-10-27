@@ -92,3 +92,40 @@ variable "existing_key_id" {
   type        = string
   default     = ""
 }
+
+# --- Sign-in (Keycloak) and permissions (OpenFGA) ---
+
+variable "keycloak_url" {
+  description = "Your existing Keycloak, e.g. https://sso.example.com (no /realms/...). Empty keeps Lapi's own password sign-in."
+  type        = string
+  default     = ""
+}
+
+variable "keycloak_realm" {
+  type    = string
+  default = ""
+}
+
+variable "keycloak_client_id" {
+  description = "OpenID Connect client for Lapi in that realm (standard flow, PKCE S256)."
+  type        = string
+  default     = "lapi"
+}
+
+variable "keycloak_confidential_client" {
+  description = "true when the Keycloak client has Client authentication on: its secret goes in the Vault secret lapi-keycloak-client-secret."
+  type        = bool
+  default     = true
+}
+
+variable "keycloak_admin_role" {
+  description = "Realm or client role that makes someone a Lapi administrator."
+  type        = string
+  default     = "lapi-administrator"
+}
+
+variable "public_url" {
+  description = "Address people open Lapi at; Keycloak redirects back to <public_url>/api/auth/keycloak/callback. Empty uses http://<load balancer IP>."
+  type        = string
+  default     = ""
+}

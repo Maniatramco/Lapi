@@ -69,6 +69,10 @@ class RegistrationInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=120)
     category: Literal['embedding', 'chat', 'extraction']
+    # Everything this model is used for; `category` is the one the test and parameters
+    # follow. Chat and Extraction can share one model; Embedding stays on its own
+    # (the form saves a separate embedding registration of the same model).
+    capabilities: list[Literal['chat', 'extraction', 'embedding']] | None = Field(default=None, min_length=1, max_length=2)
     provider_model: str = Field(min_length=1, max_length=200)
     connection: ConnectionInput
     timeout: int = Field(default=runtime_config.get('LAPI_MODEL_REGISTRATION_TIMEOUT'), ge=5, le=1800)
@@ -120,10 +124,17 @@ def prepare(body, owner, existing=None):
         if any(len(value) > 32768 for value in secret.values()):
             raise ConnectionError('Credential values are too large.')
         md = None
+        uses = sorted(set(body.capabilities or [body.category]))
+        if body.category not in uses:
+            raise ConnectionError('Use for must include the model category.')
+        if 'embedding' in uses and len(uses) > 1:
+            raise ConnectionError('Embedding is registered on its own. Save Chat and Extraction as one model, and Embedding as another.')
         if existing:
             md, profile, snapshot, old = previous(existing)
-            if body.category not in md['capabilities']:
-                raise ConnectionError('A registered model category cannot change. Register another model for the new category.')
+            if body.capabilities is None:
+                uses = md['capabilities']  # A form that does not send uses keeps the saved ones.
+            if body.category not in uses or ('embedding' in uses) != ('embedding' in md['capabilities']):
+                raise ConnectionError('An Embedding model cannot become a Chat or Extraction model, or the reverse. Register another model instead.')
             unchanged_destination = old and all(old.get(k) == c.get(k) for k in ('protocol', 'auth_mode', 'endpoint'))
             # Never reuse a saved key for a different endpoint or protocol implicitly.
             if not secret and not body.clear_credentials and unchanged_destination:
@@ -146,8 +157,9 @@ def prepare(body, owner, existing=None):
         params = body.extra_parameters if body.extra_parameters is not None else old_cfg.get(extra_key, {})
         stages = body.stage_parameters if body.stage_parameters is not None else old_cfg.get('stage_parameters') or {}
         try:
-            cfg[extra_key] = validate_parameters(params, c['protocol'], body.category, c, keep_null=True)
-            staged = validate_stage_parameters(stages, c['protocol'], body.category, c)
+            for use in uses:  # Shared values must suit every use (Chat and Extraction).
+                cfg[extra_key] = validate_parameters(params, c['protocol'], use, c, keep_null=True)
+                staged = validate_stage_parameters(stages, c['protocol'], use, c)
         except ValueError as exc:
             raise ConnectionError(str(exc)) from exc
         # Only stored when set, so older registrations keep an identical identity.
@@ -161,7 +173,7 @@ def prepare(body, owner, existing=None):
             cfg['max_output_tokens'] = body.max_output_tokens if body.max_output_tokens is not None else old_cfg.get('max_output_tokens') or runtime_config.get('LAPI_DEFAULT_MODEL_OUTPUT_TOKENS')
             if cfg['max_output_tokens'] + runtime_config.get('LAPI_CONTEXT_HEADROOM_TOKENS') >= cfg['context_limit']:
                 raise ConnectionError('Context tokens must exceed maximum output tokens plus '+str(runtime_config.get('LAPI_CONTEXT_HEADROOM_TOKENS'))+' tokens of headroom.')
-        return cfg, secret, (md['capabilities'] if md else [body.category])
+        return cfg, secret, uses
     except ConnectionError as exc:
         raise HTTPException(400, str(exc)) from exc
     except (ValueError, json.JSONDecodeError):

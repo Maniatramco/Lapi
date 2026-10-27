@@ -78,7 +78,10 @@ class Login(Audit,Base):
     updated_at:Mapped[float]=mapped_column(timestamp_type(),default=time.time)
 
 def is_administrator(user_id, session=None):
-    """Read the persisted role; IDs and client-supplied flags grant no access."""
+    """Read the persisted role; IDs and client-supplied flags grant no access.
+    With OpenFGA configured, OpenFGA answers (see authz.py)."""
+    from . import authz
+    if authz.enabled():return authz.is_administrator(user_id)
     if session is None:
         with Session() as active:return is_administrator(user_id,active)
     user=session.get(User,user_id)
@@ -267,6 +270,7 @@ def document_lock(document_id,*,blocking=True):
 
 # Register the relational tables and transaction hooks after storage exists.
 from . import relational
+from . import authz  # registers the OpenFGA sync listeners
 # Token usage and model price tables (created with the rest of the schema).
 from . import usage_tables
 # Shared knowledge catalog and workspace Default models (created by create_all).

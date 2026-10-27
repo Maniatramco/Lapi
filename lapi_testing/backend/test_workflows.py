@@ -32,10 +32,10 @@ def isolated(tmp_path,monkeypatch):
 def test_complete_storage_first_workflow():
     with TestClient(app) as c:
         assert c.get('/api/documents').status_code==401
-        assert c.get('/api/auth/status').json()=={'setup_required':True}
+        assert c.get('/api/auth/status').json()=={'setup_required':True,'keycloak':False}
         assert c.post('/api/auth/setup',json={'username':'admin','password':'secure-test-pass'}).status_code in (404,405)
         create_admin('admin','secure-test-pass')
-        assert c.get('/api/auth/status').json()=={'setup_required':False}
+        assert c.get('/api/auth/status').json()=={'setup_required':False,'keycloak':False}
         res=c.post('/api/auth/login',json={'username':'admin','password':'secure-test-pass'});assert res.status_code==200,res.text
         csrf=res.json()['csrf_token'];c.headers['X-CSRF-Token']=csrf
         kb=c.post('/api/knowledge-bases',json={'name':'Test corpus'}).json()

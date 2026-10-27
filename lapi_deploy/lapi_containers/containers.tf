@@ -1,5 +1,5 @@
 # Lapi on OCI Container Instances: no VM. One container instance in the private
-# subnet runs web, api and worker behind the load balancer (loadbalancer.tf).
+# subnet runs web, api, worker, ollama and openfga behind the load balancer (loadbalancer.tf).
 # Containers in one instance share localhost and the
 # "scratch" volume, which holds only file locks and caches; everything that must
 # survive a restart is in Autonomous AI Database, Object Storage and Vault.
@@ -20,6 +20,18 @@ resource "oci_artifacts_container_repository" "web" {
 }
 
 locals {
+  keycloak        = var.keycloak_url != ""
+  keycloak_secret = local.keycloak && var.keycloak_confidential_client
+  public_url      = trimsuffix(var.public_url != "" ? var.public_url : "http://${oci_load_balancer_load_balancer.lapi.ip_address_details[0].ip_address}", "/")
+  # Sign-in through Keycloak (keycloak_auth.py); empty keeps Lapi's password sign-in.
+  keycloak_env = local.keycloak ? merge({
+    LAPI_KEYCLOAK_URL        = var.keycloak_url
+    LAPI_KEYCLOAK_REALM      = var.keycloak_realm
+    LAPI_KEYCLOAK_CLIENT_ID  = var.keycloak_client_id
+    LAPI_KEYCLOAK_ADMIN_ROLE = var.keycloak_admin_role
+    LAPI_PUBLIC_URL          = local.public_url
+  }, local.keycloak_secret ? { LAPI_KEYCLOAK_CLIENT_SECRET_OCID = oci_vault_secret.keycloak_client[0].id } : {}) : {}
+
   registry  = "${var.region}.ocir.io/${data.oci_objectstorage_namespace.lapi.namespace}"
   api_image = "${local.registry}/${var.name}/api:${var.image_tag}"
   web_image = "${local.registry}/${var.name}/web:${var.image_tag}"
@@ -55,6 +67,7 @@ locals {
     LANGSMITH_TRACING                     = "false"
     LAPI_ALLOW_MOCK                       = "false"
     COOKIE_SECURE                         = "false" # Set "true" once the load balancer serves HTTPS.
+    LAPI_OPENFGA_URL                      = "http://127.0.0.1:8080"
   }
 }
 
@@ -86,7 +99,7 @@ resource "oci_container_instances_container_instance" "lapi" {
   containers {
     display_name          = "api"
     image_url             = local.api_image
-    environment_variables = local.backend_env
+    environment_variables = merge(local.backend_env, local.keycloak_env)
     volume_mounts {
       volume_name = "scratch"
       mount_path  = "/data"
@@ -105,7 +118,7 @@ resource "oci_container_instances_container_instance" "lapi" {
     display_name          = "worker"
     image_url             = local.api_image
     command               = ["python", "-m", "lapi_app.worker"]
-    environment_variables = local.backend_env
+    environment_variables = merge(local.backend_env, local.keycloak_env)
     volume_mounts {
       volume_name = "scratch"
       mount_path  = "/data"
@@ -130,6 +143,23 @@ resource "oci_container_instances_container_instance" "lapi" {
       volume_name = "scratch"
       mount_path  = "/data"
       sub_path    = "ollama"
+    }
+  }
+
+  # OpenFGA answers every permission check (authz.py). Its store is in memory and
+  # the api rebuilds it from the database, so it needs no database of its own.
+  # Only reachable on the instance's localhost; the playground is off (port 3000 is web's).
+  containers {
+    display_name = "openfga"
+    image_url    = "docker.io/openfga/openfga:v1.22.0"
+    arguments    = ["run"]
+    environment_variables = {
+      OPENFGA_DATASTORE_ENGINE   = "memory"
+      OPENFGA_HTTP_ADDR          = "127.0.0.1:8080"
+      OPENFGA_GRPC_ADDR          = "127.0.0.1:8081"
+      OPENFGA_PLAYGROUND_ENABLED = "false"
+      OPENFGA_METRICS_ENABLED    = "false"
+      OPENFGA_LOG_FORMAT         = "json"
     }
   }
 

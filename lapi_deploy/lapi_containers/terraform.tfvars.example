@@ -10,5 +10,10 @@ existing_key_id   = "ocid1.key.oc1.ap-mumbai-1.xxxx"
 # The existing Always Free Autonomous AI Database (lapidb).
 existing_db_id = "ocid1.autonomousdatabase.oc1.ap-mumbai-1.xxxx"
 
+# Sign-in with your existing Keycloak (leave keycloak_url empty for Lapi passwords).
+# keycloak_url       = "https://sso.example.com"
+# keycloak_realm     = "example"
+# keycloak_client_id = "lapi"
+
 # Empty on the first apply; set after push-images.ps1.
 image_tag = ""
