@@ -34,7 +34,7 @@ Needs Terraform 1.6+, Docker, an `~/.oci/config` allowed to manage these
 resources and IAM, and an OCI auth token for OCIR.
 
 ```powershell
-cd lapi_deploy\terraform
+cd lapi_deploy\lapi_containers
 copy terraform.tfvars.example terraform.tfvars   # fill in OCIDs
 terraform init
 terraform apply                                  # image_tag empty: everything except the container instance
