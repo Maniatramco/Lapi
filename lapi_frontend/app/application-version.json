@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.7",
+  "version": "26.1.16.8",
   "releases": [
+    {
+      "version": "26.1.16.8",
+      "date": "2026-10-27",
+      "title": "Clear errors for files that are not really PDF or DOCX",
+      "changes": [
+        "Uploads and cloud imports now check that a .pdf or .docx file really is a PDF or Word document, and say what it actually is (for example a saved web link, a web page or a renamed file) instead of failing later with \"Processing failed\".",
+        "Indexing a damaged or mislabelled file that was stored earlier now reports the same clear reason."
+      ]
+    },
     {
       "version": "26.1.16.7",
       "date": "2026-10-27",

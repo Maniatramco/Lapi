@@ -97,10 +97,14 @@ def test_upload_and_extract_confirmation_persists_mode_and_template(system):
     done=s.api.get('/api/agent-v2/plans/'+p['id']).json()
     assert all(c['status']=='completed' for c in done['calls'])
 
-def test_failed_upload_can_continue_ready_and_ended_request_cannot_execute(system):
+def test_failed_upload_can_continue_ready_and_ended_request_cannot_execute(system,monkeypatch):
+    from lapi_app import file_formats
     s=system;d=dataset(s);t=template(s)
     p=plan(s,d,text='extract',attached_filenames=['a.txt','b.docx'],template_id=t['id'])
-    r=s.api.post(f'/api/agent-v2/plans/{p["id"]}/calls/0/upload',data={'confirmed':'true','dataset_id':d['id']},files=[('files',('a.txt',b'Valid invoice 42','text/plain')),('files',('b.docx',b'Broken','application/octet-stream'))])
+    # Upload now refuses a fake DOCX; this covers one stored before that check.
+    with monkeypatch.context() as patch:
+        patch.setattr(file_formats,'problem',lambda name,raw:None)
+        r=s.api.post(f'/api/agent-v2/plans/{p["id"]}/calls/0/upload',data={'confirmed':'true','dataset_id':d['id']},files=[('files',('a.txt',b'Valid invoice 42','text/plain')),('files',('b.docx',b'Broken','application/octet-stream'))])
     assert r.status_code==200
     assert worker.run_once() and worker.run_once()
     recover=f'/api/agent-v2/plans/{p["id"]}/calls/0/recover'

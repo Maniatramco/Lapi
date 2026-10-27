@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.8 - 27 October 2026
+
+Clear errors for files that are not really PDF or DOCX
+
+- New `lapi_app/file_formats.py` checks a file's contents against its extension: a PDF must contain the `%PDF-` header in its first 1 KB; a DOCX must be a ZIP with `word/document.xml` and `[Content_Types].xml`. The message names the file and what it actually is: only a web link, a web page, plain text, a renamed DOCX/PDF, an older `.doc`, a different ZIP archive or a damaged file.
+- Upload (`/api/documents/upload`), the agent and onboarding uploads and cloud-connector imports refuse such files with that message (400), so no document or indexing job is created. Merged uploads report it per file instead of "Cannot merge these files".
+- Indexing reports the same reason for files stored before this check, and a PDF that pypdf cannot open is reported as damaged, instead of "Processing failed; inspect service health and retry". DOCX archive safety checks still run first.
+
 ## v26.1.16.7 - 27 October 2026
 
 Google Cloud Storage connector

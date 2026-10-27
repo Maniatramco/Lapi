@@ -5,6 +5,7 @@ from .core import Session, Record, Job, store, settings, uid, init, document_loc
 from . import core, dataset_models as routing, runtime_config
 from . import providers, workflow
 from .json_documents import json_document_text
+from . import file_formats
 from .relational import audit_as
 
 MAX_ATTEMPTS=runtime_config.get('LAPI_WORKER_MAX_ATTEMPTS')
@@ -63,9 +64,13 @@ def parse_document(name,raw,*,ocr_enabled=True,progress=None,cache_id=None):
     ext=name.rsplit('.',1)[-1].lower()
     if ext=='txt':return [{'page':1,'text':raw.decode('utf-8-sig')}]
     if ext=='json':return [{'page':1,'text':json_document_text(raw)}]
+    # ZIP-based DOCX files go through the archive safety checks below first.
+    if ext=='pdf' or ext=='docx' and not raw.startswith(b'PK\x03\x04'):file_formats.check(name,raw)
     if ext=='pdf':
         from pypdf import PdfReader
-        reader=PdfReader(io.BytesIO(raw))
+        from pypdf.errors import PyPdfError
+        try:reader=PdfReader(io.BytesIO(raw));len(reader.pages)
+        except PyPdfError:raise ValueError(f'"{name}" is damaged and cannot be opened as a PDF. Download or export it again.') from None
         if reader.is_encrypted:raise ValueError('Encrypted PDFs are unsupported. Upload an unlocked copy.')
         if len(reader.pages)>1000:raise ValueError('PDF exceeds 1000 page limit')
         pages=[];total=0

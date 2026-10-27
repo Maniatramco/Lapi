@@ -78,13 +78,17 @@ def test_missing_details_and_ambiguous_names_do_not_guess(system, monkeypatch):
     assert not any(j['kind'] == 'extract' for j in s.api.get('/api/jobs').json())
 
 def test_failed_index_stops_following_extraction(system, monkeypatch):
+    from lapi_app import file_formats
     s = system; d = dataset(s); t = template(s); planner(monkeypatch, proposal())
     p = plan(s, d, template_id=t['id'])
-    assert send_files(s, p, [('files', ('bad.docx', b'Not a DOCX file', 'application/octet-stream'))]).status_code == 200
+    # Upload now refuses such files; this covers one stored before that check.
+    with monkeypatch.context() as patch:
+        patch.setattr(file_formats, 'problem', lambda name, raw: None)
+        assert send_files(s, p, [('files', ('bad.docx', b'Not a DOCX file', 'application/octet-stream'))]).status_code == 200
     assert worker.run_once()
     failed = s.api.get('/api/agent-v2/plans/' + p['id']).json()
     assert failed['calls'][0]['status'] == 'failed' and failed['calls'][0]['error']
-    assert 'invalid or damaged' in failed['calls'][0]['error']
+    assert 'is not a real Word (DOCX) document' in failed['calls'][0]['error']
     assert call(s, p, 1).status_code == 409
 
 def test_batch_prevalidation_creates_no_partial_documents(system, monkeypatch):
@@ -173,7 +177,7 @@ def test_native_planner_uses_orchestration_instruction_and_validates_output(syst
         with pytest.raises(providers.ProviderError): providers.plan(agent.PLANNER_INSTRUCTION, 'Delete.', agent.planner_schema())
 
 def test_invalid_docx_returns_a_readable_format_error():
-    with pytest.raises(ValueError, match='invalid or damaged'):
+    with pytest.raises(ValueError, match=r'"damaged.docx" is not a real Word \(DOCX\) document: it is plain text'):
         worker.parse_document('damaged.docx', b'Not a ZIP file')
     raw=io.BytesIO()
     with zipfile.ZipFile(raw,'w') as archive: archive.writestr('example.txt','A ZIP is not a DOCX.')
