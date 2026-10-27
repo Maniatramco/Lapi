@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.1 - 27 October 2026
+
+Oracle vector table at start-up; sign-in over HTTP
+
+`core.init()` now calls `prepare_vectors()` inside the existing schema lock: when the engine is Oracle and `SEARCH_PROVIDER` is `oracle`, it runs `oracle_vectors.prepare()`, which creates `lapi_knowledge_vectors` and its index if missing. Before, only activating Oracle on the Storage > Database screen created that table, so the container deployment (Oracle configured through environment variables) answered `/ready` with 503 and its api container was restarted by its health check about every 3–4 minutes; indexing and chat would also have failed.
+
+Sign-in over HTTP: browsers only provide `crypto.randomUUID` on secure pages (HTTPS or localhost), so on the plain-HTTP deployment every API call failed after sign-in with "crypto.randomUUID is not a function". A new `randomId()` helper (`lapi_frontend/app/random-id.ts`) uses `crypto.randomUUID` when present and otherwise builds a version-4 ID from `crypto.getRandomValues`; `page.tsx`, `admin-documents.tsx`, `agent-onboarding.tsx` and `re-extract.tsx` use it.
+
+Validation: full backend suite in parallel, 1,357 passed, 11 skipped, including new tests for when the table is prepared and that start-up calls it. The ID fallback was run on the live plain-HTTP page (not a secure context, `crypto.randomUUID` undefined): 500 unique, valid version-4 IDs. New unit test `lapi_testing/frontend/random-id.test.cjs`; the frontend unit tests and type-check were not run (no Node.js on this computer).
+
 ## v26.1.16.0 - 27 October 2026
 
 Containers on OCI, no setup token

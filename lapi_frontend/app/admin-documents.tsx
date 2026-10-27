@@ -4,6 +4,7 @@ import {FileText,RefreshCw,Search,Shield,Trash2,X} from 'lucide-react';
 import {WorkflowStepper} from './workflow-stepper';
 import './admin-documents.css';
 import {SummaryTiles} from './summary-tiles';
+import {randomId} from './random-id';
 
 type Entity=Record<string,any>;
 type Api=(path:string,method?:string,body?:any,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;
@@ -34,7 +35,7 @@ export function AdminDocuments({api,onChanged,onReview}:{api:Api;onChanged:()=>v
   if(busy)return;setBusy(true);setError('');setNotice('');setConsent(false);setConfirmation('');
   try{
    const detail=kind==='delete'?await api(`/admin/documents/${row.id}/deletion-preview`):kind==='extract'?await api(`/extractions/${extraction!.id}`):null;
-   setOperation({kind,row,detail,key:crypto.randomUUID()});
+   setOperation({kind,row,detail,key:randomId()});
   }catch(e){setError(e instanceof Error?e.message:'Unable to check this file.');}finally{setBusy(false);}
  }
  async function submit(){

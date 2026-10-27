@@ -168,6 +168,17 @@ def init():
             Base.metadata.create_all(engine)
             from .relational import upgrade_legacy
             with engine.begin() as connection:upgrade_legacy(connection,bootstrap_assignments=bootstrap_assignments)
+            prepare_vectors(engine)
+def prepare_vectors(engine):
+    """Create the native vector table when Oracle is both the database and the vector store.
+
+    The Storage > Database screen prepares it when an administrator activates Oracle;
+    a deployment configured through DATABASE_PROVIDER and SEARCH_PROVIDER needs it at start-up.
+    """
+    if engine.dialect.name!='oracle' or DEFAULTS['search_provider']!='oracle':return False
+    from .oracle_vectors import prepare
+    prepare(engine)
+    return True
 def secret_cipher():
     from .vault_master_key import master_key
     key=master_key()

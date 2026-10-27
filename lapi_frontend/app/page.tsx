@@ -65,6 +65,7 @@ import { NeedsAttentionDialog, attentionItems, onAttention, type AttentionScope 
 import { ManageDataset, onDatasetEditor, type ManageRequest } from "./manage-dataset";
 import { MappingOverview } from "./mapping-overview";
 import type { DatasetKnowledgeScope } from "./dataset-knowledge-picker";
+import { randomId } from "./random-id";
 
 type Entity = Record<string, any>;
 type View =
@@ -318,7 +319,7 @@ export default function App() {
       signal?: AbortSignal,
       quiet = false,
     ) => {
-      const requestId=crypto.randomUUID();
+      const requestId=randomId();
       const resource=path.split('/')[1]||'workspace';
       const section=({overview:'workspace summary',jobs:'workflow status',settings:'workspace settings',conversations:'chats',models:'available models',templates:'prompt templates'} as Record<string,string>)[resource]||resource.replaceAll('-',' ');
       const testingModel=path==='/model-registrations/test';

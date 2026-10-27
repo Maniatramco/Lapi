@@ -1,0 +1,5 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const Module=require('node:module');const ts=require('typescript');const {webcrypto}=require('node:crypto');
+const file=path.resolve(__dirname,'../../lapi_frontend/app/random-id.ts');const compiled=new Module(file,module);compiled._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,file);const {randomId}=compiled.exports;
+const V4=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+test('uses crypto.randomUUID when the page is a secure context',()=>{assert.equal(randomId({getRandomValues:()=>{throw new Error('not used');},randomUUID:()=>'from-browser'}),'from-browser');});
+test('plain-HTTP pages without randomUUID still get unique version-4 IDs',()=>{const insecure={getRandomValues:a=>webcrypto.getRandomValues(a)};const ids=new Set(Array.from({length:200},()=>randomId(insecure)));assert.equal(ids.size,200);for(const id of ids)assert.match(id,V4);});
