@@ -56,7 +56,9 @@ NOTES = {
     'GET /api/auth/status': 'Check whether the first administrator has been created. The first administrator is created on the server with python -m lapi_app.create_admin, never through the API.',
     'POST /api/auth/login': 'Verify credentials, set the HTTP-only session cookie, and return the user and CSRF token. Login attempts are rate limited.',
     'GET /api/auth/me': 'Read the signed-in user and the CSRF token used for subsequent cookie-authenticated changes.',
-    'POST /api/auth/logout': 'Invalidate the current session and clear its cookie.',
+    'POST /api/auth/logout': 'Invalidate the current session and clear its cookie. For a Keycloak account, logout_url ends the Keycloak session too.',
+    'GET /api/auth/keycloak/start': 'Begin Keycloak sign-in (authorization code with PKCE): redirect to Keycloak with a short-lived, encrypted flow cookie.',
+    'GET /api/auth/keycloak/callback': 'Finish Keycloak sign-in: verify state, nonce and token signatures, create or update the account, set the session cookie and return to Lapi.',
     'GET /api/users': 'Administrator only: list account identity and audit metadata. Password hashes are never returned.',
     'POST /api/users': 'Administrator only: create a user with matching passwords of 12–200 characters and a unique username. The account starts with no dataset assignments.',
     'POST /api/users/{user_id}/password': 'Administrator only: verify the administrator current password, reset another user password, and revoke all target sessions. Existing documents and results are preserved.',
@@ -196,7 +198,7 @@ GROUPS = {
     'overview': 'Workspace & services', 'capabilities': 'Workspace & services',
     'documentation': 'Workspace & services', 'skills': 'Chat', 'me': 'Chat', 'token-usage': 'Token usage',
 }
-PUBLIC = {'GET /health', 'GET /ready', 'GET /api/auth/status',
+PUBLIC = {'GET /health', 'GET /ready', 'GET /api/auth/status', 'GET /api/auth/keycloak/start', 'GET /api/auth/keycloak/callback',
           'POST /api/auth/login', 'POST /api/auth/recovery/prepare', 'POST /api/auth/recovery/reset'}
 
 # Illustrative, abridged envelopes from the handlers. Placeholders are never live data.
@@ -266,7 +268,8 @@ def documented_routes(app):
     seen = set()
     from .browser_recovery import router
     from .user_management import router as account_router
-    for route in [*app.routes, *router.routes, *account_router.routes]:
+    from .keycloak_auth import router as keycloak_router
+    for route in [*app.routes, *router.routes, *account_router.routes, *keycloak_router.routes]:
         if isinstance(route, APIRoute) and (route.path, frozenset(route.methods)) not in seen:
             seen.add((route.path, frozenset(route.methods)))
             yield route

@@ -57,6 +57,32 @@ the api starts. Its generated password is the Vault secret `lapi-first-admin-pas
 (Console: Identity & Security > Vault > lapi-vault > Secrets > the secret >
 Version > View secret contents). Change it after signing in.
 
+## Sign-in with Keycloak, permissions with OpenFGA
+
+OpenFGA runs as a container in the same instance (in-memory store, localhost only)
+and answers every permission check; the api rebuilds its tuples from lapidb whenever
+it starts or OpenFGA restarts. It needs no setup.
+
+Keycloak is yours (not deployed here). To sign people in with it:
+
+1. In your realm, create an OpenID Connect client `lapi`: Standard flow on,
+   Client authentication on, PKCE method S256.
+2. Create the realm role `lapi-administrator` and give it to Lapi's administrators.
+3. Set `keycloak_url`, `keycloak_realm` and `keycloak_client_id` in
+   `terraform.tfvars` and apply. Terraform creates the empty Vault secret
+   `lapi-keycloak-client-secret` and outputs `keycloak_redirect_uri`.
+4. Paste the client secret (Clients > lapi > Credentials) into that Vault secret
+   as a new version in the Console.
+5. In the Keycloak client, add `keycloak_redirect_uri` as a Valid redirect URI and
+   `<public_url>/` as a Valid post logout redirect URI. Lapi reads the secret at
+   sign-in, so a new secret version takes effect within five minutes, no restart.
+
+Accounts are created at each person's first Keycloak sign-in; their role follows
+`lapi-administrator` at every sign-in. Lapi passwords stay only for local
+administrators such as `admin` (break-glass). Lapi sessions last 12 hours, so
+disabling someone in Keycloak takes effect at their next sign-in: delete their
+Lapi account to end access at once. Keycloak should be served over HTTPS.
+
 ## Limits
 
 - **One container instance.** The api and worker share file locks through the

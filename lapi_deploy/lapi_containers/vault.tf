@@ -66,6 +66,24 @@ resource "oci_vault_secret" "master_key" {
   }
 }
 
+# Keycloak client secret: Terraform only creates the secret; paste the real value
+# from Keycloak (Clients > lapi > Credentials) as a new version in the Console.
+resource "oci_vault_secret" "keycloak_client" {
+  count          = local.keycloak_secret ? 1 : 0
+  compartment_id = var.compartment_ocid
+  vault_id       = local.vault_id
+  key_id         = local.key_id
+  secret_name    = "${var.name}-keycloak-client-secret"
+  description    = "Client secret of the Keycloak client ${var.keycloak_client_id}; paste it in the Console"
+  secret_content {
+    content_type = "BASE64"
+    content      = base64encode("replace-in-console")
+  }
+  lifecycle {
+    ignore_changes = [secret_content, description]
+  }
+}
+
 resource "oci_vault_secret" "db_password" {
   compartment_id = var.compartment_ocid
   vault_id       = local.vault_id
@@ -79,6 +97,6 @@ resource "oci_vault_secret" "db_password" {
   # Vault generates the real password (DBAAS_DEFAULT_PASSWORD template, enabled
   # outside Terraform); Terraform must never overwrite it or the generation setting.
   lifecycle {
-    ignore_changes = [secret_content, enable_auto_generation, secret_generation_context, description]
+    ignore_changes = [secret_content, enable_auto_generation, secret_generation_context, description, replication_config]
   }
 }

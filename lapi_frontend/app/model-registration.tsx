@@ -58,12 +58,19 @@ const CHAT_APIS: Record<string, { value: string; label: string }[]> = {
   ollama: [{ value: "chat_completions", label: "Ollama chat (/api/chat)" }],
 };
 
+const USES: [string, string][] = [["chat", "Chat"], ["extraction", "Extraction"], ["embedding", "Embedding"]];
+/** The use the connection test and parameter fields follow; Chat first, Embedding only on its own. */
+const primaryUse = (uses: string[]) => uses.includes("chat") ? "chat" : uses.includes("extraction") ? "extraction" : "embedding";
+const companionName = (name: string) => `${name.trim().slice(0, 108)} (embedding)`;
+/** The form keeps `uses` locally; the API takes `capabilities`. */
+const withoutUses = ({ uses, ...rest }: Entity) => rest;
+
 export function ModelRegistration({ models, settings, api, run, busy, onSaved, onMapping, onDefaultsChanged }: {
   models: Entity[]; settings: Entity; api: Api; run: (fn: () => Promise<void>) => Promise<void>;
   busy: boolean; onSaved: (model: Entity) => void; onMapping: () => void; onDefaultsChanged?: () => void;
 }) {
   const defaults = settings.model_defaults;
-  const blank = (): Entity => ({ name: "", category: "chat", provider_model: "", timeout: defaults?.timeout, context_limit: defaults?.context_limit, max_output_tokens: defaults?.max_output_tokens, enabled: true,
+  const blank = (): Entity => ({ name: "", category: "chat", uses: ["chat"], provider_model: "", timeout: defaults?.timeout, context_limit: defaults?.context_limit, max_output_tokens: defaults?.max_output_tokens, enabled: true,
     credentials: {}, clear_credentials: false, allow_external: false,
     connection: { protocol: "ollama", endpoint: settings.ollama_endpoint || endpointHints.ollama, auth_mode: "none", region: "", project_id: "", workspace_id: "", compartment_id: "", profile: "DEFAULT", embedding_format: "titan", chat_format: "generic", chat_api: "chat_completions", dimensions: null, structured_output: true } });
   const [form, setForm] = useState<Entity>(blank);
@@ -113,6 +120,16 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
   }, [api, open, schemaKey]);
   const resetParameters = () => { setExtraText("{}"); setStageValues({}); setScope("model"); };
   const change = (key: string, value: any) => { setForm(current => ({ ...current, [key]: value, ...(key === "category" ? { context_limit: value === "embedding" ? defaults?.embedding_context_limit : defaults?.context_limit } : {}) })); if (key === "category") resetParameters(); setTest(null); };
+  const uses: string[] = form.uses || [form.category];
+  // Embedding alongside Chat/Extraction is saved as a second, embedding-only registration.
+  const companion = !editing && uses.includes("embedding") && uses.length > 1;
+  const toggleUse = (use: string, on: boolean) => {
+    const next = USES.map(([value]) => value).filter(value => value === use ? on : uses.includes(value));
+    if (!next.length) return;
+    if (primaryUse(next) !== form.category) change("category", primaryUse(next));
+    setForm(current => ({ ...current, uses: next, category: primaryUse(next) }));
+    setTest(null);
+  };
   const connectionChange = (key: string, value: any) => {
     setForm(current => ({ ...current, connection: { ...current.connection, [key]: value },
       ...(["protocol", "endpoint", "auth_mode"].includes(key) ? { credentials: {}, allow_external: false } : {}) }));
@@ -124,7 +141,7 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
     const initial = blank();
     if (model) {
       initial.name = model.name; initial.provider_model = model.provider_model;
-      initial.category = model.capabilities[0]; initial.enabled = model.enabled; initial.timeout = model.timeout || defaults.timeout; initial.context_limit = model.context_limit || (initial.category === "embedding" ? defaults.embedding_context_limit : defaults.context_limit); initial.max_output_tokens = model.max_output_tokens || defaults.max_output_tokens;
+      initial.uses = [...model.capabilities]; initial.category = primaryUse(model.capabilities); initial.enabled = model.enabled; initial.timeout = model.timeout || defaults.timeout; initial.context_limit = model.context_limit || (initial.category === "embedding" ? defaults.embedding_context_limit : defaults.context_limit); initial.max_output_tokens = model.max_output_tokens || defaults.max_output_tokens;
       if (model.connection) initial.connection = { ...initial.connection, ...model.connection };
       else if (model.provider !== "ollama") {
         initial.connection = { ...initial.connection, protocol: "openai-compatible", auth_mode: "api_key", endpoint: "" };
@@ -151,8 +168,23 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
   const loadHistory = () => { if (!editing || history) return; setHistoryError(""); api(`/model-registrations/${editing.id}/parameter-history`).then(value => setHistory(Array.isArray(value?.history) ? value.history : [])).catch(() => setHistoryError("Parameter history could not load.")); };
   // A provider with one chat API always sends its default, whatever was chosen before switching.
   const chatApi = (CHAT_APIS[form.connection.protocol] || []).some(api => api.value === form.connection.chat_api) ? form.connection.chat_api : "chat_completions";
-  const payload = () => ({ ...form, connection: { ...form.connection, chat_api: chatApi }, max_output_tokens: form.category === "embedding" ? null : form.max_output_tokens, extra_parameters: parseModelParameters(extraText, supported), stage_parameters: stagesSent, existing_model_id: editing?.id || null });
+  const payload = () => ({ ...withoutUses(form), capabilities: form.category === "embedding" ? ["embedding"] : uses.filter(u => u !== "embedding"), connection: { ...form.connection, chat_api: chatApi }, max_output_tokens: form.category === "embedding" ? null : form.max_output_tokens, extra_parameters: parseModelParameters(extraText, supported), stage_parameters: stagesSent, existing_model_id: editing?.id || null });
   const testPayload = () => ({ ...payload(), test_stages: testStages(form.category, modelValues, stagesSent) });
+  // Built the same way for its test and its save, so the passed test counts for Defaults.
+  const companionPayload = () => ({ ...withoutUses(form), name: companionName(form.name), category: "embedding", capabilities: ["embedding"],
+    connection: { ...form.connection, chat_api: "chat_completions" }, context_limit: defaults?.embedding_context_limit, max_output_tokens: null,
+    extra_parameters: {}, stage_parameters: {}, existing_model_id: null });
+  /** Test every ticked use: the main one, Extraction alongside Chat, and the embedding registration. */
+  const testAll = async () => {
+    const result = await api("/model-registrations/test", "POST", testPayload());
+    if (form.category === "chat" && uses.includes("extraction")) {
+      const extraction = await api("/model-registrations/test", "POST", { ...payload(), category: "extraction", test_stages: [] });
+      result.schema_validated = extraction.schema_validated;
+    }
+    if (companion) result.dimensions = (await api("/model-registrations/test", "POST", companionPayload())).dimensions;
+    result.passed_uses = uses;
+    return result;
+  };
   const stageLabel = (key: string) => activeSchema?.stages.find(s => s.key === key)?.label || (key === "tool_step" ? "Tool steps" : key === "extraction" ? "Extraction" : key === "optimize" ? "Optimize" : "Chat answer");
 
   return <div className="model-registration">
@@ -186,14 +218,18 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
     </section> : null}
     {!open && prices && models.some(m => m.id === prices.id) && <ModelPrices key={prices.id} model={prices} api={api} onClose={() => setPrices(null)} />}
     {open && <section className="panel registration-form-panel">
-      <form onSubmit={e => { e.preventDefault(); if (!test) return; run(async () => { const saved = await api(`/model-registrations${editing ? "/" + editing.id : ""}`, editing ? "PUT" : "POST", payload()); onSaved(saved); close(); }); }}>
+      <form onSubmit={e => { e.preventDefault(); if (!test) return; run(async () => { const saved = await api(`/model-registrations${editing ? "/" + editing.id : ""}`, editing ? "PUT" : "POST", payload()); onSaved(saved); if (companion) onSaved(await api("/model-registrations", "POST", companionPayload())); close(); }); }}>
         <div className="panel-head"><h2>{editing ? "Edit model" : "Register model"}</h2><button title="Cancel model registration" className="btn icon" type="button" aria-label="Cancel model registration" disabled={busy} onClick={close}><X size={16} /></button></div>
         {form.connection.protocol === "anthropic" && <div className="notice"><Layers size={17} /><div>Direct Claude for Agent and Dataset Knowledge Chat. After testing and saving, enable it in Model Mapping, Save & Apply, then select it in chat. Keep your existing Embedding and Extraction models.</div></div>}
         <fieldset disabled={busy}>
           <div className="registration-fields">
             <div className="field"><label htmlFor="registration-name">Name</label><input id="registration-name" autoFocus value={form.name} onChange={e => change("name", e.target.value)} required maxLength={120} placeholder="e.g. Document extraction" /></div>
-            <div className="field"><label htmlFor="registration-category">Category</label><select id="registration-category" value={form.category} disabled={!!editing} onChange={e => change("category", e.target.value)}>{[["embedding", "Embedding"], ["chat", "Chat"], ["extraction", "Extraction"]].filter(([value]) => categories.includes(value)).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-            <div className="field"><label htmlFor="registration-protocol">Provider</label><select id="registration-protocol" value={providerChoice} disabled={!providerChoices.length} onChange={e => { const choice = providerChoices.find(p => p.id === e.target.value); if (!choice) return; setProviderChoice(choice.id); resetParameters(); const protocol = choice.protocol; setForm(current => ({ ...current, category: choice.categories.includes(current.category) ? current.category : choice.categories[0], context_limit: choice.categories.includes(current.category) ? current.context_limit : defaults?.context_limit, provider_model: "", credentials: {}, clear_credentials: false, allow_external: false, connection: { ...blank().connection, protocol, region: choice.region, endpoint: protocol === "ollama" ? settings.ollama_endpoint || choice.endpoint : choice.endpoint, auth_mode: choice.auth_modes[0] } })); setTest(null); }}>{providerChoices.length ? providerChoices.map(p => <option key={p.id} value={p.id} disabled={!!editing && !p.categories.includes(form.category)}>{p.name}</option>) : <option value="ollama">Loading providers…</option>}</select>{providerError && <small role="alert">{providerError}</small>}</div>
+            <fieldset className="field registration-uses"><legend>Use for</legend><div className="row wrap">{USES.filter(([value]) => categories.includes(value)).map(([value, label]) => {
+              const locked = !!editing && (value === "embedding" || editing.capabilities.includes("embedding"));
+              return <label className="check" key={value} title={locked ? "An Embedding model and a Chat or Extraction model are separate registrations; register another model instead." : undefined}>
+                <input type="checkbox" checked={uses.includes(value)} disabled={locked} onChange={e => toggleUse(value, e.target.checked)} />{label}</label>; })}</div>
+              <small>{companion ? `Saves two registrations of ${form.provider_model.trim() || "this model"}: ${uses.filter((u: string) => u !== "embedding").map((u: string) => u === "chat" ? "Chat" : "Extraction").join(" and ")}, and “${companionName(form.name || "Model")}” for Embedding with default embedding settings (edit it after saving).` : uses.length > 1 ? "One registration used for both. Each role can be a workspace Default separately." : "Tick more than one to use the same model for several roles."}</small></fieldset>
+            <div className="field"><label htmlFor="registration-protocol">Provider</label><select id="registration-protocol" value={providerChoice} disabled={!providerChoices.length} onChange={e => { const choice = providerChoices.find(p => p.id === e.target.value); if (!choice) return; setProviderChoice(choice.id); resetParameters(); const protocol = choice.protocol; const kept = (current: Entity) => { const uses = (current.uses || [current.category]).filter((u: string) => choice.categories.includes(u)); return uses.length ? uses : [choice.categories[0]]; }; setForm(current => ({ ...current, uses: kept(current), category: primaryUse(kept(current)), context_limit: primaryUse(kept(current)) === current.category ? current.context_limit : primaryUse(kept(current)) === "embedding" ? defaults?.embedding_context_limit : defaults?.context_limit, provider_model: "", credentials: {}, clear_credentials: false, allow_external: false, connection: { ...blank().connection, protocol, region: choice.region, endpoint: protocol === "ollama" ? settings.ollama_endpoint || choice.endpoint : choice.endpoint, auth_mode: choice.auth_modes[0] } })); setTest(null); }}>{providerChoices.length ? providerChoices.map(p => <option key={p.id} value={p.id} disabled={!!editing && !p.categories.includes(form.category)}>{p.name}</option>) : <option value="ollama">Loading providers…</option>}</select>{providerError && <small role="alert">{providerError}</small>}</div>
             <div className="field"><label htmlFor="registration-model">Model / deployment ID</label><input id="registration-model" value={form.provider_model} onChange={e => change("provider_model", e.target.value)} required maxLength={200} placeholder={form.connection.protocol === "azure-openai" ? "Deployment name" : "Model ID"} /></div>
             <div className="field registration-full"><label htmlFor="registration-endpoint">Endpoint</label><input id="registration-endpoint" type="url" value={form.connection.endpoint} onChange={e => connectionChange("endpoint", e.target.value)} required maxLength={500} placeholder={endpointHints[form.connection.protocol]} /><small>{form.connection.protocol === "anthropic" ? "Direct Claude uses this official endpoint. Enter the exact model ID supplied with your API access." : "Use the service base URL. Custom gateway hosts must be approved in the deployment."}</small></div>
             {form.connection.protocol === "anthropic" && <div className="field registration-full"><label htmlFor="registration-workspace">Anthropic workspace ID (optional)</label><input id="registration-workspace" value={form.connection.workspace_id} onChange={e => connectionChange("workspace_id", e.target.value)} maxLength={128} placeholder="wrkspc_…" /><small>Required only when your API key is not scoped to one workspace. Ask your API administrator if needed.</small></div>}
@@ -238,9 +274,9 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
           <div className="registration-options"><label className="check"><input type="checkbox" checked={form.enabled} onChange={e => change("enabled", e.target.checked)} />Enabled for dataset mapping</label></div>
           {remote && <label className="check registration-test-consent"><input type="checkbox" checked={form.allow_external} onChange={e => change("allow_external", e.target.checked)} />Allow a small synthetic test request to this external model. Provider usage may be billed.</label>}
         </fieldset>
-        {test && <div className="notice" role="status"><Check size={17} /><div>Connection passed in {(test.elapsed_ms / 1000).toFixed(2)}s.{test.dimensions && ` Embedding dimensions: ${test.dimensions}.`}{test.schema_validated && " Extraction schema validated."}{test.agent_tool_call_validated && " Agent function calling validated."}
+        {test && <div className="notice" role="status"><Check size={17} /><div>Connection passed in {(test.elapsed_ms / 1000).toFixed(2)}s{test.passed_uses?.length > 1 ? ` for ${test.passed_uses.map((u: string) => USES.find(([v]) => v === u)?.[1]).join(", ")}` : ""}.{test.dimensions && ` Embedding dimensions: ${test.dimensions}.`}{test.schema_validated && " Extraction schema validated."}{test.agent_tool_call_validated && " Agent function calling validated."}
           {!!test.effective_parameters && Object.keys(test.effective_parameters).length > 0 && <ul className="registration-test-effective" aria-label="Settings sent in the test">{Object.entries(test.effective_parameters as Record<string, { parameters: ParameterValues; sources: Record<string, keyof typeof sourceLabel> }>).map(([stage, value]) => <li key={stage}><strong>{stageLabel(stage)}:</strong> {Object.keys(value.parameters).length ? Object.entries(value.parameters).map(([key, v]) => `${key} ${formatValue(v)} (${sourceLabel[value.sources[key]] || "set"})`).join(", ") : "no sampling parameters sent (provider defaults)"}{test.samples?.[stage] && <span className="muted"> · sample answer: “{test.samples[stage]}”</span>}</li>)}</ul>}</div></div>}
-        <div className="registration-actions"><button className="btn" type="button" disabled={busy || !!parameterError || !form.name.trim() || !form.provider_model.trim() || !form.connection.endpoint || remote && (!form.allow_external || settings.local_only)} onClick={e => { if (!e.currentTarget.form?.reportValidity()) return; setTest(null); setTesting(true); run(async () => { try { setTest(await api("/model-registrations/test", "POST", testPayload())); } finally { setTesting(false); } }); }}>{testing ? "Testing connection…" : "Test Connection"}</button><div className="row wrap"><button className="btn" type="button" disabled={busy} onClick={close}>Cancel</button><ActionButton className="btn primary" disabled={busy || !!parameterError || !test} label="Save Model" action="save"/></div></div>
+        <div className="registration-actions"><button className="btn" type="button" disabled={busy || !!parameterError || !form.name.trim() || !form.provider_model.trim() || !form.connection.endpoint || remote && (!form.allow_external || settings.local_only)} onClick={e => { if (!e.currentTarget.form?.reportValidity()) return; setTest(null); setTesting(true); run(async () => { try { setTest(await testAll()); } finally { setTesting(false); } }); }}>{testing ? "Testing connection…" : "Test Connection"}</button><div className="row wrap"><button className="btn" type="button" disabled={busy} onClick={close}>Cancel</button><ActionButton className="btn primary" disabled={busy || !!parameterError || !test} label="Save Model" action="save"/></div></div>
         <p className="muted small">Test the connection before saving. The test sends a sample prompt with the parameter values above and lists what was sent. Chat tests verify Agent function calling, plus one short sample answer when you change answer-stage values. New chat and extraction runs use the latest saved connection. Editing the Default embedding model requires re-applying it as Default, which deletes the knowledge index and reindexes every document. Work already queued keeps its saved version.</p>
       </form>
     </section>}

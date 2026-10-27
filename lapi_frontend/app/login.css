@@ -23,6 +23,13 @@ html body main.login-shell .login-password-entry input{padding-right:76px}
 html body main.login-shell .login-password-toggle{top:5px;right:5px;height:40px;border-radius:9px;color:var(--blue-strong)}
 html body main.login-shell .login-submit.btn.primary{min-height:52px;margin-top:8px;border:0;border-radius:12px;background:linear-gradient(135deg,#3b82f6 0%,var(--blue) 45%,var(--blue-strong) 100%);color:#ffffff;font-size:1rem;font-weight:700;box-shadow:0 10px 24px rgba(37,99,235,.28);transition:transform .15s,box-shadow .15s}
 html body main.login-shell .login-submit.btn.primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 14px 30px rgba(37,99,235,.34)}
+/* Keycloak: one primary button; the password form folds away as the admins' break-glass path. */
+html body main.login-shell a.login-keycloak{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin:0 0 24px;text-decoration:none}
+html body main.login-shell .login-breakglass{border-top:1px solid #e6ecf7;padding-top:16px}
+html body main.login-shell .login-breakglass>summary{cursor:pointer;width:max-content;max-width:100%;color:var(--muted);font-size:.9375rem;font-weight:600;border-radius:6px}
+html body main.login-shell .login-breakglass>summary:hover{color:var(--ink)}
+html body main.login-shell .login-breakglass>summary:focus-visible{outline:3px solid rgba(37,99,235,.35);outline-offset:3px}
+html body main.login-shell .login-breakglass[open]>summary{margin-bottom:20px}
 html body main.login-shell .recovery-entry{display:inline-block;margin-top:18px;color:var(--blue-strong);font-weight:600;text-align:left;text-decoration:none}
 html body main.login-shell .recovery-entry:hover{text-decoration:underline;text-underline-offset:3px}
 html body main.login-shell .login-error,html body main.login-shell .login-setup-notice{border-radius:12px}

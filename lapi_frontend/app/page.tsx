@@ -1,6 +1,6 @@
 "use client";
 import {ActionButton} from "./action-button";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { SignInLayout } from "./sign-in-layout";
 import { DatasetSearch } from "./dataset-directory";
 import {ReviewDetail} from './review-detail';
@@ -120,6 +120,18 @@ const date = (v: string | number) =>
       ).toLocaleString()
     : "—";
 const json = (v: unknown) => JSON.stringify(v, null, 2);
+// Codes the Keycloak callback adds to /?sign_in_error= (lapi_app/keycloak_auth.py).
+const SIGN_IN_ERRORS: Record<string, string> = {
+  denied: "Keycloak sign-in was cancelled.",
+  expired: "That sign-in took too long or was started in another tab. Try again.",
+  unavailable: "Keycloak is unreachable right now. Try again in a minute.",
+  account_conflict: "A local Lapi account already uses your Keycloak username. Ask an administrator to rename or delete it.",
+  failed: "Keycloak sign-in did not complete. Try again, or ask an administrator to check the server log.",
+};
+/** With Keycloak, Lapi's password form is only the local administrators' break-glass path. */
+function BreakGlass({ on, children }: { on: boolean; children: ReactNode }) {
+  return on ? <details className="login-breakglass"><summary>Administrator sign-in without Keycloak</summary>{children}</details> : <>{children}</>;
+}
 function Status({ value }: { value: string }) {
   const green = [
     "ready",
@@ -205,6 +217,7 @@ export default function App() {
   const authSession = useRef({ userId: user?.id as string | undefined, csrf });
   authSession.current = { userId: user?.id, csrf };
   const [setupRequired, setSetupRequired] = useState(false);
+  const [keycloak, setKeycloak] = useState(false);
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -393,6 +406,11 @@ export default function App() {
     setTimeout(() => setToast(""), 5500);
   };
   useEffect(() => {
+    const failure = new URLSearchParams(window.location.search).get("sign_in_error");
+    if (failure) {
+      setError(SIGN_IN_ERRORS[failure] || SIGN_IN_ERRORS.failed);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     fetch("/api/auth/me", { credentials: "include",signal:AbortSignal.timeout(15000) })
       .then(async (r) => {
         const d = await r.json();
@@ -406,9 +424,10 @@ export default function App() {
       .finally(() => setAuthChecked(true));
     fetch("/api/auth/status",{signal:AbortSignal.timeout(15000)})
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: Entity) =>
-        setSetupRequired(!!d.setup_required),
-      )
+      .then((d: Entity) => {
+        setSetupRequired(!!d.setup_required);
+        setKeycloak(!!d.keycloak);
+      })
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -655,9 +674,12 @@ export default function App() {
     return (
       <SignInLayout>
           <h1 id="login-heading" className="screen-heading">Welcome back</h1>
-          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : "Sign in to your workspace."}</p>
+          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : keycloak ? "Sign in with your organization account." : "Sign in to your workspace."}</p>
           {setupRequired && <div className="login-setup-notice" role="status">No administrator exists yet. Create one on the server with <code>lapi_local_use/lapi_scripts/create-admin.sh</code>, then sign in here.</div>}
           {error && <div className="login-error" role="alert"><AlertCircle size={18} aria-hidden="true" /><span>{error}</span></div>}
+          {keycloak && <a className="btn primary login-submit login-keycloak" href="/api/auth/keycloak/start">
+            <KeyRound size={17} aria-hidden="true" />Sign in with Keycloak</a>}
+          <BreakGlass on={keycloak}>
           <form noValidate aria-busy={busy} onSubmit={e => {
             e.preventDefault();
             if (busy) return;
@@ -699,6 +721,7 @@ export default function App() {
             </button>
           </form>
           <a className="recovery-entry" href="/recover-password">Forgot password?</a>
+          </BreakGlass>
       </SignInLayout>
     );
 
@@ -777,9 +800,11 @@ export default function App() {
               aria-label="Sign out"
               onClick={() =>
                 run(async () => {
-                  await api("/auth/logout", "POST");
+                  const result = await api("/auth/logout", "POST");
                   setUser(null);
                   setCsrf("");
+                  // End the Keycloak session too, or the next sign-in would skip the password.
+                  if (result?.logout_url) window.location.assign(result.logout_url);
                 })
               }
             >
@@ -809,7 +834,7 @@ export default function App() {
           {view === "Add knowledge" && <AddKnowledge api={api} datasets={kbs} documents={docs} selectedDataset={kb} onChanged={reload} onBack={()=>navigate("Home")} onExtract={()=>navigate("Extract Data")} onAsk={scope=>{if(navigate("Home")){setDashboardDatasetId('');setDashboardHandoff({...scope,key:Date.now()});}}}/>}
           {view === "Files & processing" && (user.is_admin?<AdminDocuments api={api} onChanged={reload} onReview={openReview}/>:<div className="panel" role="alert">Administrator access is required to manage files and processing.</div>)}
           {view === "Token usage" && (user.is_admin?<TokenUsageAdmin api={api}/>:<div className="panel" role="alert">Administrator access is required to view token usage.</div>)}
-          {view === "Users & passwords" && <UserManagement api={api} user={user as {id:string;username:string;is_admin?:boolean}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
+          {view === "Users & passwords" && <UserManagement api={api} keycloak={keycloak} user={user as {id:string;username:string;is_admin?:boolean;sign_in?:string}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
           {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This dataset is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
           {view === "Datasets" && <DatasetWorkspace directorySearch={directorySearch} onClearDirectorySearch={()=>setDirectorySearch('')} onDirectoryVisibilityChange={setDatasetDirectoryVisible} canManage={Boolean(user.is_admin)} datasets={kbs} models={models} documents={docs}
             storageKey={`lapi-new-dataset:${user.id}`} defaults={selectedDataset} onSelect={changeDataset} onCreated={d=>{setKbs(current=>[...current.filter(item=>item.id!==d.id),d]);changeDataset(d.id);}}

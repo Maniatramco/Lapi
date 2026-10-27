@@ -21,7 +21,7 @@ resource "oci_identity_policy" "containers" {
   name           = "${var.name}-containers"
   description    = "Lapi containers read their secrets, use their bucket and pull their images"
   statements = [
-    "Allow dynamic-group ${oci_identity_dynamic_group.containers.name} to read secret-bundles in compartment ${local.compartment_name} where any {target.secret.id = '${oci_vault_secret.master_key.id}', target.secret.id = '${oci_vault_secret.db_password.id}', target.secret.id = '${oci_vault_secret.first_admin.id}'}",
+    "Allow dynamic-group ${oci_identity_dynamic_group.containers.name} to read secret-bundles in compartment ${local.compartment_name} where any {target.secret.id = '${oci_vault_secret.master_key.id}', target.secret.id = '${oci_vault_secret.db_password.id}', target.secret.id = '${oci_vault_secret.first_admin.id}'${local.keycloak_secret ? ", target.secret.id = '${oci_vault_secret.keycloak_client[0].id}'" : ""}}",
     "Allow dynamic-group ${oci_identity_dynamic_group.containers.name} to read buckets in compartment ${local.compartment_name} where target.bucket.name = '${oci_objectstorage_bucket.lapi.name}'",
     "Allow dynamic-group ${oci_identity_dynamic_group.containers.name} to manage objects in compartment ${local.compartment_name} where target.bucket.name = '${oci_objectstorage_bucket.lapi.name}'",
     "Allow dynamic-group ${oci_identity_dynamic_group.containers.name} to read objectstorage-namespaces in compartment ${local.compartment_name}",

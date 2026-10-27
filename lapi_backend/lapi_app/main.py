@@ -24,6 +24,12 @@ async def lifespan(app):
     init()
     from .create_admin import ensure_from_environment
     ensure_from_environment()
+    from . import authz
+    if authz.enabled():
+        try:authz.prepare()
+        except authz.AuthorizationUnavailable:
+            # OpenFGA may still be starting; the first permission check connects instead.
+            import logging;logging.getLogger(__name__).warning('OpenFGA is not reachable yet; permission checks will retry.')
     from . import reranker
     if reranker.enabled():
         import asyncio
@@ -44,15 +50,21 @@ async def safe_validation_errors(request, error):
     return JSONResponse(status_code=422, content={'detail':[
         {'loc':list(item['loc']), 'msg':item['msg'], 'type':item['type']}
         for item in error.errors()]})
+from . import authz, keycloak_auth
+@app.exception_handler(authz.AuthorizationUnavailable)
+async def permission_service_unavailable(request, error):
+    # Refuse rather than guess: no answer from OpenFGA grants nothing.
+    return JSONResponse(status_code=503, content={'detail':'The permission service is unavailable. Try again in a minute.'})
 app.add_middleware(CORSMiddleware,allow_origins=os.getenv('ALLOWED_ORIGINS','http://localhost:3000,http://127.0.0.1:3000').split(','),allow_credentials=True,allow_methods=['*'],allow_headers=['Content-Type','X-CSRF-Token','Authorization'])
 @app.middleware('http')
 async def security_headers(request,call_next):
     actor_token=access.request_actor.set(None)
     audit_token=relational.actor_override.set(None)
+    answers_token=authz.remember_answers()
     try:
         response=await call_next(request);response.headers['X-Content-Type-Options']='nosniff';response.headers['Cache-Control']='no-store';return response
     finally:
-        access.request_actor.reset(actor_token);relational.actor_override.reset(audit_token)
+        access.request_actor.reset(actor_token);relational.actor_override.reset(audit_token);authz.forget_answers(answers_token)
 
 def authenticate(request:Request):
     token=request.cookies.get('lapi_session','');bearer=request.headers.get('authorization','')
@@ -112,7 +124,9 @@ class Credentials(BaseModel):
 
 @app.get('/api/auth/status')
 def auth_status():
-    with Session() as s:return {'setup_required':not bool(s.scalar(select(User)))}
+    with Session() as s:setup=not bool(s.scalar(select(User)))
+    # With Keycloak, password sign-in is only the local administrators' break-glass path.
+    return {'setup_required':setup,'keycloak':keycloak_auth.enabled()}
 _login_attempts={}
 @app.post('/api/auth/login')
 def login(body:Credentials,response:Response,request:Request):
@@ -124,6 +138,7 @@ def login(body:Credentials,response:Response,request:Request):
         with Session.begin() as s:
             u=s.scalar(select(User).where(User.username==body.username))
             if not u or not password_valid(body.password,u.password_hash):raise HTTPException(401,'Invalid username or password')
+            if keycloak_auth.enabled() and (keycloak_auth.managed(u.id) or u.role!='administrator'):raise HTTPException(403,'This account signs in with Keycloak.')
             token=secrets.token_urlsafe(40);csrf=secrets.token_urlsafe(32)
             s.add(Login(id=hashlib.sha256(token.encode()).hexdigest(),owner=u.id,expires=now+43200,csrf=csrf))
             user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s)}
@@ -134,13 +149,15 @@ def login(body:Credentials,response:Response,request:Request):
 def me(request:Request,owner=Depends(auth)):
     with Session() as s:
         u=s.get(User,owner);token=request.cookies.get('lapi_session','');l=s.get(Login,hashlib.sha256(token.encode()).hexdigest())
-        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s)},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else ''}
+        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else ''}
 @app.post('/api/auth/logout')
 def logout(request:Request,response:Response,owner=Depends(auth)):
     with Session.begin() as s:
         row=s.get(Login,hashlib.sha256(request.cookies.get('lapi_session','').encode()).hexdigest())
         if row:s.delete(row)
-    response.delete_cookie('lapi_session');return {'ok':True}
+    response.delete_cookie('lapi_session')
+    return {'ok':True,'logout_url':keycloak_auth.logout_url() if keycloak_auth.enabled() and keycloak_auth.managed(owner) else ''}
+app.include_router(keycloak_auth.router)
 from .user_management import install as install_user_management
 install_user_management(app, auth)
 from .storage_config import install as install_storage_config

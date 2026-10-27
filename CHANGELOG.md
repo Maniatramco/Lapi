@@ -2,6 +2,25 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.6 - 27 October 2026
+
+Local reranker in the cloud deployment
+
+- The API image (`lapi_backend/Dockerfile`) now downloads the pinned local reranker (`cross-encoder/ms-marco-MiniLM-L6-v2`, fixed revision, checked with `verify_assets`) to `/opt/lapi-reranker` at build time and sets `LAPI_RERANK_MODEL_DIR`; build with `INSTALL_RERANKER=false` to leave it out.
+- The OCI deployment sets `LAPI_RERANKER=local` for the api and worker containers, so chat and extraction no longer fail with "Chat reranking is unavailable".
+
+## v26.1.16.5 - 27 October 2026
+
+Keycloak sign-in, OpenFGA permissions and multi-use models
+
+- Keycloak (`lapi_app/keycloak_auth.py`): OpenID Connect authorization code flow with PKCE against an existing Keycloak, on when `LAPI_KEYCLOAK_URL`, `LAPI_KEYCLOAK_REALM`, `LAPI_KEYCLOAK_CLIENT_ID` and `LAPI_PUBLIC_URL` are set. State, nonce and verifier travel in an encrypted, ten-minute, `SameSite=Lax` cookie; ID and access tokens are verified against Keycloak's JWKS (issuer, audience/azp, expiry, nonce). Accounts (`kc-<subject>`) are created at the first sign-in, never merged with a local account of the same name, and their role follows the Keycloak role `lapi-administrator` at every sign-in (a change ends older sessions). Sign-out returns Keycloak's end-session URL. Only same-site paths are followed after sign-in. The client secret comes from OCI Vault (`LAPI_KEYCLOAK_CLIENT_SECRET_OCID`) or a mounted file.
+- With Keycloak on, password sign-in is refused except for local administrators (break-glass); Keycloak accounts change passwords and roles in Keycloak, administrators add people in Keycloak, and a Keycloak administrator confirms account changes with a sign-in from the last ten minutes instead of a password. The sign-in page shows "Sign in with Keycloak" and folds the password form away.
+- OpenFGA (`lapi_app/authz.py`): on when `LAPI_OPENFGA_URL` is set. Administrators (`user:<id> administrator lapi:workspace`) and dataset grants (`user:<id> viewer dataset:<id>`) are tuples; `is_administrator` and dataset access ask OpenFGA, with answers cached per request. The database stays the record: the store is found or created and fully reconciled at start-up and after OpenFGA restarts (in-memory store), and each committed role or grant change is synced. No answer means HTTP 503, never access.
+- Terraform: an `openfga` container (v1.22.0, memory store, localhost only, playground off) in the container instance; Keycloak variables, an empty `lapi-keycloak-client-secret` Vault secret readable by the containers, and the `keycloak_redirect_uri` output. The database password secret now also ignores replication settings.
+- Model Registration: "Use for" replaces Category. Registrations accept `capabilities` (Chat and Extraction together; Embedding alone), parameters are validated for every use, and an edit may add or remove Chat/Extraction but not cross into Embedding. Ticking Embedding with Chat/Extraction also saves an embedding registration of the same model; Test Connection tests each use.
+
+Validation: full backend suite in parallel, 1,394 passed, 11 skipped, including new `test_keycloak_auth.py` (against a fake Keycloak signing RS256 tokens: sign-in, roles, break-glass, forged state, nonce, signature, replayed code, cancelled sign-in, name conflict, open redirect), `test_openfga_authz.py` (against a fake OpenFGA: decisions, sync, restart rebuild, shared store, stale tuples, refusal when unreachable, batching) and `test_model_uses.py`. The web image build type-checks. Deployed 27 October 2026 with OpenFGA on and Keycloak off; Keycloak was not tried against a real server.
+
 ## v26.1.16.4 - 27 October 2026
 
 Choose each model's API

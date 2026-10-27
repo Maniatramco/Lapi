@@ -26,11 +26,17 @@ output "bucket" {
   value = oci_objectstorage_bucket.lapi.name
 }
 
+output "keycloak_redirect_uri" {
+  description = "Add this as a Valid redirect URI of the Keycloak client (and <public_url>/ as a post-logout redirect URI)."
+  value       = local.keycloak ? "${local.public_url}/api/auth/keycloak/callback" : null
+}
+
 output "secrets" {
   description = "Vault secret OCIDs (values are never output)."
   value = {
     master_key  = oci_vault_secret.master_key.id
     db_password = oci_vault_secret.db_password.id
     first_admin = oci_vault_secret.first_admin.id
+    keycloak    = local.keycloak_secret ? oci_vault_secret.keycloak_client[0].id : null
   }
 }

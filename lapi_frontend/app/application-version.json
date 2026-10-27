@@ -1,6 +1,25 @@
 {
-  "version": "26.1.16.4",
+  "version": "26.1.16.6",
   "releases": [
+    {
+      "version": "26.1.16.6",
+      "date": "2026-10-27",
+      "title": "Local reranker in the cloud deployment",
+      "changes": [
+        "The API image now includes the pinned local reranker (ms-marco-MiniLM-L6-v2), and the OCI deployment turns it on, so chat and extraction no longer stop with \"Chat reranking is unavailable\"."
+      ]
+    },
+    {
+      "version": "26.1.16.5",
+      "date": "2026-10-27",
+      "title": "Keycloak sign-in, OpenFGA permissions and multi-use models",
+      "changes": [
+        "People sign in with your organization's Keycloak. Their Lapi account is created at the first sign-in, and the Keycloak role lapi-administrator decides who is an administrator. Signing out of Lapi also signs out of Keycloak.",
+        "Lapi's own password sign-in remains only for local administrators, as a break-glass path when Keycloak is unavailable. Passwords and roles of Keycloak accounts are managed in Keycloak.",
+        "OpenFGA now answers every permission check: who administers Lapi and which datasets each person may open. If OpenFGA cannot answer, access is refused rather than granted.",
+        "Model Registration has a Use for choice instead of a single Category. One model can serve Chat and Extraction together, and each role can be a workspace Default on its own. Ticking Embedding as well also saves an embedding registration of the same model and connection; Test Connection checks every ticked use."
+      ]
+    },
     {
       "version": "26.1.16.4",
       "date": "2026-10-27",
