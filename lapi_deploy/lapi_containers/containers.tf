@@ -64,7 +64,7 @@ locals {
     LAPI_AGENT_ENGINE                     = "langgraph"
     LAPI_CHAT_MODE                        = "auto"
     LAPI_RERANKER                         = "local" # Model files are baked into the API image at /opt/lapi-reranker.
-    LAPI_OCR_ENABLED                      = "false"
+    LAPI_OCR_ENABLED                      = "true" # Images and scanned pages use the dataset's cloud OCR model (OpenAI gpt-4o/gpt-4o-mini or Gemini); nothing runs locally.
     LANGSMITH_TRACING                     = "false"
     LAPI_ALLOW_MOCK                       = "false"
     COOKIE_SECURE                         = "false" # Set "true" once the load balancer serves HTTPS.

@@ -10,7 +10,7 @@ from urllib.parse import quote, urlparse, parse_qs
 
 import httpx
 
-FORMATS = {'pdf', 'docx', 'txt', 'json'}
+from .file_formats import SUPPORTED as FORMATS
 GOOGLE_EXPORTS = {
     'application/vnd.google-apps.document': ('application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.docx'),
     'application/vnd.google-apps.spreadsheet': ('application/pdf', '.pdf'),

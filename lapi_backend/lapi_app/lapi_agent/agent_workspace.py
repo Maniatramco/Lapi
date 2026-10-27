@@ -14,6 +14,7 @@ from .. import core, dataset_models as routing, providers, runtime_config
 from ..temporary_chat import chat_snapshot
 from . import token_usage
 from ..json_documents import json_document_text
+from .. import file_formats
 
 TOOLS = ('upload', 'extract', 'reextract')
 upload_locks = {}
@@ -206,7 +207,7 @@ def application_reply(text,context):
     if prompt and prompt_reference and single_upload_request(text):
         return f'Your prompt template "{prompt["name"]}" is saved'+(f' in "{context["selected_dataset"]}"' if context['selected_dataset'] else '')+' and selected for extraction. Attach documents to upload them, or ask me to extract selected dataset documents with this prompt. I will show the workflow for you to confirm.'
     if upload_guidance_question(text) or (named_prompt and single_upload_request(text)):
-        return 'Yes. Attach or drop a file into the chat box: PDF, DOCX and TXT go directly into the document upload flow. For JSON, choose Prompt template or Document; prompts are validated and reviewed, then saved with Send, while document uploads wait for Confirm upload.'
+        return 'Yes. Attach or drop a file into the chat box: PDF, DOCX, TXT and images (PNG, JPG, WEBP) go directly into the document upload flow; images are read with OCR. For JSON, choose Prompt template or Document; prompts are validated and reviewed, then saved with Send, while document uploads wait for Confirm upload.'
     return ''
 
 def catalog(owner,selectors_only=False):
@@ -793,7 +794,7 @@ def install(app, auth, main):
                     data.update(auto_continue=True, extraction_mode=extraction_mode or 'merge',merge_strategy=merge_strategy, template_id=template.id, workflow_allow_external=allow_external)
                 limit = core.settings()['max_upload_mb'] * 1024 * 1024
                 for file in files:
-                    if (file.filename or '').rsplit('.', 1)[-1].lower() not in ('pdf', 'docx', 'txt', 'json'): raise HTTPException(422, 'Only PDF, DOCX, UTF-8 TXT and JSON files are supported.')
+                    if not file_formats.supported(file.filename or ''): raise HTTPException(422, 'Only ' + file_formats.SUPPORTED_LABEL + ' files are supported.')
                     raw = await file.read(limit + 1); await file.seek(0)
                     if not raw or len(raw) > limit: raise HTTPException(413, 'A document is empty or exceeds the configured upload size.')
                     if (file.filename or '').rsplit('.', 1)[-1].lower() == 'json':

@@ -216,6 +216,45 @@ def read_page(raw, index, native_text, *, cfg=None, progress=None, cache_id=None
         raise OcrError(f'Page {index + 1}: PDF rendering failed. Upload a valid unlocked PDF or retry failed indexing.') from None
 
 
+IMAGE_PIXEL_LIMIT = 50_000_000  # Refused before decoding, like a PDF page over the render limit.
+IMAGE_MAX_SIDE = 2000  # About a letter page at the OCR render DPI; keeps the visual context bounded.
+
+
+def read_image(raw, *, cfg=None, progress=None, cache_id=None):
+    """Transcribe an uploaded image as one page. The original file is unchanged."""
+    from PIL import Image, ImageOps
+    cfg = cfg or config()
+    if not cfg['enabled']:
+        raise OcrError('Images are read with OCR, which is turned off on this Lapi server. Ask an administrator to set LAPI_OCR_ENABLED=true, or upload the text as PDF, DOCX or TXT.')
+    if progress: progress(1)
+    try:
+        with Image.open(io.BytesIO(raw)) as source:
+            if source.width * source.height > IMAGE_PIXEL_LIMIT:
+                raise OcrError('The image is too large to read (over 50 megapixels). Resize it and upload it again.')
+            # Phone photos are often stored sideways with an orientation tag.
+            image = ImageOps.exif_transpose(source).convert('RGB')
+    except OcrError:
+        raise
+    except Exception:
+        raise OcrError('The image could not be opened. Upload a valid PNG, JPG or WEBP image.') from None
+    image.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))
+    if all(low == high and low >= 245 for low, high in image.getextrema()):
+        raise OcrError('The image is blank, so there is no text to read.')
+    out = io.BytesIO(); image.save(out, format='PNG')
+    cfg = available(cfg)
+    digest = hashlib.sha256(raw).hexdigest()
+    fingerprint = hashlib.sha256(json.dumps({k: cfg[k] for k in ('model','digest','context','output','batch','protocol')} | {'max_side': IMAGE_MAX_SIDE}, sort_keys=True).encode()).hexdigest()[:16]
+    key = f'documents/{cache_id}/ocr/{digest}-image-{fingerprint}.json' if cache_id else None
+    if key:
+        from .core import store
+        try: return store.json(key)
+        except FileNotFoundError: pass
+    text, metadata = transcribe(out.getvalue(), cfg)
+    value = {'text': text, 'text_origin': 'ocr', 'ocr': metadata | {'page': 1, 'render_width': image.width, 'render_height': image.height}}
+    if key: store.put_json(key, value)
+    return value
+
+
 def summary(pages):
     values = [page['ocr'] | dict(page=page.get('page'), source_filename=page.get('source_filename')) for page in pages if page.get('ocr')]
     return {'model': values[0]['model'], 'provider': values[0].get('provider', 'ollama'), 'ocr_page_count': len(values), 'pages': values,

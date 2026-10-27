@@ -62,6 +62,6 @@ export function CitationPanel({source,api,onClose,onReview}:{source:Entity;api:A
     {!origin&&<p className="citation-panel-note">This citation refers to application metadata, not a document page.</p>}
    </>}
   </div>
-  <footer>{!error&&published&&base&&<a className="btn" href={`/api${base}/${/\.(pdf|txt|json)$/i.test(origin?.document_name||'')?'source':'download'}${pdf?`#page=${page||1}`:''}`} target="_blank" rel="noopener noreferrer">{/\.(pdf|txt|json)$/i.test(origin?.document_name||'')?'Open original':'Download original'}</a>}{evidence&&onReview&&<ActionButton className="btn primary" onClick={()=>{dialog.current?.close();onReview(evidence.extraction_id);}} label="Open Review" action="review"/>}<ActionButton className="btn" onClick={()=>dialog.current?.close()} label="Close" action="close"/></footer>
+  <footer>{!error&&published&&base&&<a className="btn" href={`/api${base}/${/\.(pdf|txt|json|png|jpe?g|webp)$/i.test(origin?.document_name||'')?'source':'download'}${pdf?`#page=${page||1}`:''}`} target="_blank" rel="noopener noreferrer">{/\.(pdf|txt|json|png|jpe?g|webp)$/i.test(origin?.document_name||'')?'Open original':'Download original'}</a>}{evidence&&onReview&&<ActionButton className="btn primary" onClick={()=>{dialog.current?.close();onReview(evidence.extraction_id);}} label="Open Review" action="review"/>}<ActionButton className="btn" onClick={()=>dialog.current?.close()} label="Close" action="close"/></footer>
  </dialog>;
 }
