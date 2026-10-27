@@ -1,60 +1,76 @@
-/* Sign-in page: the form on white, Lapi's story on a brand-blue panel.
+/* Sign-in page: one blended background (blue, indigo, rose, peach) behind the
+   Connect · Unify · Ask diagram and a frosted-glass sign-in card.
    Loaded after every other stylesheet; earlier sign-in layers (readability.css,
-   sign-in.css, lapi-theme.css) are overridden here rather than edited. */
+   sign-in.css, lapi-theme.css, globals.css) are overridden here rather than edited. */
 
-html body main.login-shell{display:block;min-height:100vh;padding:0;overflow-x:hidden;background:#ffffff;animation:none}
-html body main.login-shell::before{display:none}
-html body main.login-shell .login-layout{display:grid;grid-template-columns:minmax(360px,1fr) minmax(0,1.5fr);grid-template-areas:"form story";gap:0;align-items:stretch;width:100%;max-width:none;min-height:100vh}
+html body main.login-shell{position:relative;isolation:isolate;display:block;min-height:100vh;padding:0;overflow-x:hidden;color:#ffffff;animation:none;
+  background:
+    radial-gradient(38% 50% at 92% 8%,rgba(253,186,116,.75),rgba(253,186,116,0) 70%),
+    radial-gradient(34% 46% at 78% 96%,rgba(244,114,182,.42),rgba(244,114,182,0) 72%),
+    radial-gradient(40% 55% at 58% 42%,rgba(139,92,246,.45),rgba(139,92,246,0) 70%),
+    radial-gradient(45% 60% at 6% 92%,rgba(56,189,248,.45),rgba(56,189,248,0) 70%),
+    radial-gradient(40% 50% at 18% 10%,rgba(255,255,255,.14),rgba(255,255,255,0) 70%),
+    linear-gradient(115deg,#1e3a8a 0%,#2563eb 34%,#5b5fe8 58%,#c0759a 80%,#f39a5f 100%)}
+/* A faint grid that fades out towards the edges, and a warm glow behind the card. */
+html body main.login-shell::before{content:"";display:block;position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(70% 70% at 40% 45%,#000 0%,transparent 100%);mask-image:radial-gradient(70% 70% at 40% 45%,#000 0%,transparent 100%)}
+html body main.login-shell::after{content:"";position:absolute;z-index:-1;right:4%;top:50%;width:520px;height:520px;margin-top:-260px;border-radius:50%;background:rgba(251,146,60,.5);filter:blur(130px);pointer-events:none}
 
-/* Form column */
-html body main.login-shell .login-card{grid-area:form;align-self:center;justify-self:center;order:0;width:100%;max-width:420px;margin:0;padding:48px 32px;background:transparent;border:0;border-radius:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;animation:login-rise .5s ease-out both}
-html body main.login-shell .login-identity{display:flex;align-items:center;gap:14px;margin:0 0 44px;padding:0;border:0}
-html body main.login-shell .login-identity>img{width:52px;height:52px;border-radius:14px;box-shadow:0 8px 20px rgba(37,99,235,.18)}
-html body main.login-shell .login-brand-name{color:var(--ink);font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
-html body main.login-shell .login-brand-tagline{margin-top:2px;color:var(--orange-strong);font-size:.875rem;font-weight:600}
-html body main.login-shell .login-card .screen-heading{margin:0 0 8px;color:var(--ink);font-size:2.25rem;line-height:1.15;letter-spacing:-.03em;text-align:left}
-html body main.login-shell .login-description{margin:0 0 32px;color:var(--muted);font-size:1rem;line-height:1.6;text-align:left}
-html body main.login-shell .login-card .field{margin-bottom:20px}
-html body main.login-shell .login-card label{margin-bottom:8px;color:var(--ink);font-size:.9375rem;font-weight:600}
-html body main.login-shell .login-card input{min-height:50px;padding:0 14px;border:1px solid #d6e0f3;border-radius:12px;background:#f8fafe;font-size:1rem;box-shadow:none;transition:border-color .15s,box-shadow .15s,background .15s}
-html body main.login-shell .login-card input:hover{border-color:#b9cbef}
-html body main.login-shell .login-card input:focus{border-color:var(--blue);background:#ffffff;box-shadow:0 0 0 4px rgba(37,99,235,.14)}
+html body main.login-shell .login-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(380px,440px);grid-template-areas:"story form";gap:56px;align-items:center;width:100%;max-width:1480px;min-height:100vh;margin:0 auto;padding:40px 56px;box-sizing:border-box}
+
+/* Glass sign-in card */
+html body main.login-shell .login-card{grid-area:form;align-self:center;justify-self:stretch;order:0;width:100%;max-width:none;margin:0;padding:36px 36px 28px;box-sizing:border-box;color:#ffffff;
+  background:linear-gradient(160deg,rgba(255,255,255,.22),rgba(255,255,255,.06) 55%,rgba(20,33,61,.18)),rgba(30,41,90,.28);
+  border:1px solid rgba(255,255,255,.34);border-radius:26px;box-shadow:0 30px 70px rgba(11,27,77,.35),inset 0 1px 0 rgba(255,255,255,.4);
+  -webkit-backdrop-filter:blur(22px) saturate(140%);backdrop-filter:blur(22px) saturate(140%);animation:login-rise .5s ease-out both}
+html body main.login-shell .login-identity{display:flex;align-items:center;gap:12px;margin:0 0 28px;padding:0;border:0}
+html body main.login-shell .login-identity>img{width:44px;height:44px;border-radius:12px;box-shadow:0 8px 20px rgba(11,27,77,.25)}
+html body main.login-shell .login-brand-name{margin:0;color:#ffffff;font-size:1.375rem;font-weight:800;letter-spacing:-.02em}
+html body main.login-shell .login-brand-tagline{margin:2px 0 0;color:#fdba74;font-size:.8125rem;font-weight:700}
+html body main.login-shell .login-card .screen-heading{margin:0 0 6px;color:#ffffff;font-size:1.875rem;line-height:1.15;letter-spacing:-.03em;text-align:left}
+html body main.login-shell .login-description{margin:0 0 24px;color:#dbeafe;font-size:.9375rem;line-height:1.55;text-align:left}
+html body main.login-shell .login-card .field{margin-bottom:18px}
+html body main.login-shell .login-card label{margin-bottom:7px;color:#ffffff;font-size:.875rem;font-weight:700}
+html body main.login-shell .login-card input{min-height:50px;padding:0 14px;color:#ffffff;caret-color:#ffffff;border:1px solid rgba(255,255,255,.38);border-radius:12px;background:rgba(255,255,255,.14);font-size:1rem;box-shadow:none;transition:border-color .15s,box-shadow .15s,background .15s}
+html body main.login-shell .login-card input:hover{border-color:rgba(255,255,255,.55)}
+html body main.login-shell .login-card input:focus{border-color:#fdba74;background:rgba(255,255,255,.2);box-shadow:0 0 0 4px rgba(253,186,116,.3)}
+/* Browser autofill paints a light box; keep the text readable on the glass. */
+html body main.login-shell .login-card input:-webkit-autofill{-webkit-text-fill-color:#ffffff;box-shadow:0 0 0 1000px rgba(37,52,120,.92) inset;transition:background-color 9999s}
+html body main.login-shell .login-card :focus-visible{outline:3px solid #fdba74;outline-offset:3px}
 html body main.login-shell .login-password-entry input{padding-right:76px}
-html body main.login-shell .login-password-toggle{top:5px;right:5px;height:40px;border-radius:9px;color:var(--blue-strong)}
-html body main.login-shell .login-submit.btn.primary{min-height:52px;margin-top:8px;border:0;border-radius:12px;background:linear-gradient(135deg,#3b82f6 0%,var(--blue) 45%,var(--blue-strong) 100%);color:#ffffff;font-size:1rem;font-weight:700;box-shadow:0 10px 24px rgba(37,99,235,.28);transition:transform .15s,box-shadow .15s}
-html body main.login-shell .login-submit.btn.primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 14px 30px rgba(37,99,235,.34)}
+html body main.login-shell .login-password-toggle{top:6px;right:6px;height:38px;border:0;border-radius:9px;background:rgba(255,255,255,.2);color:#ffffff;font-weight:700}
+html body main.login-shell .login-password-toggle:hover:not(:disabled){background:rgba(255,255,255,.3)}
+html body main.login-shell .login-card .field-error{color:#fed7aa;font-weight:600}
+html body main.login-shell .login-submit.btn.primary{min-height:52px;margin-top:6px;border:0;border-radius:12px;background:#fb923c;color:#14213d;font-size:1rem;font-weight:800;box-shadow:0 12px 28px rgba(251,146,60,.35);transition:transform .15s,box-shadow .15s,background .15s}
+html body main.login-shell .login-submit.btn.primary:hover:not(:disabled){background:#fdba74;transform:translateY(-1px);box-shadow:0 16px 32px rgba(251,146,60,.42)}
 /* Keycloak: one primary button; the password form folds away as the admins' break-glass path. */
-html body main.login-shell a.login-keycloak{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin:0 0 24px;text-decoration:none}
-html body main.login-shell .login-breakglass{border-top:1px solid #e6ecf7;padding-top:16px}
-html body main.login-shell .login-breakglass>summary{cursor:pointer;width:max-content;max-width:100%;color:var(--muted);font-size:.9375rem;font-weight:600;border-radius:6px}
-html body main.login-shell .login-breakglass>summary:hover{color:var(--ink)}
-html body main.login-shell .login-breakglass>summary:focus-visible{outline:3px solid rgba(37,99,235,.35);outline-offset:3px}
+html body main.login-shell a.login-keycloak{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin:0 0 22px;text-decoration:none}
+html body main.login-shell .login-breakglass{border-top:1px solid rgba(255,255,255,.22);padding-top:16px}
+html body main.login-shell .login-breakglass>summary{cursor:pointer;width:max-content;max-width:100%;color:#dbeafe;font-size:.9375rem;font-weight:600;border-radius:6px}
+html body main.login-shell .login-breakglass>summary:hover{color:#ffffff}
 html body main.login-shell .login-breakglass[open]>summary{margin-bottom:20px}
-html body main.login-shell .recovery-entry{display:inline-block;margin-top:18px;color:var(--blue-strong);font-weight:600;text-align:left;text-decoration:none}
-html body main.login-shell .recovery-entry:hover{text-decoration:underline;text-underline-offset:3px}
-html body main.login-shell .login-error,html body main.login-shell .login-setup-notice{border-radius:12px}
-html body main.login-shell .login-trust{display:flex;align-items:center;gap:8px;margin:44px 0 0;padding-top:20px;border-top:1px solid #e6ecf7;color:var(--muted);font-size:.875rem;line-height:1.5}
-html body main.login-shell .login-trust svg{flex:none;color:var(--orange-strong)}
+html body main.login-shell .recovery-entry{display:inline-block;margin-top:16px;color:#fed7aa;font-weight:700;text-align:left;text-decoration:none}
+html body main.login-shell .recovery-entry:hover{color:#ffffff;text-decoration:underline;text-underline-offset:3px}
+html body main.login-shell .login-error,html body main.login-shell .login-setup-notice{border-radius:12px;color:#ffffff;background:rgba(15,23,42,.42);border:1px solid rgba(255,255,255,.3)}
+html body main.login-shell .login-error{border-color:rgba(254,202,202,.6);background:rgba(127,29,29,.45)}
+html body main.login-shell .login-setup-notice code{color:#fed7aa}
+html body main.login-shell .login-trust{display:flex;align-items:center;gap:8px;margin:28px 0 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.22);color:#dbeafe;font-size:.8125rem;line-height:1.5}
+html body main.login-shell .login-trust svg{flex:none;color:#fdba74}
 
-/* Story panel */
-html body main.login-shell .login-story{grid-area:story;display:flex;align-items:stretch;padding:16px 16px 16px 0;background:transparent}
+/* Story: headline and the Connect · Unify · Ask diagram, straight on the blended background */
+html body main.login-shell .login-story{grid-area:story;display:flex;align-items:center;min-width:0;padding:0;background:transparent}
 html body main.login-shell .login-story::after{display:none}
-html body main.login-shell .login-story-panel{position:relative;isolation:isolate;overflow:hidden;flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;padding:clamp(28px,3.4vw,56px);border-radius:28px;color:#ffffff;
-  background:radial-gradient(60% 55% at 100% 0%,rgba(253,186,116,.42),rgba(253,186,116,0) 70%),radial-gradient(55% 55% at 0% 100%,rgba(96,165,250,.5),rgba(96,165,250,0) 70%),linear-gradient(145deg,#1e40af 0%,#2563eb 55%,#1d4ed8 100%)}
-html body main.login-shell .login-story-panel::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);background-size:44px 44px;-webkit-mask-image:radial-gradient(75% 70% at 55% 45%,#000 0%,transparent 100%);mask-image:radial-gradient(75% 70% at 55% 45%,#000 0%,transparent 100%)}
+html body main.login-shell .login-story-panel{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;padding:0;background:none;border-radius:0;color:#ffffff}
+html body main.login-shell .login-story-panel::before{display:none}
 html body main.login-shell .login-story-panel>*{animation:login-rise .6s ease-out both}
-html body main.login-shell .login-story-panel>:nth-child(2){animation-delay:.06s}.login-story-panel>:nth-child(3){animation-delay:.12s}
-html body main.login-shell .login-story-panel>:nth-child(4){animation-delay:.18s}.login-story-panel>:nth-child(5){animation-delay:.24s}
-html body main.login-shell .login-story-eyebrow{margin:0;color:#fed7aa;font-size:.8125rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
-html body main.login-shell .login-story-title{margin:0;color:#ffffff;font-size:clamp(2rem,3.1vw,3.25rem);font-weight:800;line-height:1.08;letter-spacing:-.035em}
-html body main.login-shell .login-story-title span{display:block;color:#fdba74}
-html body main.login-shell .login-story-lead{max-width:58ch;margin:0;color:#dbeafe;font-size:1.0625rem;line-height:1.6}
-html body main.login-shell svg.login-artwork{display:block;width:100%;height:auto;max-height:42vh;margin:4px 0;background:none;border-radius:0;box-shadow:none}
-html body main.login-shell .login-proof{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin:0;padding:22px 0 0;list-style:none;border-top:1px solid rgba(255,255,255,.18)}
-html body main.login-shell .login-proof li{display:flex;align-items:flex-start;gap:12px}
-html body main.login-shell .login-proof svg{flex:none;margin-top:2px;color:#fdba74}
-html body main.login-shell .login-proof strong{display:block;color:#ffffff;font-size:.9375rem;line-height:1.4}
-html body main.login-shell .login-proof span{display:block;margin-top:2px;color:#bfdbfe;font-size:.8125rem;line-height:1.45}
+html body main.login-shell .login-story-panel>:nth-child(2){animation-delay:.06s}
+html body main.login-shell .login-story-panel>:nth-child(3){animation-delay:.12s}
+html body main.login-shell .login-story-title{margin:0;color:#ffffff;font-size:clamp(2.25rem,3.8vw,3.5rem);font-weight:800;line-height:1;letter-spacing:-.045em}
+html body main.login-shell .login-story-unify{color:#bfdbfe}
+html body main.login-shell .login-story-ask{color:#fdba74}
+html body main.login-shell .login-story-lead{max-width:62ch;margin:0 0 6px;color:#dbeafe;font-size:1.0625rem;line-height:1.6}
+html body main.login-shell svg.login-artwork{display:block;width:calc(100% + 24px);height:auto;max-height:none;margin:0 -12px;background:none;border-radius:0;box-shadow:none}
 
 /* The diagram's ring and orbit turn around the knowledge core at (560, 318). */
 html body main.login-shell .lapi-banner-orbit{transform-box:view-box;transform-origin:560px 318px}
@@ -62,22 +78,18 @@ html body main.login-shell .lapi-banner-orbit{transform-box:view-box;transform-o
 @keyframes login-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 @media(max-width:1180px){
-  html body main.login-shell .login-layout{grid-template-columns:minmax(340px,1fr) minmax(0,1.25fr)}
-  html body main.login-shell .login-proof{grid-template-columns:minmax(0,1fr);gap:14px}
+  html body main.login-shell .login-layout{grid-template-columns:minmax(0,1.3fr) minmax(360px,400px);gap:40px;padding:32px 36px}
 }
 @media(max-width:960px){
-  html body main.login-shell .login-layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"form" "story";min-height:0}
-  html body main.login-shell .login-card{max-width:480px;padding:40px 24px 32px}
-  html body main.login-shell .login-story{padding:0 16px 16px}
-  html body main.login-shell .login-story-panel{border-radius:24px}
-  html body main.login-shell .login-proof{grid-template-columns:repeat(3,minmax(0,1fr))}
-  html body main.login-shell svg.login-artwork{max-height:none}
+  html body main.login-shell .login-layout{grid-template-columns:minmax(0,1fr);grid-template-areas:"form" "story";gap:36px;min-height:0;padding:32px 20px 40px}
+  html body main.login-shell .login-card{justify-self:center;max-width:480px}
+  html body main.login-shell::after{right:-20%;top:12%;margin-top:0;width:420px;height:420px}
 }
 @media(max-width:640px){
-  html body main.login-shell .login-identity{margin-bottom:32px}
-  html body main.login-shell .login-card .screen-heading{font-size:1.875rem}
-  html body main.login-shell .login-story-panel{gap:18px;padding:28px 22px}
-  html body main.login-shell .login-proof{grid-template-columns:minmax(0,1fr)}
+  html body main.login-shell .login-layout{padding:24px 16px 32px}
+  html body main.login-shell .login-card{padding:28px 20px 22px;border-radius:22px}
+  html body main.login-shell .login-identity{margin-bottom:22px}
+  html body main.login-shell .login-card .screen-heading{font-size:1.625rem}
 }
 /* Below this width the diagram's labels would be too small to read: keep the words. */
 @media(max-width:560px){html body main.login-shell svg.login-artwork{display:none}}

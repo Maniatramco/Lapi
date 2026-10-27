@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.13 - 28 October 2026
+
+Redesigned sign-in page
+
+- One blended background (deep blue, indigo, rose and peach, with see-through glows and a faint grid) now runs behind the whole sign-in page instead of a white form beside a blue panel.
+- The Connect · Unify · Ask diagram (`lapi-banner.tsx`) is unchanged and sits directly on the background under a "Connect. Unify. Ask." headline; the three feature notes under it are removed.
+- The sign-in card is frosted glass (blur and a darker tint for readable white text), with an orange Sign in button; Keycloak, administrator sign-in, password reveal, errors, autofill and keyboard focus are restyled for it. The card stays first in reading order and above the diagram on narrow screens; the diagram is hidden below 560 px as before.
+
 ## v26.1.16.12 - 28 October 2026
 
 Text-only files are indexed as their text

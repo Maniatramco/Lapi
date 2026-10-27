@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.12",
+  "version": "26.1.16.13",
   "releases": [
+    {
+      "version": "26.1.16.13",
+      "date": "2026-10-28",
+      "title": "Redesigned sign-in page",
+      "changes": [
+        "The sign-in page now uses one blended background (blue, indigo, rose and peach) behind the Connect · Unify · Ask diagram, with a frosted-glass sign-in card instead of a separate white form and blue panel. The diagram itself is unchanged."
+      ]
+    },
     {
       "version": "26.1.16.12",
       "date": "2026-10-28",
