@@ -2,6 +2,25 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.10 - 28 October 2026
+
+Step-by-step connector guides
+
+- New `lapi_frontend/app/connector-guides.ts`: a plain-language setup guide for every storage connector (Amazon S3, Azure Blob Storage, OCI Object Storage, SharePoint, Google Drive, Google Cloud Storage). Each lists what you need, numbered steps in the provider's console, where each Lapi field's value comes from, and the fix for each error Test connection can return. A shared final part covers Test, Save, selecting files, Vectorize and the OCR model needed for images and scans.
+- Add knowledge shows the guide above the connection form, open for a new connection and collapsed when editing a saved one. Text to copy or look for is shown as code.
+- The file-selection page lists images among the importable types.
+- Test: every provider has a complete guide, and the panel renders.
+
+## v26.1.16.9 - 27 October 2026
+
+Image uploads read with OCR
+
+- PNG, JPG/JPEG and WEBP join PDF, DOCX, TXT and JSON (`file_formats.SUPPORTED`, now the one list used by upload, Lapi Agent and onboarding uploads, merged uploads and cloud connectors). Images are checked by signature like PDF and DOCX; a mislabelled image says what it really is.
+- New `ocr.read_image`: refuses images over 50 megapixels before decoding, applies the EXIF orientation, scales the longest side to 2,000 px and sends the image to the dataset's cloud OCR model (the same path as scanned PDF pages: OpenAI gpt-4o / gpt-4o-mini or Gemini; local OCR stays off for dataset jobs). Text is indexed as one page with `text_origin: ocr`, unverified, and cached per OCR model. Blank or unreadable images, OCR turned off and a dataset without an OCR model each fail with a specific reason.
+- Merged uploads may include images; they are read in the worker, never on the upload request.
+- Images open inline as originals (`/api/documents/{id}/source`, merged sources) and in citations; file pickers and drop zones accept them.
+- OCI deployment: `LAPI_OCR_ENABLED=true`, so images and scanned PDF pages are read; nothing is installed or run locally for OCR.
+
 ## v26.1.16.8 - 27 October 2026
 
 Clear errors for files that are not really PDF or DOCX

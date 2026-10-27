@@ -5,7 +5,7 @@ export function suggestedExtractionName(names:string[],when:Date=new Date(),time
  const parts=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(when);
  const part=(name:string)=>parts.find(p=>p.type===name)?.value||'';
  const suffix=`_${part('year')}-${part('month')}-${part('day')}_${part('hour')}-${part('minute')}-${part('second')}`;
- const base=(names.length>1?`Merged extraction - ${names.length} documents`:names[0]?.replace(/\.(pdf|docx|txt|json)$/i,'')||'Document extraction').trim().replace(/_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/,'');
+ const base=(names.length>1?`Merged extraction - ${names.length} documents`:names[0]?.replace(/\.(pdf|docx|txt|json|png|jpe?g|webp)$/i,'')||'Document extraction').trim().replace(/_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/,'');
  return (base||'Document extraction').slice(0,200-suffix.length)+suffix;
 }
 

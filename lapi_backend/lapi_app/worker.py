@@ -65,7 +65,12 @@ def parse_document(name,raw,*,ocr_enabled=True,progress=None,cache_id=None):
     if ext=='txt':return [{'page':1,'text':raw.decode('utf-8-sig')}]
     if ext=='json':return [{'page':1,'text':json_document_text(raw)}]
     # ZIP-based DOCX files go through the archive safety checks below first.
-    if ext=='pdf' or ext=='docx' and not raw.startswith(b'PK\x03\x04'):file_formats.check(name,raw)
+    if ext in ('pdf',*file_formats.IMAGES) or ext=='docx' and not raw.startswith(b'PK\x03\x04'):file_formats.check(name,raw)
+    if ext in file_formats.IMAGES:
+        # An image is one page of OCR text. Merged uploads read it later in the worker.
+        if not ocr_enabled:return [{'page':1,'text':'','ocr_pending':True}]
+        from . import ocr
+        return [{'page':1,**ocr.read_image(raw,progress=progress,cache_id=cache_id)}]
     if ext=='pdf':
         from pypdf import PdfReader
         from pypdf.errors import PyPdfError

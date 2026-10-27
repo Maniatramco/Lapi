@@ -2,6 +2,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {ArrowLeft,ArrowRight,CheckCircle2,Cloud,Database,FileText,Folder,Loader2,RefreshCw,ShieldCheck,AlertCircle,ChevronRight} from 'lucide-react';
 import type {DatasetKnowledgeScope} from './dataset-knowledge-picker';
+import {CONNECTOR_GUIDES,type ConnectorGuide} from './connector-guides';
 import './add-knowledge.css';
 
 type Entity=Record<string,any>;
@@ -15,6 +16,19 @@ export const STORAGE_PROVIDERS=[
  {id:'google_drive',name:'Google Drive',help:'A folder shared with a service account',auth:'Google service-account key'},
  {id:'gcs',name:'Google Cloud Storage',help:'A bucket and optional folder prefix',auth:'Google service-account key with Storage Object Viewer'},
 ] as const;
+/** `Backticked` guide text is something to copy, type or look for exactly. */
+const guideText=(text:string)=>text.split('`').map((part,i)=>i%2?<code key={i}>{part}</code>:part);
+export function ConnectorGuidePanel({guide,name,open}:{guide:ConnectorGuide;name:string;open:boolean}){
+ return <details className="connector-guide" open={open}>
+  <summary><strong>Step-by-step: how to connect {name}</strong><span>{guide.time}</span></summary>
+  <div className="connector-guide-body">
+   <section><h3>What you need</h3><ul>{guide.need.map(item=><li key={item}>{guideText(item)}</li>)}</ul></section>
+   {guide.parts.map((part,n)=><section key={part.title}><h3>Part {n+1}: {part.title}</h3><ol>{part.steps.map(step=><li key={step}>{guideText(step)}</li>)}</ol></section>)}
+   <section><h3>What goes where</h3><dl className="connector-guide-fields">{guide.fields.map(([field,where])=><div key={field}><dt>{field}</dt><dd>{guideText(where)}</dd></div>)}</dl></section>
+   <section><h3>If Test connection shows an error</h3><dl className="connector-guide-fields">{guide.problems.map(([message,fix])=><div key={message}><dt>{message}</dt><dd>{guideText(fix)}</dd></div>)}</dl></section>
+  </div>
+ </details>;
+}
 const STEPS:[Step,string][]=[['choose','Choose storage'],['connect','Connect & test'],['select','Select documents'],['vectorize','Vectorize']];
 export const MAX_SELECTION=20;
 export const blankConnection=(provider:string,datasetId:string):Entity=>({name:'',provider,dataset_id:datasetId,enabled:true,auth_mode:'access_key',bucket:'',region:provider==='oci_object'?'ap-mumbai-1':provider==='s3'?'ap-south-1':'',prefix:'',expected_owner:'',tenant_id:'',client_id:'',site_id:'',drive_id:'',folder_id:'',account:'',container:'',namespace:'',endpoint:'',credentials:{}});
@@ -82,6 +96,7 @@ export function AddKnowledge({api,datasets,documents,selectedDataset,onChanged,o
 
   {step==='connect'&&form&&provider&&<form className="add-knowledge-body" onSubmit={e=>{e.preventDefault();void save();}}>
    <div className="knowledge-section-head"><h2>Connect {provider.name}</h2><button type="button" className="text-button" onClick={()=>setStep('choose')}>Choose different storage</button></div>
+   {CONNECTOR_GUIDES[form.provider]&&<ConnectorGuidePanel guide={CONNECTOR_GUIDES[form.provider]} name={provider.name} open={!form.id}/>}
    <fieldset disabled={!!busy}><legend className="sr-only">{provider.name} location and credentials</legend>
    <div className="knowledge-fields">
     {field('name','Connection name','For example: Finance contracts')}
@@ -105,7 +120,7 @@ export function AddKnowledge({api,datasets,documents,selectedDataset,onChanged,o
   </form>}
 
   {step==='select'&&active&&<div className="add-knowledge-body">
-   <div className="knowledge-section-head"><div><h2>Select documents</h2><p className="knowledge-sub">{active.name} · into <strong>{dataset?.name||'dataset'}</strong> · up to {MAX_SELECTION} files, PDF, DOCX, TXT or JSON</p></div><button type="button" className="text-button" onClick={()=>setStep('choose')}>Change storage</button></div>
+   <div className="knowledge-section-head"><div><h2>Select documents</h2><p className="knowledge-sub">{active.name} · into <strong>{dataset?.name||'dataset'}</strong> · up to {MAX_SELECTION} files, PDF, DOCX, TXT, JSON or images</p></div><button type="button" className="text-button" onClick={()=>setStep('choose')}>Change storage</button></div>
    <nav className="knowledge-trail" aria-label="Folder path"><button type="button" onClick={()=>void browse(active,[])}>{active.name}</button>{trail.map((part,i)=><span key={part.id}><ChevronRight size={14}/><button type="button" onClick={()=>void browse(active,trail.slice(0,i+1))}>{part.name}</button></span>)}</nav>
    <ul className="knowledge-files" aria-busy={busy==='Reading documents'}>
     {items.map(item=>item.folder?<li key={item.id}><button type="button" className="knowledge-folder" onClick={()=>void browse(active,[...trail,{id:item.id,name:item.name}])}><Folder size={18}/><span>{item.name}</span><ChevronRight size={15}/></button></li>:<li key={item.id}><label data-disabled={!item.selection}><input type="checkbox" checked={chosen.some(c=>c.id===item.id)} disabled={!item.selection||(!chosen.some(c=>c.id===item.id)&&chosen.length>=MAX_SELECTION)} onChange={()=>toggle(item)} aria-label={`Select ${item.name}`}/><FileText size={18}/><span><strong>{item.name}</strong><small>{item.selection?`${Math.max(1,Math.round((item.size||0)/1024))} KB`:'Unsupported file type'}</small></span></label></li>)}

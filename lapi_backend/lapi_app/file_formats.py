@@ -1,4 +1,5 @@
-"""Check that a PDF or DOCX file really is one before it is stored or indexed.
+"""Supported document types, and a check that a PDF, DOCX or image file really is one
+before it is stored or indexed.
 
 A file's extension says nothing about its contents: a saved web link, a web page or a
 renamed archive can arrive named .pdf. Say what the file actually is, so the user knows
@@ -7,7 +8,29 @@ to fetch the real document instead of retrying.
 import io
 import zipfile
 
+IMAGES = ('png', 'jpg', 'jpeg', 'webp')  # Read with OCR; one image is one page.
+SUPPORTED = ('pdf', 'docx', 'txt', 'json') + IMAGES
+SUPPORTED_LABEL = 'PDF, DOCX, UTF-8 TXT, JSON and image (PNG, JPG, WEBP)'
 OLE = b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'  # Legacy Office (.doc, .xls) compound file
+
+
+def extension(name):
+    return name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+
+
+def supported(name):
+    return extension(name) in SUPPORTED
+
+
+def image_kind(raw):
+    """The image format named by the file's signature, or None."""
+    if raw.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'png'
+    if raw.startswith(b'\xff\xd8\xff'):
+        return 'jpg'
+    if raw[:4] == b'RIFF' and raw[8:12] == b'WEBP':
+        return 'webp'
+    return None
 
 
 def _text(raw):
@@ -28,6 +51,8 @@ def _actually(raw):
         return 'a ZIP archive'
     if raw.startswith(OLE):
         return 'an older Microsoft Office file (such as .doc)'
+    if image_kind(raw):
+        return 'a ' + image_kind(raw).upper() + ' image'
     text = _text(raw)
     if text is None:
         return None
@@ -40,13 +65,29 @@ def _actually(raw):
 
 
 def problem(name, raw):
-    """Why a .pdf or .docx file is not that format, or None when it looks right."""
+    """Why a .pdf, .docx or image file is not that format, or None when it looks right."""
     ext = name.rsplit('.', 1)[-1].lower()
+    if ext in IMAGES:
+        kind = image_kind(raw)
+        if kind == ('jpg' if ext == 'jpeg' else ext):
+            return None
+        if kind:
+            return f'"{name}" is a {kind.upper()} image with a .{ext} name. Rename it to .{kind} and upload it again.'
+        found = _actually(raw)
+        if found == 'only a web link':
+            return f'"{name}" is not a real image: it only contains a web link. Open the link, download the actual image and upload that instead.'
+        if found == 'a PDF file':
+            return f'"{name}" is a PDF file with an image name. Rename it to .pdf and upload it again.'
+        if found:
+            return f'"{name}" is not a real {ext.upper()} image: it is {found}. Upload the original image instead.'
+        return f'"{name}" is not a real {ext.upper()} image: its contents are not in an image format. Upload the original image instead.'
     if ext == 'pdf':
         # The PDF header may follow a few bytes of junk; readers search the first 1 KB.
         if raw[:1024].find(b'%PDF-') >= 0:
             return None
         found = _actually(raw)
+        if image_kind(raw):
+            return f'"{name}" is {found} with a .pdf name. Rename it to .{image_kind(raw)} and upload it again.'
         if found == 'only a web link':
             return f'"{name}" is not a real PDF: it only contains a web link. Open the link, download the actual PDF and upload that instead.'
         if found == 'a web page':
@@ -67,6 +108,8 @@ def problem(name, raw):
                 return None
             return f'"{name}" is not a Word (DOCX) document: it is a different kind of ZIP archive. Export it from Word as DOCX or PDF.'
         found = _actually(raw)
+        if image_kind(raw):
+            return f'"{name}" is {found} with a .docx name. Rename it to .{image_kind(raw)} and upload it again.'
         if found == 'a PDF file':
             return f'"{name}" is a PDF file with a .docx name. Rename it to .pdf and upload it again.'
         if found == 'an older Microsoft Office file (such as .doc)':

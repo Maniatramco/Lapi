@@ -8,7 +8,7 @@ import asyncio
 from typing import Literal
 from fastapi import Depends, HTTPException, File, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
-from .. import core, dataset_models as routing, dataset_access as access
+from .. import core, dataset_models as routing, dataset_access as access, file_formats
 
 
 class DocumentManifest(BaseModel):
@@ -240,8 +240,8 @@ def install(app, auth):
                         profile = routing.profile_snapshot(routing.owned(model_data['connection_profile_id'], model.owner, 'config_profile'), model_data.get('connection_profile_version'))
                         main.external_check(body.processing.allow_external, role == 'embedding', profile['settings'])
                 limit = core.settings()['max_upload_mb'] * 1024 * 1024
-                if any(d.size > limit or '/' in d.name or '\\' in d.name or d.name.rsplit('.', 1)[-1].lower() not in ('txt','pdf','docx','json') for d in body.processing.documents):
-                    raise HTTPException(422, 'Choose supported PDF, DOCX, TXT or JSON documents within the upload limit.')
+                if any(d.size > limit or '/' in d.name or '\\' in d.name or not file_formats.supported(d.name) for d in body.processing.documents):
+                    raise HTTPException(422, 'Choose supported PDF, DOCX, TXT, JSON or image (PNG, JPG, WEBP) documents within the upload limit.')
             data = {**values, 'agent':'onboard_extract','workflow_version':2,'models': models, 'dataset_id': '', 'status': 'pending', 'confirmed_at': time.time(),
                     'steps': [{'id': str(i), 'label': label, 'status': 'pending'} for i, label in enumerate(FULL_LABELS if body.processing else LABELS)]}
             ref = f'agent_onboarding/{id}/v1.json'; core.store.put_json(ref, data)

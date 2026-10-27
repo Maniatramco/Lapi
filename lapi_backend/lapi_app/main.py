@@ -267,7 +267,7 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
     limit=settings()['max_upload_mb']*1024*1024
     for file in files:
         name=(file.filename or '').replace('\\','/').split('/')[-1]
-        if name.rsplit('.',1)[-1].lower() not in ('txt','pdf','docx','json'):raise HTTPException(400,'Only PDF, DOCX, UTF-8 TXT and JSON files are supported')
+        if not file_formats.supported(name):raise HTTPException(400,'Only '+file_formats.SUPPORTED_LABEL+' files are supported')
         raw=await file.read(limit+1);await file.seek(0)
         if not raw or len(raw)>limit:raise HTTPException(413,'A file is empty or exceeds the upload size limit')
         if name.lower().endswith('.txt'):
@@ -292,7 +292,7 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
         files=[UploadFile(filename=name,file=io.BytesIO(raw))]
     for file in files:
         name=(file.filename or 'document').replace('\\','/').split('/')[-1][:200]
-        if name.rsplit('.',1)[-1].lower() not in ('txt','pdf','docx','json'):raise HTTPException(400,'Only PDF, DOCX, UTF-8 TXT and JSON files are supported')
+        if not file_formats.supported(name):raise HTTPException(400,'Only '+file_formats.SUPPORTED_LABEL+' files are supported')
         limit=settings()['max_upload_mb']*1024*1024;raw=await file.read(limit+1)
         if len(raw)>limit:raise HTTPException(413,'File exceeds configured upload size')
         if not raw:raise HTTPException(400,'Empty file')
@@ -318,12 +318,13 @@ def preview(id:str,owner=Depends(auth)):
 def download(id:str,owner=Depends(auth)):
     from urllib.parse import quote
     r=get_record(id,owner,'document');return Response(store.get(r.ref),media_type='application/octet-stream',headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(r.name)})
+INLINE_TYPES={'pdf':'application/pdf','json':'application/json','txt':'text/plain; charset=utf-8','png':'image/png','jpg':'image/jpeg','jpeg':'image/jpeg','webp':'image/webp'}
 @app.get('/api/documents/{id}/source')
 def source_document(id:str,owner=Depends(auth)):
     from urllib.parse import quote
     r=get_record(id,owner,'document');ext=r.name.rsplit('.',1)[-1].lower()
-    if ext not in ('pdf','txt','json'):raise HTTPException(415,'Inline original preview supports PDF, UTF-8 TXT and JSON. Download DOCX to review its original layout.')
-    return Response(store.get(r.ref),media_type={'pdf':'application/pdf','json':'application/json'}.get(ext,'text/plain; charset=utf-8'),headers={'Content-Disposition':"inline; filename*=UTF-8''"+quote(r.name),'Content-Security-Policy':"sandbox"})
+    if ext not in INLINE_TYPES:raise HTTPException(415,'Inline original preview supports PDF, UTF-8 TXT, JSON and images. Download DOCX to review its original layout.')
+    return Response(store.get(r.ref),media_type=INLINE_TYPES[ext],headers={'Content-Disposition':"inline; filename*=UTF-8''"+quote(r.name),'Content-Security-Policy':"sandbox"})
 
 def original_pdf_page_count(raw):
     import pypdfium2 as pdfium
@@ -361,8 +362,8 @@ def merged_source(id:str,key:str,action:str,page:int=1,owner=Depends(auth)):
     if action=='page-image':
         if ext!='pdf':raise HTTPException(415,'Page images are available for original PDF files.')
         return original_page_image(store.get(f'documents/{id}/merged-sources/{key}/original'),page)
-    if action=='source' and ext not in ('pdf','txt','json'):raise HTTPException(415,'Download this original to inspect its layout.')
-    return Response(store.get(f'documents/{id}/merged-sources/{key}/original'),media_type={'pdf':'application/pdf','json':'application/json','txt':'text/plain; charset=utf-8'}.get(ext,'application/octet-stream'),headers={'Content-Disposition':('inline' if action=='source' else 'attachment')+"; filename*=UTF-8''"+quote(source['name']),'Content-Security-Policy':'sandbox'})
+    if action=='source' and ext not in INLINE_TYPES:raise HTTPException(415,'Download this original to inspect its layout.')
+    return Response(store.get(f'documents/{id}/merged-sources/{key}/original'),media_type=INLINE_TYPES.get(ext,'application/octet-stream'),headers={'Content-Disposition':('inline' if action=='source' else 'attachment')+"; filename*=UTF-8''"+quote(source['name']),'Content-Security-Policy':'sandbox'})
 class Consent(BaseModel):allow_external:bool=False
 @app.post('/api/documents/{id}/reindex')
 @lifecycle_guard()

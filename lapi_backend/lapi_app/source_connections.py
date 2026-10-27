@@ -302,7 +302,7 @@ def install(app, auth, api):
                             name, raw, provenance = adapter.fetch(item, core.settings()['max_upload_mb'] * 1024 * 1024)
                             authorize(actor, cfg['dataset_id'])
                             if not cloud_sources.supported(name):
-                                raise cloud_sources.SourceError('Only PDF, DOCX, TXT and JSON files can be imported.')
+                                raise cloud_sources.SourceError('Only PDF, DOCX, TXT, JSON and image (PNG, JPG, WEBP) files can be imported.')
                             digest = hashlib.sha256(raw).hexdigest()
                             key = hashlib.sha256(json.dumps([cfg['id'], cfg['dataset_id'], item['id'], name, digest]).encode()).hexdigest()
                             generation_ref = ROOT + cfg['id'] + '/' + key + '.json'

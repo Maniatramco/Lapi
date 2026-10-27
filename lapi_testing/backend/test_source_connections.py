@@ -349,7 +349,7 @@ def test_gcs_browses_prefix_pages_and_reads_the_selected_generation(monkeypatch)
     def request(method, url, **kwargs):
         calls.append((url, kwargs))
         if url == adapter.objects:
-            return {'prefixes': ['approved/sub/'], 'items': [{'name': 'approved/', 'size': '0', 'generation': '1'}, *objects.values(), {'name': 'approved/photo.png', 'size': '9', 'generation': '3'}], 'nextPageToken': 'page2'}
+            return {'prefixes': ['approved/sub/'], 'items': [{'name': 'approved/', 'size': '0', 'generation': '1'}, *objects.values(), {'name': 'approved/photo.gif', 'size': '9', 'generation': '3'}], 'nextPageToken': 'page2'}
         if url == adapter.objects + '/approved%2Fa%20b.txt':
             return objects['approved/a b.txt']
         raise AssertionError(url)
@@ -357,7 +357,7 @@ def test_gcs_browses_prefix_pages_and_reads_the_selected_generation(monkeypatch)
     monkeypatch.setattr(cloud, 'download', lambda url, headers, limit: downloads.append(url) or b'data')
     items, cursor = adapter.browse()
     assert cursor == 'page2' and calls[0][1]['params'] | {} == {'prefix': 'approved/', 'delimiter': '/', 'maxResults': 100, 'fields': 'nextPageToken,prefixes,items(name,size,generation,updated)'}
-    assert [(i['name'], i['folder'], i.get('supported')) for i in items] == [('sub', True, None), ('a b.txt', False, True), ('photo.png', False, False)]
+    assert [(i['name'], i['folder'], i.get('supported')) for i in items] == [('sub', True, None), ('a b.txt', False, True), ('photo.gif', False, False)]
     adapter.browse(cursor='page2'); assert calls[-1][1]['params']['pageToken'] == 'page2'
     name, raw, provenance = adapter.fetch(items[1], 10)
     assert (name, raw) == ('a b.txt', b'data') and downloads == [adapter.objects + '/approved%2Fa%20b.txt?alt=media&generation=17']
@@ -463,7 +463,7 @@ def test_local_endpoints_only_on_this_computer_when_enabled(system, remote, monk
 
 def test_azure_adapter_lists_scoped_pages_and_reads_with_sas(monkeypatch):
     seen = []
-    listing = b'<?xml version="1.0" encoding="utf-8"?><EnumerationResults><Blobs><BlobPrefix><Name>team/sub/</Name></BlobPrefix><Blob><Name>team/brief.pdf</Name><Properties><Content-Length>4</Content-Length><Etag>"0x1"</Etag><Last-Modified>Mon, 26 Oct 2026 10:00:00 GMT</Last-Modified></Properties></Blob><Blob><Name>team/photo.png</Name><Properties><Content-Length>9</Content-Length><Etag>"0x2"</Etag></Properties></Blob></Blobs><NextMarker>page-2</NextMarker></EnumerationResults>'
+    listing = b'<?xml version="1.0" encoding="utf-8"?><EnumerationResults><Blobs><BlobPrefix><Name>team/sub/</Name></BlobPrefix><Blob><Name>team/brief.pdf</Name><Properties><Content-Length>4</Content-Length><Etag>"0x1"</Etag><Last-Modified>Mon, 26 Oct 2026 10:00:00 GMT</Last-Modified></Properties></Blob><Blob><Name>team/photo.gif</Name><Properties><Content-Length>9</Content-Length><Etag>"0x2"</Etag></Properties></Blob></Blobs><NextMarker>page-2</NextMarker></EnumerationResults>'
     def handler(request):
         seen.append(request)
         return httpx.Response(200, content=listing if 'comp=list' in str(request.url) else b'data')
@@ -471,7 +471,7 @@ def test_azure_adapter_lists_scoped_pages_and_reads_with_sas(monkeypatch):
     monkeypatch.setattr(cloud.httpx, 'Client', lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs))
     adapter = cloud.AzureBlob({'provider': 'azure_blob', 'account': 'lapidocs', 'container': 'approved-docs', 'prefix': 'team/'}, {'sas_token': SAS})
     items, cursor = adapter.browse()
-    assert cursor == 'page-2' and [item['name'] for item in items] == ['sub', 'brief.pdf', 'photo.png']
+    assert cursor == 'page-2' and [item['name'] for item in items] == ['sub', 'brief.pdf', 'photo.gif']
     assert items[1]['supported'] and not items[2]['supported'] and items[0]['folder']
     assert str(seen[0].url).startswith('https://lapidocs.blob.core.windows.net/approved-docs?restype=container&comp=list') and 'prefix=team%2F' in str(seen[0].url) and 'sig=SECRET_SIGNATURE' in str(seen[0].url)
     name, raw, provenance = adapter.fetch(items[1], 10)

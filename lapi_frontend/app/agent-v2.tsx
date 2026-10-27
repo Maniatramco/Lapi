@@ -143,7 +143,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  const onFileDrop=(event:DragEvent<HTMLElement>)=>{
   if(!isFileDrag(Array.from(event.dataTransfer.types)))return;event.preventDefault();event.stopPropagation();dragDepth.current=0;setDragging(false);
   const folder=Array.from(event.dataTransfer.items||[]).some(item=>item.kind==='file'&&item.webkitGetAsEntry?.()?.isDirectory);
-  if(folder){setError('Folders are not supported. Drop PDF, DOCX, TXT or JSON files instead.');return;}
+  if(folder){setError('Folders are not supported. Drop PDF, DOCX, TXT, JSON or image files instead.');return;}
   attachFiles(Array.from(event.dataTransfer.files));
  };
  useEffect(()=>{
@@ -515,8 +515,8 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
      if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}
     }}/></div></div>
     <div className="agent-v2-compose-controls">
-     <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>
-     <button className="btn icon" aria-label="Attach documents for agent" title="Attach PDF, DOCX, TXT or JSON" disabled={attachmentsBlocked} onClick={()=>fileInput.current?.click()}><Plus size={21}/></button>
+     <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json,.png,.jpg,.jpeg,.webp" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>
+     <button className="btn icon" aria-label="Attach documents for agent" title="Attach PDF, DOCX, TXT, JSON or images (PNG, JPG, WEBP)" disabled={attachmentsBlocked} onClick={()=>fileInput.current?.click()}><Plus size={21}/></button>
      <label className="agent-v2-model-control"><span>Agent Model</span><select aria-label="Agent Model" value={effectivePlanner} disabled={Boolean(working)||onboardingBusy||plans.some(active)||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading models…':catalogError?'Models unavailable':'Choose an Agent Model'):'Choose an Agent Model'}</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
      <div className="agent-v2-send-controls">
       <button className={`btn icon${listening?' primary':''}`} aria-label={listening?'Stop listening':'Speak your request'} title={voiceSupported?'Speech input':'Speech input unavailable in this browser'} disabled={!voiceSupported||Boolean(working)} onClick={toggleMic}><Mic size={20}/></button>
@@ -526,7 +526,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
    </div>
    {inputIssue&&<p className="agent-v2-prompt-notice" role="status">{inputIssue}</p>}
    {promptNotice&&<p className="agent-v2-prompt-notice" role="status">{promptNotice}</p>}
-   <div className="agent-v2-footer"><span>Drag & drop PDF, DOCX, TXT, JSON · up to 20 files</span><details><summary>Privacy & providers</summary><p>Chat uses your configured model and indexed knowledge directly. Onboarding, upload, extraction and re-extraction ask for external processing approval before sending files. Workflow requests and results are saved in your workspace.</p><p>Browser speech recognition may send audio to its speech service; voice is optional and text remains available.</p></details></div>
+   <div className="agent-v2-footer"><span>Drag & drop PDF, DOCX, TXT, JSON or images · up to 20 files</span><details><summary>Privacy & providers</summary><p>Chat uses your configured model and indexed knowledge directly. Onboarding, upload, extraction and re-extraction ask for external processing approval before sending files. Workflow requests and results are saved in your workspace.</p><p>Browser speech recognition may send audio to its speech service; voice is optional and text remains available.</p></details></div>
   </div>
   </div>
   <aside className="agent-context-panel" aria-label="Agent context">

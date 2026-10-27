@@ -354,7 +354,7 @@ Use selected_dataset by default. accessible_datasets is ONLY for explicitly disc
     if query=='original' or query=='semantic' and 'extraction' not in args.get('source_types',[]):
         # Supported originals always have an upload extension. A dataset name
         # or content topic is not a filename, even when quoted in the request.
-        frame['document_names']=[name for name in frame['document_names'] if re.search(r'\.(pdf|docx|txt|json)$',name,re.I)]
+        frame['document_names']=[name for name in frame['document_names'] if re.search(r'\.(pdf|docx|txt|json|png|jpe?g|webp)$',name,re.I)]
     reads={'document_count':['list_documents'],'documents':['list_documents'],
         'datasets':['list_datasets'],'prompts':['list_prompts'],'models':['get_model_configuration'],
         'status':['list_documents','get_dataset_status'],'workflow':['get_workflow_status']}

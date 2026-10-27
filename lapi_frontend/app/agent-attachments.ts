@@ -5,9 +5,9 @@ export function isJsonAttachment(file:Pick<Attachment,'name'>){return /\.json$/i
 export function isFileDrag(types:readonly string[]){return types.includes('Files');}
 export function mergeAgentAttachments<T extends Attachment>(existing:T[],incoming:T[],maxMb=25):{files:T[];error:string}{
  const limit=Number.isFinite(maxMb)&&maxMb>0?maxMb:25;
- if(!incoming.length)return {files:existing,error:'Drop PDF, DOCX, TXT or JSON files. Folders are not supported.'};
+ if(!incoming.length)return {files:existing,error:'Drop PDF, DOCX, TXT, JSON or image files. Folders are not supported.'};
  for(const file of incoming){
-  const reason=!/\.(pdf|docx|txt|json)$/i.test(file.name)?'Only PDF, DOCX, TXT and JSON files are supported.':!file.size?'Empty files cannot be attached.':file.size>limit*1024*1024?`This file exceeds the ${limit} MB limit.`:'';
+  const reason=!/\.(pdf|docx|txt|json|png|jpe?g|webp)$/i.test(file.name)?'Only PDF, DOCX, TXT, JSON and image (PNG, JPG, WEBP) files are supported.':!file.size?'Empty files cannot be attached.':file.size>limit*1024*1024?`This file exceeds the ${limit} MB limit.`:'';
   if(reason)return {files:existing,error:`${file.name}: ${reason}`};
  }
  const files=[...existing];
