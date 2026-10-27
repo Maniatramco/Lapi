@@ -549,15 +549,6 @@
                         "key": "master-key"
                       }
                     }
-                  },
-                  {
-                    "name": "LAPI_BOOTSTRAP_TOKEN",
-                    "valueFrom": {
-                      "secretKeyRef": {
-                        "name": "lapi-secrets",
-                        "key": "bootstrap-token"
-                      }
-                    }
                   }
                 ],
                 "volumeMounts": [
@@ -651,15 +642,6 @@
                         "key": "master-key"
                       }
                     }
-                  },
-                  {
-                    "name": "LAPI_BOOTSTRAP_TOKEN",
-                    "valueFrom": {
-                      "secretKeyRef": {
-                        "name": "lapi-secrets",
-                        "key": "bootstrap-token"
-                      }
-                    }
                   }
                 ],
                 "volumeMounts": [
@@ -747,15 +729,6 @@
                       "secretKeyRef": {
                         "name": "lapi-secrets",
                         "key": "master-key"
-                      }
-                    }
-                  },
-                  {
-                    "name": "LAPI_BOOTSTRAP_TOKEN",
-                    "valueFrom": {
-                      "secretKeyRef": {
-                        "name": "lapi-secrets",
-                        "key": "bootstrap-token"
                       }
                     }
                   }

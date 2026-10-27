@@ -1,7 +1,6 @@
 import os,tempfile
 os.environ['DATA_DIR']=tempfile.mkdtemp()
 os.environ['DATABASE_URL']='sqlite:///'+os.environ['DATA_DIR']+'/test.db'
-os.environ['LAPI_BOOTSTRAP_TOKEN']='test-bootstrap'
 os.environ['MODEL_PROVIDER']='mock'
 os.environ['EMBEDDING_PROVIDER']='mock'
 os.environ['SEARCH_PROVIDER']='local'
@@ -10,6 +9,7 @@ from fastapi.testclient import TestClient
 from lapi_app.main import app
 from lapi_app.core import store,Session,Record,Job,User,password_hash
 from lapi_app.worker import run_once
+from lapi_app.create_admin import create_admin
 
 import pytest
 from sqlalchemy import create_engine
@@ -32,8 +32,10 @@ def isolated(tmp_path,monkeypatch):
 def test_complete_storage_first_workflow():
     with TestClient(app) as c:
         assert c.get('/api/documents').status_code==401
-        assert c.post('/api/auth/setup',json={'username':'admin','password':'secure-test-pass','bootstrap_token':'bad'}).status_code==403
-        assert c.post('/api/auth/setup',json={'username':'admin','password':'secure-test-pass','bootstrap_token':'test-bootstrap'}).status_code==200
+        assert c.get('/api/auth/status').json()=={'setup_required':True}
+        assert c.post('/api/auth/setup',json={'username':'admin','password':'secure-test-pass'}).status_code in (404,405)
+        create_admin('admin','secure-test-pass')
+        assert c.get('/api/auth/status').json()=={'setup_required':False}
         res=c.post('/api/auth/login',json={'username':'admin','password':'secure-test-pass'});assert res.status_code==200,res.text
         csrf=res.json()['csrf_token'];c.headers['X-CSRF-Token']=csrf
         kb=c.post('/api/knowledge-bases',json={'name':'Test corpus'}).json()
@@ -217,3 +219,33 @@ def test_openai_rejects_overlong_unicode_query_before_external_request(monkeypat
     monkeypatch.setattr(providers,'openai_request',lambda *args:calls.append(args))
     with pytest.raises(providers.ProviderError,match='8000 UTF-8 byte'):providers.embed(['😀'*2001])
     assert calls==[]
+
+def test_create_admin_command_only_creates_the_first_administrator(monkeypatch,capsys):
+    import io,json as _json
+    from sqlalchemy import select
+    from lapi_app import create_admin as command
+    with pytest.raises(ValueError):command.create_admin('admin','short')
+    stdin=io.TextIOWrapper(io.BytesIO(_json.dumps({'username':'admin','password':'secure-test-pass'}).encode()))
+    monkeypatch.setattr('sys.stdin',stdin)
+    assert command.main()==0 and 'secure-test-pass' not in capsys.readouterr().out
+    with Session() as s:
+        admin=s.scalar(select(User));assert (admin.id,admin.username,admin.role)==('administrator','admin','administrator')
+    with pytest.raises(ValueError,match='already configured'):command.create_admin('intruder','another-test-pass')
+    with Session() as s:assert [u.username for u in s.scalars(select(User))]==['admin']
+
+
+def test_first_admin_from_environment_is_created_once(monkeypatch):
+    from lapi_app import create_admin as command, vault_master_key
+    from sqlalchemy import select
+    monkeypatch.setattr(vault_master_key,'read_secret',lambda secret_id:'vault-admin-password')
+    assert command.ensure_from_environment() is False  # Not configured: nothing happens.
+    monkeypatch.setenv('LAPI_FIRST_ADMIN_USERNAME','owner')
+    monkeypatch.setenv('LAPI_FIRST_ADMIN_PASSWORD_SECRET_OCID','ocid1.vaultsecret.oc1..admin')
+    assert command.ensure_from_environment() is True
+    with Session() as s:
+        admin=s.scalar(select(User));assert (admin.username,admin.role)==('owner','administrator')
+        assert password_hash  # Stored hashed, never as the secret value.
+        assert admin.password_hash!='vault-admin-password'
+    monkeypatch.setenv('LAPI_FIRST_ADMIN_USERNAME','someone-else')
+    assert command.ensure_from_environment() is False
+    with Session() as s:assert [u.username for u in s.scalars(select(User))]==['owner']

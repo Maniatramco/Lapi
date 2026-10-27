@@ -27,6 +27,12 @@ virtual environment with `py -3.12 -m venv .venv`.
 .\.venv\Scripts\python.exe -B lapi_testing\run_backend_tests.py
 ```
 
+The full suite runs test files in parallel on every CPU core (pytest-xdist), each
+worker with its own storage folder and SQLite database (`backend/conftest.py`); it
+takes about three minutes on a 20-core laptop instead of about thirty. A single file
+or test runs serially. Pass `-n 0` to force a serial run or `-n 4` to choose the
+worker count.
+
 Run one file or one test (paths are relative to `lapi_testing`):
 
 ```powershell
@@ -75,8 +81,8 @@ permissions, persistence and jobs still use the application code. Seed only that
 isolated deployment with `python lapi_testing/scripts/smoke.py` and a disposable
 `LAPI_SMOKE_PASSWORD`. Use a unique Compose project and separate configuration
 and volumes when reproducing locally. Never attach this overlay to live state.
-`LAPI_SMOKE_ENV_FILE` selects the smoke configuration (default `.env`); match its
-values, project name and Compose file selection to the test environment.
+The smoke script creates its administrator with `docker compose exec api python -m
+lapi_app.create_admin`; match the project name and Compose file selection to the test environment.
 
 `npm --prefix lapi_frontend run test:screenshots` runs responsive browser checks.
 Set `LAPI_CAPTURE_SCREENSHOTS=true` to retain synthetic screenshots under ignored

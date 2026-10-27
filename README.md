@@ -2,7 +2,7 @@
 
 Secure data lakehouse and AI platform: dataset onboarding, document extraction and review, and a grounded Lapi Agent with hybrid retrieval, reranking and cited answers.
 
-**Working branch: `lapi_sprint1`. Current version: `v26.1.15.0`.**
+**Working branch: `lapi_sprint1`. Current version: `v26.1.16.0`.**
 
 ## Repository layout
 
@@ -11,7 +11,7 @@ Secure data lakehouse and AI platform: dataset onboarding, document extraction a
 | `lapi_backend/` | FastAPI API and worker (`lapi_app` package), model providers, agents |
 | `lapi_frontend/` | Next.js web application |
 | `lapi_database/` | Oracle table definitions and read-only checks |
-| `lapi_deploy/` | Deployment tools; `lapi_oci/` is the live Always Free deployment |
+| `lapi_deploy/` | Deployment tools; `lapi_containers/` is the live OCI deployment (Terraform) |
 | `lapi_local_use/` | Local Docker Compose setups and helper scripts |
 | `lapi_testing/` | Backend, frontend and browser tests |
 | `lapi_docs/` | Architecture and deployment documents |
@@ -19,7 +19,13 @@ Secure data lakehouse and AI platform: dataset onboarding, document extraction a
 
 ## Live deployment
 
-Lapi runs on OCI Always Free in its own `lapi` compartment: `lapi-vm` (Ampere A1, 2 OCPU / 12 GB) and the `lapidb` Autonomous Database. See [`lapi_deploy/lapi_oci/README.md`](lapi_deploy/lapi_oci/README.md) to provision, update or find the private secrets. No secrets are stored in this repository.
+Lapi runs on OCI Container Instances in its own `lapi` compartment, with no VM:
+one container instance (web, api, worker and Ollama with the local `qwen3:4b` and
+`nomic-embed-text` models) behind a load balancer, the `lapidb` Always Free
+Autonomous Database for data and vectors, Object Storage for files and Lapi's own
+settings, and OCI Vault for the master key and passwords. Everything is defined in
+Terraform: see [`lapi_deploy/lapi_containers/README.md`](lapi_deploy/lapi_containers/README.md).
+The earlier VM setup (`lapi_oci`) is retired to `delete/`.
 
 ## Local development
 

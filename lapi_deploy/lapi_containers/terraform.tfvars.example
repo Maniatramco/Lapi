@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (ignored by Git) and fill in.
+tenancy_ocid     = "ocid1.tenancy.oc1..xxxx"
+compartment_ocid = "ocid1.compartment.oc1..xxxx" # the lapi compartment
+region           = "ap-mumbai-1"
+
+# Reuse the Vault and HSM key created on 27 October 2026 (lapi-vault).
+existing_vault_id = "ocid1.vault.oc1.ap-mumbai-1.xxxx"
+existing_key_id   = "ocid1.key.oc1.ap-mumbai-1.xxxx"
+
+# The existing Always Free Autonomous AI Database (lapidb).
+existing_db_id = "ocid1.autonomousdatabase.oc1.ap-mumbai-1.xxxx"
+
+# Empty on the first apply; set after push-images.ps1.
+image_tag = ""

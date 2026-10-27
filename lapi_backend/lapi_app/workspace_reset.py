@@ -23,8 +23,7 @@ def paused():
     except FileNotFoundError:return False
 
 def archives():
-    root=core.DATA/'workspace-archives'
-    return [core.local_store.json(str(path.relative_to(core.DATA))) for path in sorted(root.glob('*/receipt.json'),reverse=True)]
+    return [core.local_store.json(key) for key in reversed(core.files_in('workspace-archives/','*/receipt.json'))]
 
 def catalog():
     with core.Session() as session:
@@ -35,25 +34,44 @@ def catalog():
     if core.settings()['search_provider'] in ('qdrant','oracle'):names=[c.name for c in providers.client().get_collections().collections if c.name.startswith('lapi_')]
     return {'counts':counts,'jobs':all_jobs,'active_jobs':jobs,'index_collections':names,'archives':archives(),
         'retained':['Users and sign-in','Registered models and credentials','Installed model weights','Storage configuration'],
-        'note':'Archives stay on this laptop. Existing files are not uploaded to OCI.'}
+        'note':'Archives are kept with the workspace control state. Files already in OCI document storage are not copied.'}
 
 def safe(path):
     value=Path(path).resolve()
     if core.DATA not in value.parents:raise ValueError('Archive path is outside the storage root')
     return value
 
+def archived_files(folder):
+    """(store, logical key, archive-relative name) for every file under a workspace folder.
+
+    The relative name is the path below the storage root, as archives have always
+    recorded it, so archives stay compatible across disk and Object Storage.
+    """
+    from .storage_config import DirectoryStorage
+    if core.local_store is not core.scratch:
+        return [(core.local_store,item['key'],item['key']) for item in core.local_store.list_prefix(folder+'/')]
+    source=safe(core.DATA/folder)
+    if not source.exists():return []
+    result=[]
+    for path in source.rglob('*'):
+        if path.is_symlink():raise ValueError('Workspace archive cannot include symbolic links')
+        if path.is_file():
+            relative=str(path.relative_to(core.DATA)).replace('\\','/')
+            result.append((DirectoryStorage(core.DATA),relative,relative))
+    return result
+
 def rows(model,session):return [{c.key:getattr(row,c.key) for c in model.__table__.columns} for row in session.scalars(select(model))]
 
 def _restore(id):
     if not uuid.UUID(id):raise ValueError('Invalid archive')
-    directory=safe(core.DATA/'workspace-archives'/id)
+    archive='workspace-archives/'+id+'/files/'
     manifest=core.local_store.json('workspace-archives/'+id+'/manifest.json')
+    contents={}
     for name,checksum in manifest['files'].items():
-        source=safe(directory/'files'/name)
-        if hashlib.sha256(source.read_bytes()).hexdigest()!=checksum:raise ValueError('Workspace archive integrity check failed')
-    for folder in manifest['folders']:
-        source=safe(directory/'files'/folder);target=safe(core.DATA/folder)
-        shutil.copytree(source,target,dirs_exist_ok=True)
+        data=core.local_store.get(archive+name)
+        if hashlib.sha256(data).hexdigest()!=checksum:raise ValueError('Workspace archive integrity check failed')
+        contents[name]=data
+    for name,data in contents.items():core.local_store.put(name,data)
     with core.Session.begin() as session:
         # Canonical files are restored before projection hooks read their refs.
         rank={'knowledge_base':0,'document':1,'template':2,'extraction':3}
@@ -86,7 +104,7 @@ def reset(actor):
         if paused():raise HTTPException(409,'A workspace operation is already running.')
         core.local_store.put_json(FLAG,{'active':True})
         locks=ExitStack()
-        id=str(uuid.uuid4());directory=safe(core.DATA/'workspace-archives'/id)
+        id=str(uuid.uuid4());archive='workspace-archives/'+id+'/files/'
         receipt={'id':id,'created_at':time.time(),'status':'preparing','counts':preview['counts'],'jobs':preview['jobs'],'collections':len(preview['index_collections'])}
         try:
             for name in preview['index_collections']:
@@ -97,26 +115,22 @@ def reset(actor):
                 manifest['jobs']=rows(core.Job,session)
                 manifest['tables']={model.__name__:rows(model,session) for model in TABLES}
             roots={core.DATA}
-            for path in (core.DATA/'storage-routes').glob('*.json'):
-                entry=json.loads(path.read_text(encoding='utf-8'))
-                destination=entry['destination']
-                if destination['storage_provider']=='local' and entry['key'].split('/',1)[0] in FOLDERS:
-                    root=Path(destination.get('local_storage_path') or core.DATA).resolve()
-                    if root!=core.DATA:safe(root)
-                    roots.add(root)
+            if core.local_store is core.scratch:
+                for key in core.files_in('storage-routes/','*.json'):
+                    entry=core.local_store.json(key)
+                    destination=entry['destination']
+                    if destination['storage_provider']=='local' and entry['key'].split('/',1)[0] in FOLDERS:
+                        root=Path(destination.get('local_storage_path') or core.DATA).resolve()
+                        if root!=core.DATA:safe(root)
+                        roots.add(root)
             folders=sorted({str((root/folder).relative_to(core.DATA)).replace('\\','/') for root in roots for folder in FOLDERS})
+            archived=[]
             for folder in folders:
-                source=safe(core.DATA/folder)
-                if not source.exists():continue
-                for path in source.rglob('*'):
-                    if path.is_symlink():raise ValueError('Workspace archive cannot include symbolic links')
-                    if path.is_file():
-                        relative=str(path.relative_to(core.DATA)).replace('\\','/')
-                        target=safe(directory/'files'/relative);target.parent.mkdir(parents=True,exist_ok=True)
-                        shutil.copy2(path,target)
-                        checksum=hashlib.sha256(path.read_bytes()).hexdigest()
-                        if hashlib.sha256(target.read_bytes()).hexdigest()!=checksum:raise ValueError('Archive copy verification failed')
-                        manifest['files'][relative]=checksum
+                for source,key,relative in archived_files(folder):
+                    data=source.get(key);checksum=hashlib.sha256(data).hexdigest()
+                    core.local_store.put(archive+relative,data)
+                    if hashlib.sha256(core.local_store.get(archive+relative)).hexdigest()!=checksum:raise ValueError('Archive copy verification failed')
+                    manifest['files'][relative]=checksum;archived.append((source,key))
                 manifest['folders'].append(folder)
             if preview['index_collections']:
                 q=providers.client()
@@ -135,9 +149,11 @@ def reset(actor):
                 for model in TABLES:session.execute(delete(model))
                 session.execute(delete(core.Record).where(core.Record.kind.in_(KINDS)))
             for name in preview['index_collections']:q.delete_collection(name)
-            for folder in manifest['folders']:
-                source=safe(core.DATA/folder)
-                if source.exists():shutil.rmtree(source)
+            for source,key in archived:source.delete(key)
+            if core.local_store is core.scratch:
+                for folder in manifest['folders']:
+                    source=safe(core.DATA/folder)
+                    if source.exists():shutil.rmtree(source)
             receipt.update(status='active_workspace_cleared',file_count=len(manifest['files']))
             core.local_store.put_json('workspace-archives/'+id+'/receipt.json',receipt)
             return receipt
