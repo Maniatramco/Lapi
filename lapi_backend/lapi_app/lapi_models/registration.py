@@ -60,6 +60,7 @@ class ConnectionInput(BaseModel):
     profile: str = Field(default='DEFAULT', max_length=80)
     embedding_format: str = Field(default='titan', max_length=30)
     chat_format: str = Field(default='generic', max_length=30)
+    chat_api: Literal['chat_completions', 'responses'] = 'chat_completions'
     dimensions: int | None = Field(default=None, ge=1, le=65536)
     structured_output: bool = True
 

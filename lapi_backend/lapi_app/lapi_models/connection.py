@@ -78,6 +78,17 @@ class ModelConnection:
         except (httpx.HTTPError, ValueError) as exc:
             raise ConnectionError('Model service is unavailable, timed out, or returned invalid JSON.') from exc
 
+    def chat(self, payload):
+        """Send a Chat Completions payload with the API chosen for this model and
+        return a Chat Completions reply (the Responses API is translated both ways)."""
+        from .providers.lapi_openai import responses
+        if not responses.uses_responses(self):
+            return self.post('/chat/completions', payload)
+        try:
+            return responses.reply(self.post('/responses', responses.request(payload)))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ConnectionError('The Responses API returned an answer Lapi could not read.') from exc
+
     def bedrock(self):
         from .providers.lapi_aws.bedrock import client
         return client(self)

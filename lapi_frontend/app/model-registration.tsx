@@ -47,6 +47,17 @@ function connectionTested(model: Entity) {
   return !model.connection || model.connection_test?.connection_profile_version === model.connection_profile_version;
 }
 
+/** Chat APIs each provider offers. OpenAI-compatible and Azure OpenAI let the admin choose. */
+const CHAT_APIS: Record<string, { value: string; label: string }[]> = {
+  "openai-compatible": [{ value: "chat_completions", label: "Chat Completions (/chat/completions)" }, { value: "responses", label: "Responses (/responses)" }],
+  "azure-openai": [{ value: "chat_completions", label: "Chat Completions (/chat/completions)" }, { value: "responses", label: "Responses (/responses)" }],
+  anthropic: [{ value: "chat_completions", label: "Messages API" }],
+  bedrock: [{ value: "chat_completions", label: "Converse API" }],
+  vertex: [{ value: "chat_completions", label: "generateContent" }],
+  oci: [{ value: "chat_completions", label: "OCI Generative AI chat" }],
+  ollama: [{ value: "chat_completions", label: "Ollama chat (/api/chat)" }],
+};
+
 export function ModelRegistration({ models, settings, api, run, busy, onSaved, onMapping, onDefaultsChanged }: {
   models: Entity[]; settings: Entity; api: Api; run: (fn: () => Promise<void>) => Promise<void>;
   busy: boolean; onSaved: (model: Entity) => void; onMapping: () => void; onDefaultsChanged?: () => void;
@@ -54,7 +65,7 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
   const defaults = settings.model_defaults;
   const blank = (): Entity => ({ name: "", category: "chat", provider_model: "", timeout: defaults?.timeout, context_limit: defaults?.context_limit, max_output_tokens: defaults?.max_output_tokens, enabled: true,
     credentials: {}, clear_credentials: false, allow_external: false,
-    connection: { protocol: "ollama", endpoint: settings.ollama_endpoint || endpointHints.ollama, auth_mode: "none", region: "", project_id: "", workspace_id: "", compartment_id: "", profile: "DEFAULT", embedding_format: "titan", chat_format: "generic", dimensions: null, structured_output: true } });
+    connection: { protocol: "ollama", endpoint: settings.ollama_endpoint || endpointHints.ollama, auth_mode: "none", region: "", project_id: "", workspace_id: "", compartment_id: "", profile: "DEFAULT", embedding_format: "titan", chat_format: "generic", chat_api: "chat_completions", dimensions: null, structured_output: true } });
   const [form, setForm] = useState<Entity>(blank);
   const [editing, setEditing] = useState<Entity | null>(null);
   const [open, setOpen] = useState(false);
@@ -138,7 +149,9 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
   const setModelValues = (values: ParameterValues) => { setExtraText(JSON.stringify(values, null, 2)); setTest(null); };
   const setStages = (values: StageValues) => { setStageValues(values); setTest(null); };
   const loadHistory = () => { if (!editing || history) return; setHistoryError(""); api(`/model-registrations/${editing.id}/parameter-history`).then(value => setHistory(Array.isArray(value?.history) ? value.history : [])).catch(() => setHistoryError("Parameter history could not load.")); };
-  const payload = () => ({ ...form, max_output_tokens: form.category === "embedding" ? null : form.max_output_tokens, extra_parameters: parseModelParameters(extraText, supported), stage_parameters: stagesSent, existing_model_id: editing?.id || null });
+  // A provider with one chat API always sends its default, whatever was chosen before switching.
+  const chatApi = (CHAT_APIS[form.connection.protocol] || []).some(api => api.value === form.connection.chat_api) ? form.connection.chat_api : "chat_completions";
+  const payload = () => ({ ...form, connection: { ...form.connection, chat_api: chatApi }, max_output_tokens: form.category === "embedding" ? null : form.max_output_tokens, extra_parameters: parseModelParameters(extraText, supported), stage_parameters: stagesSent, existing_model_id: editing?.id || null });
   const testPayload = () => ({ ...payload(), test_stages: testStages(form.category, modelValues, stagesSent) });
   const stageLabel = (key: string) => activeSchema?.stages.find(s => s.key === key)?.label || (key === "tool_step" ? "Tool steps" : key === "extraction" ? "Extraction" : key === "optimize" ? "Optimize" : "Chat answer");
 
@@ -201,6 +214,19 @@ export function ModelRegistration({ models, settings, api, run, busy, onSaved, o
             <div className="field"><label htmlFor="registration-dimensions">Output dimensions (optional)</label><input id="registration-dimensions" type="number" min={1} max={65536} value={form.connection.dimensions || ""} onChange={e => connectionChange("dimensions", e.target.value ? Number(e.target.value) : null)} /><small>Leave empty for the model’s default dimensions.</small></div>
             {form.connection.protocol === "bedrock" && <div className="field"><label htmlFor="registration-embedding-format">Embedding request format</label><select id="registration-embedding-format" value={form.connection.embedding_format} onChange={e => connectionChange("embedding_format", e.target.value)}><option value="titan">Titan Text</option><option value="cohere-v3">Cohere Embed v3</option><option value="cohere-v4">Cohere Embed v4</option></select></div>}
           </div>}
+          {form.category !== "embedding" && (() => {
+            const apis = CHAT_APIS[form.connection.protocol] || CHAT_APIS["openai-compatible"];
+            const value = apis.some(api => api.value === form.connection.chat_api) ? form.connection.chat_api : "chat_completions";
+            return <div className="field"><label htmlFor="registration-chat-api">API</label>
+              <select id="registration-chat-api" value={value} disabled={apis.length < 2} aria-describedby="registration-chat-api-help"
+                onChange={e => connectionChange("chat_api", e.target.value)}>
+                {apis.map(api => <option key={api.value} value={api.value}>{api.label}</option>)}
+              </select>
+              <small id="registration-chat-api-help">{apis.length < 2 ? "The only chat API this provider offers."
+                : value === "responses" ? "Supports function tools together with reasoning. Seed, stop and frequency/presence penalties are not sent. Answers are not streamed; OpenAI keeps no copy (store: false)."
+                : "The widely supported default. Some reasoning models refuse function tools with reasoning here; choose Responses for them."}</small>
+            </div>;
+          })()}
           {form.category !== "embedding" && form.connection.protocol === "oci" && <div className="field"><label htmlFor="registration-chat-format">Chat request format</label><select id="registration-chat-format" value={form.connection.chat_format} onChange={e => connectionChange("chat_format", e.target.value)}><option value="generic">Generic</option><option value="cohere">Cohere</option></select></div>}
           {form.category === "extraction" && ["openai-compatible", "azure-openai"].includes(form.connection.protocol) && <label className="check"><input type="checkbox" checked={form.connection.structured_output} onChange={e => connectionChange("structured_output", e.target.checked)} />Request native JSON schema output <span className="muted small">All extraction responses are validated against the template.</span></label>}
           {form.category !== "embedding" || supported.length ? <section className="registration-parameters" aria-labelledby="registration-parameters-title">

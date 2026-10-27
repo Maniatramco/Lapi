@@ -119,6 +119,15 @@ def validate_connection(connection, category, model):
             raise ConnectionError('Endpoint location must match the configured location.')
         if '/' in model or ':' in model:
             raise ConnectionError('For Vertex enter the publisher model ID, without a resource path or operation suffix.')
+    api = c.get('chat_api') or 'chat_completions'
+    if api not in ('chat_completions', 'responses'):
+        raise ConnectionError('Choose the chat API: Chat Completions or Responses.')
+    if api == 'responses' and protocol not in ('openai-compatible', 'azure-openai'):
+        raise ConnectionError('The Responses API is available for OpenAI-compatible and Azure OpenAI connections only; this provider has one chat API.')
+    if protocol in ('openai-compatible', 'azure-openai') and category != 'embedding':
+        c['chat_api'] = api
+    else:
+        c.pop('chat_api', None)
     if protocol == 'oci':
         if not re.fullmatch(r'ocid1\.compartment\.[A-Za-z0-9._-]+', c.get('compartment_id', '')):
             raise ConnectionError('Enter the OCI compartment OCID.')

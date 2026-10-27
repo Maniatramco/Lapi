@@ -64,7 +64,7 @@ def transcribe(image, cfg, instruction, schema):
                 {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(image).decode('ascii')}}]}],
             'response_format': {'type': 'json_schema', 'json_schema': {'name': 'page_transcription', 'strict': True, 'schema': schema}}}
         call = token_usage.attempt(protocol=adapter.c['protocol'], parameters={'max_completion_tokens': cfg['output'], **extra})
-        data = adapter.post('/chat/completions', payload)
+        data = adapter.chat(payload)
         token_usage.record(data, adapter.c['protocol'], call)
     choice = data['choices'][0]
     message = choice.get('message') or {}

@@ -115,7 +115,7 @@ def generate(connection, instruction, text, schema, output_tokens, extra):
     payload = {'model': connection.model, 'messages': [{'role': 'system', 'content': instruction}, {'role': 'user', 'content': text}], 'max_completion_tokens': output_tokens, **extra}
     if schema and connection.c.get('structured_output', True):
         payload['response_format'] = {'type': 'json_schema', 'json_schema': {'name': 'extraction', 'schema': schema, 'strict': True}}
-    data = connection.post('/chat/completions', payload)
+    data = connection.chat(payload)
     token_usage.report(data, connection.c['protocol'])
     choice = data['choices'][0]
     if choice.get('finish_reason') not in ('stop',):

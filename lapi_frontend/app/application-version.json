@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.3",
+  "version": "26.1.16.4",
   "releases": [
+    {
+      "version": "26.1.16.4",
+      "date": "2026-10-27",
+      "title": "Choose each model's API",
+      "changes": [
+        "Model Registration has an API field for Chat and Extraction models. OpenAI-compatible and Azure OpenAI models can use Chat Completions or the Responses API; Anthropic, Bedrock, Vertex, OCI and Ollama show the one chat API they offer.",
+        "With Responses, models such as gpt-6.1-terra can call Lapi's tools while reasoning. Tool steps, chat answers, extraction and OCR all use the chosen API; Responses answers arrive in one piece rather than streamed, and OpenAI keeps no copy."
+      ]
+    },
     {
       "version": "26.1.16.3",
       "date": "2026-10-27",

@@ -456,13 +456,19 @@ def complete(messages, tools, on_token=None):
         if any(t.get('function', {}).get('strict') for t in wire_tools):
             payload['parallel_tool_calls'] = False
         usage_call=token_usage.attempt(protocol=protocol,parameters={key:value for key,value in payload.items() if key not in ('model','messages','tools')})
-        if on_token:
+        from ..lapi_models.providers.lapi_openai.responses import uses_responses
+        responses_api = provider == 'registered' and uses_responses(connection)
+        if on_token and not responses_api:
             from .agent_stream import native_request
             data=native_request(protocol,payload,cfg,on_token)
         elif provider == 'registered':
             from ..model_connections import ModelConnection, ConnectionError
-            try: data = ModelConnection(cfg).post('/chat/completions', payload)
+            if on_token:on_token('')  # Cancellation check before the request.
+            try: data = ModelConnection(cfg).chat(payload)
             except ConnectionError as exc: raise providers.ProviderError(str(exc)) from exc
+            # The Responses API is not streamed: publish its answer in one piece.
+            text=((data.get('choices') or [{}])[0].get('message') or {}).get('content') if isinstance(data,dict) else None
+            if on_token and text:on_token(text)
         else: data = providers.openai_request('chat/completions', payload)
         token_usage.record(data, 'openai', usage_call)
         try: choice = data['choices'][0]
