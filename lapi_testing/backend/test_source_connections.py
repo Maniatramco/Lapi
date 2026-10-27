@@ -11,6 +11,9 @@ from lapi_app import core, main, worker, cloud_sources as cloud, source_connecti
 from test_dataset_models import system, dataset, post
 
 
+SERVICE_ACCOUNT = json.dumps({'type': 'service_account', 'client_email': 'test@example.iam.gserviceaccount.com', 'private_key': 'testkey', 'token_uri': 'https://oauth2.googleapis.com/token'})
+
+
 def body(d, provider='s3'):
     return {'name': 'Team files', 'provider': provider, 'dataset_id': d['id'], 'bucket': 'team-documents', 'region': 'ap-south-1', 'prefix': 'approved/', 'credentials': {'access_key_id': 'TEST_ACCESS_KEY', 'secret_access_key': 'DO_NOT_EXPOSE'}}
 
@@ -75,14 +78,16 @@ def test_test_is_read_only_and_browse_is_paginated(system, remote):
     assert s.api.get('/api/documents').json() == []
 
 
-@pytest.mark.parametrize('provider', ['s3', 'sharepoint', 'google_drive'])
+@pytest.mark.parametrize('provider', ['s3', 'sharepoint', 'google_drive', 'gcs'])
 def test_import_indexes_and_publishes_authorized_knowledge(system, remote, provider):
     s = system; d = dataset(s)
     values = {}
     if provider == 'sharepoint':
         values = {'tenant_id': '11111111-1111-1111-1111-111111111111', 'client_id': '22222222-2222-2222-2222-222222222222', 'site_id': 'tenant.sharepoint.com,site,web', 'drive_id': 'drive', 'credentials': {'client_secret': 'DO_NOT_EXPOSE'}}
     elif provider == 'google_drive':
-        values = {'folder_id': 'folder', 'credentials': {'service_account': json.dumps({'type': 'service_account', 'client_email': 'test@example.iam.gserviceaccount.com', 'private_key': 'testkey', 'token_uri': 'https://oauth2.googleapis.com/token'})}}
+        values = {'folder_id': 'folder', 'credentials': {'service_account': SERVICE_ACCOUNT}}
+    elif provider == 'gcs':
+        values = {'bucket': 'team-documents', 'region': '', 'credentials': {'service_account': SERVICE_ACCOUNT}}
     c = connection(s, d, provider=provider, **values)
     result = submit(s, c); assert result.status_code == 200, result.text
     item = result.json()['results'][0]; assert item['status'] == 'imported', item
@@ -318,6 +323,67 @@ def test_sharepoint_native_token_scoped_library_ancestry_and_content(monkeypatch
     with pytest.raises(cloud.SourceError): adapter.fetch(items[0] | {'revision': 'changed'}, 20)
 
 
+def test_gcs_rejects_invalid_buckets_and_foreign_token_hosts(system):
+    s = system; d = dataset(s)
+    gcs = body(d) | {'provider': 'gcs', 'region': '', 'credentials': {'service_account': SERVICE_ACCOUNT}}
+    for bucket in ('gs://team', 'Team', 'a', 'google-docs', 'team..docs'):
+        assert s.api.post('/api/source-connections', json=gcs | {'bucket': bucket}).status_code == 422, bucket
+    foreign = json.loads(SERVICE_ACCOUNT) | {'token_uri': 'https://evil.example/token', 'private_key': 'DO_NOT_EXPOSE'}
+    response = s.api.post('/api/source-connections', json=gcs | {'credentials': {'service_account': json.dumps(foreign)}})
+    assert response.status_code == 422 and 'DO_NOT_EXPOSE' not in response.text
+    assert s.api.post('/api/source-connections', json=gcs | {'credentials': {'access_key_id': 'x'}}).status_code == 422
+    assert post(s, '/api/source-connections', gcs)['provider'] == 'gcs'
+
+
+def gcs_adapter():
+    adapter = object.__new__(cloud.GoogleCloudStorage)
+    adapter.cfg = {'bucket': 'team-documents', 'prefix': 'approved/'}
+    adapter.headers = {'Authorization': 'Bearer test'}; adapter.email = 'reader@project.iam.gserviceaccount.com'
+    adapter.objects = adapter.BASE + 'team-documents/o'
+    return adapter
+
+
+def test_gcs_browses_prefix_pages_and_reads_the_selected_generation(monkeypatch):
+    adapter = gcs_adapter(); calls = []; downloads = []
+    objects = {'approved/a b.txt': {'name': 'approved/a b.txt', 'size': '4', 'generation': '17', 'updated': 'today'}}
+    def request(method, url, **kwargs):
+        calls.append((url, kwargs))
+        if url == adapter.objects:
+            return {'prefixes': ['approved/sub/'], 'items': [{'name': 'approved/', 'size': '0', 'generation': '1'}, *objects.values(), {'name': 'approved/photo.png', 'size': '9', 'generation': '3'}], 'nextPageToken': 'page2'}
+        if url == adapter.objects + '/approved%2Fa%20b.txt':
+            return objects['approved/a b.txt']
+        raise AssertionError(url)
+    monkeypatch.setattr(cloud, 'request_json', request)
+    monkeypatch.setattr(cloud, 'download', lambda url, headers, limit: downloads.append(url) or b'data')
+    items, cursor = adapter.browse()
+    assert cursor == 'page2' and calls[0][1]['params'] | {} == {'prefix': 'approved/', 'delimiter': '/', 'maxResults': 100, 'fields': 'nextPageToken,prefixes,items(name,size,generation,updated)'}
+    assert [(i['name'], i['folder'], i.get('supported')) for i in items] == [('sub', True, None), ('a b.txt', False, True), ('photo.png', False, False)]
+    adapter.browse(cursor='page2'); assert calls[-1][1]['params']['pageToken'] == 'page2'
+    name, raw, provenance = adapter.fetch(items[1], 10)
+    assert (name, raw) == ('a b.txt', b'data') and downloads == [adapter.objects + '/approved%2Fa%20b.txt?alt=media&generation=17']
+    assert provenance == {'remote_id': 'approved/a b.txt', 'revision': '17', 'original_url': 'gs://team-documents/approved/a b.txt'}
+    objects['approved/a b.txt']['generation'] = '18'
+    with pytest.raises(cloud.SourceError, match='changed'): adapter.fetch(items[1], 10)
+    objects['approved/a b.txt'] |= {'generation': '17', 'size': '400'}
+    with pytest.raises(cloud.SourceError, match='size limit'): adapter.fetch(items[1], 10)
+    with pytest.raises(cloud.SourceError, match='outside'): adapter.browse('approved-sibling/')
+    with pytest.raises(cloud.SourceError, match='outside'): adapter.fetch({'id': 'other/a.txt', 'name': 'a.txt'}, 10)
+    assert len(downloads) == 1
+
+
+@pytest.mark.parametrize('status,message', [(403, 'Storage Object Viewer role on bucket team-documents'), (404, 'Bucket not found')])
+def test_gcs_explains_missing_role_and_bucket(monkeypatch, status, message):
+    adapter = gcs_adapter()
+    transport = httpx.MockTransport(lambda request: httpx.Response(status, json={'error': {'message': 'SECRET'}}))
+    original = httpx.Client
+    monkeypatch.setattr(httpx, 'Client', lambda **kwargs: original(transport=transport, **kwargs))
+    with pytest.raises(cloud.SourceError) as error:
+        adapter.browse()
+    assert message in str(error.value) and 'SECRET' not in str(error.value)
+    if status == 403:
+        assert 'reader@project.iam.gserviceaccount.com' in str(error.value)
+
+
 def test_google_native_exports_shared_drive_flags_and_scope(monkeypatch):
     adapter = object.__new__(cloud.GoogleDrive); adapter.cfg = {'folder_id': 'root-folder'}; adapter.headers = {'Authorization': 'Bearer test'}
     document = {'id': 'doc', 'name': 'Report', 'mimeType': 'application/vnd.google-apps.document', 'parents': ['root-folder'], 'version': '1', 'modifiedTime': 'today'}
@@ -473,3 +539,19 @@ def test_azure_errors_use_the_service_error_code(monkeypatch, code, expected):
     assert adapter.sas == SAS
     with pytest.raises(cloud.SourceError) as error: adapter.browse()
     assert expected in str(error.value) and 'SECRET' not in str(error.value)
+
+
+def test_gcs_token_uses_only_the_read_only_storage_scope(monkeypatch):
+    from google.oauth2 import service_account
+    seen = {}
+    class Identity:
+        token = 'test-bearer'
+        def refresh(self, request): pass
+    def from_info(info, scopes):
+        seen.update(info=info, scopes=scopes)
+        return Identity()
+    monkeypatch.setattr(service_account.Credentials, 'from_service_account_info', staticmethod(from_info))
+    adapter = cloud.GoogleCloudStorage({'bucket': 'team-documents', 'prefix': ''}, {'service_account': SERVICE_ACCOUNT})
+    assert seen['scopes'] == ['https://www.googleapis.com/auth/devstorage.read_only']
+    assert seen['info']['token_uri'] == 'https://oauth2.googleapis.com/token'
+    assert adapter.headers == {'Authorization': 'Bearer test-bearer'} and adapter.email == 'test@example.iam.gserviceaccount.com'

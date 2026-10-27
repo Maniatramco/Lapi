@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.7 - 27 October 2026
+
+Google Cloud Storage connector
+
+- New `gcs` source connection (`lapi_app/cloud_sources.py`, `GoogleCloudStorage`): a bucket plus optional folder prefix, read over the Cloud Storage JSON API with a service-account token limited to `devstorage.read_only`. Browsing pages 100 objects at a time with folders; imports pin the selected object generation, so a newer upload is never read under an older selection, and anything outside the prefix is refused.
+- Clear errors name what to fix: a missing role asks to grant the service-account email Storage Object Viewer on the bucket; a wrong name reports the bucket was not found.
+- The service-account key is checked like Google Drive's (googleapis.com token host only) and stored encrypted; Google Drive and Cloud Storage share the sign-in code.
+- Add knowledge offers Google Cloud Storage with bucket, prefix and key fields.
+
 ## v26.1.16.6 - 27 October 2026
 
 Local reranker in the cloud deployment

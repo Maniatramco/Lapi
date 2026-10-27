@@ -20,15 +20,15 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from . import core, dataset_access as access, dataset_models as routing, cloud_sources, knowledge
 
 ROOT = 'configuration/source-connections/'
-KEYS = {'s3': {'access_key_id', 'secret_access_key', 'session_token'}, 'sharepoint': {'client_secret'}, 'google_drive': {'service_account'}, 'azure_blob': {'sas_token'}, 'oci_object': {'access_key_id', 'secret_access_key'}}
-REQUIRED = {'sharepoint': ('client_secret',), 'google_drive': ('service_account',), 'azure_blob': ('sas_token',), 'oci_object': ('access_key_id', 'secret_access_key')}
+KEYS = {'s3': {'access_key_id', 'secret_access_key', 'session_token'}, 'sharepoint': {'client_secret'}, 'google_drive': {'service_account'}, 'gcs': {'service_account'}, 'azure_blob': {'sas_token'}, 'oci_object': {'access_key_id', 'secret_access_key'}}
+REQUIRED = {'sharepoint': ('client_secret',), 'google_drive': ('service_account',), 'gcs': ('service_account',), 'azure_blob': ('sas_token',), 'oci_object': ('access_key_id', 'secret_access_key')}
 LOCATION = ('provider', 'auth_mode', 'bucket', 'region', 'tenant_id', 'client_id', 'site_id', 'drive_id', 'folder_id', 'prefix', 'expected_owner', 'account', 'container', 'namespace', 'endpoint', 'dataset_id')
 
 
 class ConnectionInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=120)
-    provider: Literal['s3', 'sharepoint', 'google_drive', 'azure_blob', 'oci_object']
+    provider: Literal['s3', 'sharepoint', 'google_drive', 'gcs', 'azure_blob', 'oci_object']
     dataset_id: str = Field(min_length=1, max_length=100)
     enabled: bool = True
     auth_mode: Literal['access_key', 'server_identity'] = 'access_key'
@@ -88,6 +88,9 @@ class ConnectionInput(BaseModel):
                 raise ValueError('Enter the SharePoint site ID and document-library drive ID, not URLs.')
             if self.folder_id and not re.fullmatch(r'[A-Za-z0-9!_-]+', self.folder_id):
                 raise ValueError('Enter a valid SharePoint folder item ID, or leave it empty for the library root.')
+        elif self.provider == 'gcs':
+            if not re.fullmatch(r'[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]', self.bucket) or '..' in self.bucket or self.bucket.startswith('goog'):
+                raise ValueError('Enter a valid Cloud Storage bucket name, without gs://.')
         elif not re.fullmatch(r'[A-Za-z0-9_-]+', self.folder_id):
             raise ValueError('Enter a Google Drive folder ID shared with the service account.')
         return self
@@ -165,7 +168,7 @@ def prepare(body, actor, previous=None):
             cloud_sources.read_only_sas(secret['sas_token'])
         except cloud_sources.SourceError as error:
             raise HTTPException(422, str(error)) from None
-    if body.provider == 'google_drive':
+    if body.provider in ('google_drive', 'gcs'):
         try:
             info = json.loads(secret['service_account'])
             if info.get('type') != 'service_account' or not all(info.get(k) for k in ('client_email', 'private_key', 'token_uri')):

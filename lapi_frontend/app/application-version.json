@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.6",
+  "version": "26.1.16.7",
   "releases": [
+    {
+      "version": "26.1.16.7",
+      "date": "2026-10-27",
+      "title": "Google Cloud Storage connector",
+      "changes": [
+        "Add knowledge can now connect a Google Cloud Storage bucket (optionally limited to a folder prefix) with a read-only service-account key, browse it, and import and index PDF, DOCX, TXT and JSON files."
+      ]
+    },
     {
       "version": "26.1.16.6",
       "date": "2026-10-27",
