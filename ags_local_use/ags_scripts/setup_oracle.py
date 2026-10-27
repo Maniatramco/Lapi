@@ -49,7 +49,6 @@ def prepare(root, env_file='.env.oracle', secret_dir='secrets/oracle', port=3003
             handle.write('Ag1_' + secrets.token_hex(24) + '\n')
     source = (root / 'ags_local_use/.env.oracle.example').read_text(encoding='utf-8')
     source = source.replace('CHANGE_ME_MASTER_KEY', base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())
-    source = source.replace('CHANGE_ME_BOOTSTRAP_TOKEN', secrets.token_urlsafe(32))
     source = source.replace('AEGIS_PORT=3003', f'AEGIS_PORT={port}')
     source = source.replace('http://localhost:3003', f'http://localhost:{port}')
     source = source.replace('AEGIS_ORACLE_SECRET_DIR=./secrets/oracle', f'AEGIS_ORACLE_SECRET_DIR="./{relative}"')

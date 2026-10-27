@@ -81,29 +81,16 @@ test("simple login validates fields and supports keyboard password visibility", 
   await page.screenshot({ path: "screenshots/login-simple-desktop.png", fullPage: true });
 });
 
-test("empty installations keep two-field login and require explicit first-account setup", async ({ page }) => {
+test("empty installations keep two-field login and point to the server-side admin command", async ({ page }) => {
   const writes: string[] = [];
   await page.route("**/api/auth/status", route => route.fulfill({ json: { setup_required: true } }));
   page.on("request", request => { if (request.url().includes("/api/") && request.method() !== "GET") writes.push(request.url()); });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Welcome back", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Set up your first account", exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "No administrator exists yet." })).toContainText("create-admin.sh");
   await expect(page.locator(".login-card input")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Set up your first account", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Bootstrap token", { exact: true })).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Welcome back", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Set up your first account", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Create your workspace", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Bootstrap token", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Create administrator", exact: true }).click();
-  await expect(page.getByText("Enter your setup code.", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Bootstrap token", { exact: true })).toBeFocused();
-  await page.getByLabel("Bootstrap token", { exact: true }).fill("synthetic-unsent-code");
-  await page.getByRole("button", { name: "Already configured? Sign in", exact: true }).click();
-  await expect(page.locator(".login-card input")).toHaveCount(2);
-  await page.getByRole("button", { name: "Set up your first account", exact: true }).click();
-  await expect(page.getByLabel("Bootstrap token", { exact: true })).toHaveValue("");
-  await page.getByRole("button", { name: "Already configured? Sign in", exact: true }).click();
   expect(writes).toEqual([]);
 });
 

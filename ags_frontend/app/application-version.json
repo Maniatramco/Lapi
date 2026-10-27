@@ -1,6 +1,16 @@
 {
-  "version": "26.1.12.18",
+  "version": "26.1.12.19",
   "releases": [
+    {
+      "version": "26.1.12.19",
+      "date": "2026-10-27",
+      "title": "Server-side admin setup and OCI Vault master key",
+      "changes": [
+        "The setup screen and its bootstrap token are gone. The first administrator is created on the server with create-admin.sh or create-admin.ps1 (python -m ags_app.create_admin), which only works while no account exists.",
+        "When no administrator exists yet, the sign-in page says so and names the command; it no longer offers a setup form.",
+        "The master key that encrypts saved model API keys, storage credentials and database passwords can live in OCI Vault: set AEGIS_MASTER_KEY_SECRET_OCID and the server reads it with its own OCI identity instead of keeping it in .env."
+      ]
+    },
     {
       "version": "26.1.12.18",
       "date": "2026-10-26",

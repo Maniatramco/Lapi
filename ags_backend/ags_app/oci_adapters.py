@@ -53,6 +53,8 @@ def _client(service: str, endpoint: str | None = None, *, region=None, auth_mode
         if endpoint: kwargs['service_endpoint'] = endpoint
         if service == 'storage': return oci.object_storage.ObjectStorageClient(config, **kwargs)
         if service == 'queue': return oci.queue.QueueClient(config, **kwargs)
+        if service == 'secrets': return oci.secrets.SecretsClient(config, **kwargs)
+        if service == 'vaults': return oci.vault.VaultsClient(config, **kwargs)
         raise OCIProviderUnavailable('Unknown OCI service')
     except OCIProviderUnavailable:
         raise

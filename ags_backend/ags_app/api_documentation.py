@@ -53,8 +53,7 @@ NOTES = {
     'POST /api/workspace/reset': 'Administrator only: archive and reset workspace content with explicit confirmation while preserving operator configuration.',
     'PUT /api/storage': 'Administrator only: save a verified file destination; stored files retain their individually pinned routes.',
     'PUT /api/storage/database': 'Administrator only: save verified database configuration and encrypted credentials without activating it.',
-    'GET /api/auth/status': 'Check whether the first administrator has been created before showing login or setup.',
-    'POST /api/auth/setup': 'Create the first administrator with the deployment bootstrap token and a password of at least 12 characters. Setup is disabled once an administrator exists.',
+    'GET /api/auth/status': 'Check whether the first administrator has been created. The first administrator is created on the server with python -m ags_app.create_admin, never through the API.',
     'POST /api/auth/login': 'Verify credentials, set the HTTP-only session cookie, and return the user and CSRF token. Login attempts are rate limited.',
     'GET /api/auth/me': 'Read the signed-in user and the CSRF token used for subsequent cookie-authenticated changes.',
     'POST /api/auth/logout': 'Invalidate the current session and clear its cookie.',
@@ -171,7 +170,7 @@ GROUPS = {
     'overview': 'Workspace & services', 'capabilities': 'Workspace & services',
     'documentation': 'Workspace & services',
 }
-PUBLIC = {'GET /health', 'GET /ready', 'GET /api/auth/status', 'POST /api/auth/setup',
+PUBLIC = {'GET /health', 'GET /ready', 'GET /api/auth/status',
           'POST /api/auth/login', 'POST /api/auth/recovery/prepare', 'POST /api/auth/recovery/reset'}
 
 # Illustrative, abridged envelopes from the handlers. Placeholders are never live data.

@@ -18,8 +18,10 @@ x-backend: &backend
     AEGIS_STORAGE_ROOT: /data
     AEGIS_CONFIG_FILE: /etc/aegis/runtime.toml
     AEGIS_CONFIG_PROFILE: ${AEGIS_CONFIG_PROFILE:-local}
-    AEGIS_MASTER_KEY: ${AEGIS_MASTER_KEY:?Generate the Oracle configuration first}
-    AEGIS_BOOTSTRAP_TOKEN: ${AEGIS_BOOTSTRAP_TOKEN:?Generate the Oracle configuration first}
+    # Either the key itself (local development) or the OCI Vault secret that holds it.
+    AEGIS_MASTER_KEY: ${AEGIS_MASTER_KEY:-}
+    AEGIS_MASTER_KEY_SECRET_OCID: ${AEGIS_MASTER_KEY_SECRET_OCID:-}
+    AEGIS_VAULT_AUTH_MODE: ${AEGIS_VAULT_AUTH_MODE:-instance_principal}
     QDRANT_URL: http://qdrant:6333
     SEARCH_PROVIDER: qdrant
     MODEL_PROVIDER: ${MODEL_PROVIDER:-ollama}

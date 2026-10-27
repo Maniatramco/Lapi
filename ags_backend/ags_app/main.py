@@ -19,6 +19,8 @@ from .admin_documents import lifecycle_guard
 async def lifespan(app):
     from . import runtime_config
     runtime_config.validate()
+    from .vault_master_key import master_key, SECRET_ENV
+    if os.getenv(SECRET_ENV):master_key()  # Fail at startup, not on the first saved credential.
     init()
     from . import reranker
     if reranker.enabled():
@@ -105,21 +107,10 @@ def external_check(consent,embedding=False,cfg=None):
 class Credentials(BaseModel):
     username:str=Field(min_length=1,max_length=120)
     password:str=Field(min_length=1,max_length=200)
-    bootstrap_token:str=''
 
 @app.get('/api/auth/status')
 def auth_status():
     with Session() as s:return {'setup_required':not bool(s.scalar(select(User)))}
-@app.post('/api/auth/setup')
-def setup(body:Credentials):
-    expected=os.getenv('AEGIS_BOOTSTRAP_TOKEN','')
-    if not expected or not secrets.compare_digest(expected,body.bootstrap_token):raise HTTPException(403,'Invalid bootstrap token')
-    if len(body.password)<12:raise HTTPException(400,'Use a password of at least 12 characters')
-    with document_lock('bootstrap'):
-        with Session.begin() as s:
-            if s.scalar(select(User)):raise HTTPException(409,'Administrator already configured')
-            s.add(User(id='administrator',username=body.username,password_hash=password_hash(body.password),role='administrator'))
-    return {'ok':True}
 _login_attempts={}
 @app.post('/api/auth/login')
 def login(body:Credentials,response:Response,request:Request):

@@ -195,15 +195,13 @@ export default function App() {
   const [csrf, setCsrf] = useState("");
   const authSession = useRef({ userId: user?.id as string | undefined, csrf });
   authSession.current = { userId: user?.id, csrf };
-  const [bootstrap, setBootstrap] = useState(false);
   const [setupRequired, setSetupRequired] = useState(false);
-  const [bootstrapToken, setBootstrapToken] = useState("");
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [passwordChangedNotice, setPasswordChangedNotice] = useState(false);
   const [roleChangedNotice, setRoleChangedNotice] = useState(false);
-  const [signInErrors, setSignInErrors] = useState<{ username?: string; password?: string; code?: string }>({});
+  const [signInErrors, setSignInErrors] = useState<{ username?: string; password?: string }>({});
   const [busy, setBusy] = useState(false);
   const operationLock=useRef(false);
   const [loading, setLoading] = useState(false);
@@ -400,7 +398,7 @@ export default function App() {
     fetch("/api/auth/status",{signal:AbortSignal.timeout(15000)})
       .then((r) => (r.ok ? r.json() : {}))
       .then((d: Entity) =>
-        setSetupRequired(!!(d.setup_required || d.bootstrap_required)),
+        setSetupRequired(!!d.setup_required),
       )
       .catch(() => {});
   }, []);
@@ -579,16 +577,6 @@ export default function App() {
   const reload = () => setRefresh((v) => v + 1);
   const authenticate = () =>
     run(async () => {
-      if (bootstrap) {
-        await api("/auth/setup", "POST", {
-          username,
-          password,
-          bootstrap_token: bootstrapToken,
-        });
-        setBootstrapToken("");
-        setBootstrap(false);
-        setSetupRequired(false);
-      }
       const d = await api("/auth/login", "POST", { username, password });
       prepareFreshLoginChat(sessionStorage,d.user.username,d.chat_session_id||'');
       navigate("Home");
@@ -657,33 +645,24 @@ export default function App() {
   if (!user)
     return (
       <SignInLayout>
-          <h1 id="login-heading" className="screen-heading">{bootstrap ? "Create your workspace" : "Welcome back"}</h1>
-          <p className="login-description">{bootstrap ? "Set up your first account to get started." : roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : "Sign in to your workspace."}</p>
+          <h1 id="login-heading" className="screen-heading">Welcome back</h1>
+          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : "Sign in to your workspace."}</p>
+          {setupRequired && <div className="login-setup-notice" role="status">No administrator exists yet. Create one on the server with <code>ags_local_use/ags_scripts/create-admin.sh</code>, then sign in here.</div>}
           {error && <div className="login-error" role="alert"><AlertCircle size={18} aria-hidden="true" /><span>{error}</span></div>}
           <form noValidate aria-busy={busy} onSubmit={e => {
             e.preventDefault();
             if (busy) return;
-            const next: { username?: string; password?: string; code?: string } = {};
+            const next: { username?: string; password?: string } = {};
             if (!username.trim()) next.username = "Enter your username.";
             if (!password) next.password = "Enter your password.";
-            else if (bootstrap && password.length < 12) next.password = "Use at least 12 characters.";
-            if (bootstrap && !bootstrapToken) next.code = "Enter your setup code.";
             setSignInErrors(next);
             if (Object.keys(next).length) {
-              document.getElementById(next.code ? "login-code" : next.username ? "login-username" : "login-password")?.focus();
+              document.getElementById(next.username ? "login-username" : "login-password")?.focus();
               return;
             }
             setShowPassword(false);
             authenticate();
           }}>
-            {bootstrap && <div className="field">
-              <label htmlFor="login-code">Bootstrap token</label>
-              <input id="login-code" autoComplete="off" type="password" value={bootstrapToken} required
-                aria-invalid={!!signInErrors.code} aria-describedby={signInErrors.code ? "login-code-error" : "login-code-help"}
-                onChange={e => { setBootstrapToken(e.target.value); setSignInErrors(current => ({ ...current, code: undefined })); setError(""); }} />
-              <small id="login-code-help">Use the one-time setup code from your installation.</small>
-              {signInErrors.code && <small className="field-error" id="login-code-error">{signInErrors.code}</small>}
-            </div>}
             <div className="field">
               <label htmlFor="login-username">Username</label>
               <input id="login-username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} required
@@ -694,8 +673,8 @@ export default function App() {
             <div className="field">
               <label htmlFor="login-password">Password</label>
               <div className="login-password-entry">
-                <input id="login-password" autoComplete={bootstrap ? "new-password" : "current-password"} type={showPassword ? "text" : "password"}
-                  value={password} required minLength={bootstrap ? 12 : 1} maxLength={200}
+                <input id="login-password" autoComplete="current-password" type={showPassword ? "text" : "password"}
+                  value={password} required minLength={1} maxLength={200}
                   aria-invalid={!!signInErrors.password} aria-describedby={signInErrors.password ? "login-password-error" : undefined}
                   onChange={e => { setPassword(e.target.value); setSignInErrors(current => ({ ...current, password: undefined })); setError(""); }} />
                 <button title={showPassword ? "Hide password" : "Show password"} type="button" className="login-password-toggle" aria-label={showPassword ? "Hide password" : "Show password"}
@@ -707,16 +686,10 @@ export default function App() {
             </div>
             <button className="btn primary login-submit" type="submit" disabled={busy}>
               {busy && <Loader2 size={17} className="animate-spin" aria-hidden="true" />}
-              {busy ? (bootstrap ? "Creating account..." : "Signing in...") : (bootstrap ? "Create administrator" : "Sign in")}
+              {busy ? "Signing in..." : "Sign in"}
             </button>
           </form>
-          {!bootstrap && <a className="recovery-entry" href="/recover-password">Forgot password?</a>}
-          {!bootstrap && setupRequired && <button className="login-switch" type="button" onClick={() => {
-            setBootstrap(true); setPassword(""); setShowPassword(false); setSignInErrors({}); setError("");
-          }}>Set up your first account</button>}
-          {bootstrap && <button className="login-switch" type="button" onClick={() => {
-            setBootstrap(false); setBootstrapToken(""); setPassword(""); setShowPassword(false); setSignInErrors({}); setError("");
-          }}>Already configured? Sign in</button>}
+          <a className="recovery-entry" href="/recover-password">Forgot password?</a>
       </SignInLayout>
     );
 

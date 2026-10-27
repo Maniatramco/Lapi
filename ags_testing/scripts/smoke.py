@@ -7,7 +7,6 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from pathlib import Path
 
 BASE = os.getenv('AEGIS_SMOKE_URL', 'http://127.0.0.1:3000')
 os.environ.setdefault('COMPOSE_FILE', 'ags_local_use/compose.yaml')
@@ -72,11 +71,11 @@ while True:
         time.sleep(1)
 assert status['setup_required']
 request('/documents', expected=401)
-env_file = Path(os.getenv('AEGIS_SMOKE_ENV_FILE', '.env'))
-values = dict(line.split('=', 1) for line in env_file.read_text().splitlines() if '=' in line and not line.startswith('#'))
 password = os.getenv('AEGIS_SMOKE_PASSWORD') or 'Smoke-test-only-' + uuid.uuid4().hex
-request('/auth/setup', {'username': 'smoke', 'password': password, 'bootstrap_token': 'wrong'}, expected=403)
-request('/auth/setup', {'username': 'smoke', 'password': password, 'bootstrap_token': values['AEGIS_BOOTSTRAP_TOKEN']})
+# The first administrator is created on the server only; there is no setup API.
+subprocess.run(['docker', 'compose', '--project-directory', '.', 'exec', '-T', 'api', 'python', '-m', 'ags_app.create_admin'],
+               input=json.dumps({'username': 'smoke', 'password': password}).encode(), check=True)
+assert not request('/auth/status')['setup_required']
 csrf = request('/auth/login', {'username': 'smoke', 'password': password})['csrf_token']
 cfg = request('/settings')
 assert cfg['model_provider'] == cfg['embedding_provider'] == 'mock'

@@ -11,8 +11,10 @@ x-backend: &backend
     AEGIS_STORAGE_ROOT: /data
     AEGIS_CONFIG_FILE: /etc/aegis/runtime.toml
     AEGIS_CONFIG_PROFILE: ${AEGIS_CONFIG_PROFILE:-default}
-    AEGIS_MASTER_KEY: ${AEGIS_MASTER_KEY:?Run ags_local_use/ags_scripts/setup.sh first}
-    AEGIS_BOOTSTRAP_TOKEN: ${AEGIS_BOOTSTRAP_TOKEN:?Run ags_local_use/ags_scripts/setup.sh first}
+    # Either the key itself (local development) or the OCI Vault secret that holds it.
+    AEGIS_MASTER_KEY: ${AEGIS_MASTER_KEY:-}
+    AEGIS_MASTER_KEY_SECRET_OCID: ${AEGIS_MASTER_KEY_SECRET_OCID:-}
+    AEGIS_VAULT_AUTH_MODE: ${AEGIS_VAULT_AUTH_MODE:-instance_principal}
     QDRANT_URL: http://qdrant:6333
     MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
     EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-sentence_transformers}

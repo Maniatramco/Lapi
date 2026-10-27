@@ -32,6 +32,55 @@ Windows Oracle/Ollama launcher:
 ./ags_local_use/ags_scripts/start-oracle.ps1
 ```
 
+Create the first administrator once the API is running. There is no setup screen
+or setup token; this only works while no account exists. The scripts prompt for
+the username and password and pass them through stdin:
+
+```sh
+./ags_local_use/ags_scripts/create-admin.sh      # or create-admin.ps1 on Windows
+```
+
+They target the Oracle Compose configuration, like `create-colleague`. For any
+other deployment, run the module inside the API container and type the JSON on stdin:
+
+```sh
+docker compose --project-directory . --env-file .env -f ags_local_use/compose.yaml exec -T api python -m ags_app.create_admin
+```
+
+### Keep the master key in OCI Vault
+
+Model API keys, storage credentials and database passwords are saved encrypted
+with one master key. On the OCI server, keep that key in OCI Vault instead of
+`.env`; the VM reads it with its own OCI identity, so no API key or master key is
+stored on the server.
+
+1. On a computer whose `~/.oci/config` may manage vaults, keys and IAM, create the
+   Vault, HSM key, `lapi-vm` dynamic group and `lapi-vault-access` policy. It prints
+   the compartment, vault and key IDs:
+
+   ```sh
+   python ags_deploy/scripts/setup-lapi-vault.py
+   ```
+
+2. On the VM, copy the current key into the Vault (it is read from the running API
+   container and never printed). Keep the existing key: it decrypts what is already saved.
+
+   ```sh
+   docker compose --project-directory . --env-file .env -f ags_local_use/compose.yaml exec -T api sh -c 'printenv AEGIS_MASTER_KEY | python -m ags_app.vault_master_key store --compartment-id <compartment_id> --vault-id <vault_id> --key-id <key_id>'
+   ```
+
+3. In `.env`, set `AEGIS_MASTER_KEY_SECRET_OCID` to the printed secret OCID and delete
+   the `AEGIS_MASTER_KEY` line. Recreate the services, then confirm:
+
+   ```sh
+   docker compose --project-directory . --env-file .env -f ags_local_use/compose.yaml up -d
+   docker compose --project-directory . --env-file .env -f ags_local_use/compose.yaml exec -T api python -m ags_app.vault_master_key check
+   ```
+
+Lapi refuses to start if both settings are present or the Vault secret cannot be
+read. After step 2 you may remove the `manage secrets` and `use keys` statements
+from the policy; reading only needs `read secret-bundles`.
+
 Existing laptop configuration with OCI credentials and local GPU inference:
 
 ```sh
