@@ -2,6 +2,17 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.4 - 27 October 2026
+
+Choose each model's API
+
+- Setting: model connections gain `chat_api` (`chat_completions` by default, or `responses`). Validation allows Responses for `openai-compatible` and `azure-openai` Chat/Extraction models, without restricting the endpoint host (Test Connection reports a provider that does not support it); other protocols have one chat API, refuse `responses` and store nothing; embeddings ignore it. Existing models keep Chat Completions.
+- Translation (`lapi_models/providers/lapi_openai/responses.py`): Lapi keeps building Chat Completions payloads; `request()` turns them into Responses requests (messages and image parts to `input`, tool calls and outputs to `function_call`/`function_call_output`, tools, `tool_choice`, `max_output_tokens`, `reasoning.effort`, `text.format` for JSON schema, `store: false`; `seed`, `stop` and frequency/presence penalties are not sent) and `reply()` turns answers back (text, tool calls, finish reason, usage including cached and reasoning tokens).
+- Wiring: `ModelConnection.chat()` picks the API; agent tool steps and answers, `generate()` (chat and extraction) and OpenAI/Gemini OCR use it. A streamed agent answer with Responses is requested once and published in one piece.
+- Model Registration: an API field for Chat and Extraction models, with both choices for OpenAI-compatible and Azure OpenAI and the provider's single API (Messages, Converse, generateContent, OCI Generative AI chat, Ollama chat) for the others; the request always sends a value the provider accepts.
+
+Validation: full backend suite in parallel, 1,372 passed, 11 skipped, including new `test_openai_responses_api.py` (request and reply translation, validation per provider, stored setting, an agent tool step with reasoning on `/v1/responses` and on `/v1/chat/completions`, streamed answers in one piece). The web image build type-checks the form; the form was not previewed in a browser.
+
 ## v26.1.16.3 - 27 October 2026
 
 Model tests explain provider errors
