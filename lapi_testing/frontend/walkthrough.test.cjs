@@ -2,7 +2,7 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const filename=path.resolve(__dirname,'../../lapi_frontend/app/walkthrough-data.ts'),compiled=new Module(filename,module);compiled.paths=module.paths;
 compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
-const {SCENES,TOUR_VERSION,totalSeconds,clampScene,nextScene,previousScene,sceneStart,sceneAt,segmentFill,formatClock,shouldShowTour,wordsPerSecond,pickVoice}=compiled.exports;
+const {SCENES,TOUR_VERSION,totalSeconds,clampScene,nextScene,previousScene,sceneStart,sceneAt,segmentFill,formatClock,shouldShowTour,wordsPerSecond,pickVoice,MOBILE_SCENES,scenesFor}=compiled.exports;
 
 test('six scenes tell Connect, Unify, Ask in about one minute, each with a caption',()=>{
  assert.deepEqual(SCENES.map(s=>s.id),['welcome','connect','unify','ask','extract','secure']);
@@ -59,4 +59,12 @@ test('the most natural English voice is chosen, never a non-English one',()=>{
  assert.equal(pickVoice(voices).name,'Microsoft Aria Online (Natural)');
  assert.equal(pickVoice(voices.filter(v=>!/Aria/.test(v.name))).name,'Google UK English Female');
  assert.equal(pickVoice([{name:'Google Deutsch',lang:'de-DE'}]),undefined);
+});
+
+test('phones get their own tour with the same scenes and timing, narrated for taps and photos',()=>{
+ assert.deepEqual(MOBILE_SCENES.map(s=>[s.id,s.seconds]),SCENES.map(s=>[s.id,s.seconds]));
+ assert.equal(scenesFor('mobile'),MOBILE_SCENES);assert.equal(scenesFor('desktop'),SCENES);
+ for(const scene of MOBILE_SCENES)assert.ok(wordsPerSecond(scene)<=2.7,scene.id);
+ assert.match(MOBILE_SCENES[1].caption,/Tap Add/);assert.match(MOBILE_SCENES[1].caption,/photo/);assert.match(MOBILE_SCENES[1].caption,/merged/);
+ assert.match(SCENES[3].caption,/keyboard shortcuts/);assert.match(SCENES[4].caption,/side by side/);
 });

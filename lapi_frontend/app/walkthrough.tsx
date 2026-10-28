@@ -1,11 +1,10 @@
 "use client";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Activity, CheckCircle2, ChevronLeft, ChevronRight, Cloud, Database, FileText, FolderOpen, KeyRound, Pause, Play, RotateCcw, ScanText, ShieldCheck, Sparkles, Users, Volume2, VolumeX, X } from "lucide-react";
-import { SCENES, TOUR_VERSION, clampScene, formatClock, nextScene, pickVoice, previousScene, sceneAt, sceneStart, segmentFill, shouldShowTour, totalSeconds, type SceneId } from "./walkthrough-data";
+import { MOBILE_QUERY, TOUR_VERSION, clampScene, formatClock, nextScene, pickVoice, previousScene, sceneAt, sceneStart, scenesFor, segmentFill, shouldShowTour, totalSeconds, type Device, type SceneId } from "./walkthrough-data";
 import "./walkthrough.css";
 
 type Api = (path: string, method?: string, body?: unknown, signal?: AbortSignal, quiet?: boolean) => Promise<any>;
-const TOTAL = totalSeconds();
 /** Seconds into the last scene when the "You're ready" end card appears. */
 const END_CARD_AT = 4;
 
@@ -42,7 +41,7 @@ function Welcome() {
 const FORMATS = ["PDF", "DOCX", "TXT", "JSON", "Images"];
 const CLOUDS = ["Amazon S3", "Azure Blob", "Google Cloud Storage", "OCI Object Storage"];
 const APPS = ["Google Drive", "SharePoint"];
-function Connect() {
+function Connect({ mobile = false }: { mobile?: boolean }) {
   return <div className="wt-scene wt-connect">
     <div className="wt-sources">
       <div className="wt-group wt-in-left" {...at(0.2)}><span className="wt-group-title"><FileText size={14} aria-hidden="true" />Upload files</span>
@@ -54,9 +53,9 @@ function Connect() {
     </div>
     <div className="wt-flow" aria-hidden="true">{[0, 1, 2, 3, 4].map(i => <i key={i} style={{ ["--d" as string]: `${1 + i * 0.45}s` }} />)}</div>
     <div className="wt-panel wt-addk wt-in-right" {...at(0.6)}>
-      <span className="wt-panel-head"><Sparkles size={15} aria-hidden="true" />Add knowledge</span>
+      <span className="wt-panel-head"><Sparkles size={15} aria-hidden="true" />{mobile ? "Add" : "Add knowledge"}</span>
       <ol className="wt-guide">
-        {["Choose a source", "Follow the connector guide", "Test and connect"].map((step, i) =>
+        {(mobile ? ["Tap Add", "Take a photo or choose files", "Merge pages into one"] : ["Choose a source", "Follow the connector guide", "Test and connect"]).map((step, i) =>
           <li key={step} className="wt-in-up" {...at(4 + i * 1.2)}><CheckCircle2 size={15} aria-hidden="true" className="wt-tick" style={{ ["--d" as string]: `${4.6 + i * 1.2}s` }} />{step}</li>)}
       </ol>
       <span className="wt-kb wt-in-pop" {...at(7.8)}><Database size={14} aria-hidden="true" />Into one knowledge base</span>
@@ -137,6 +136,20 @@ function Secure({ endCard }: { endCard: ReactNode }) {
   </div>;
 }
 
+/** "mobile" on phone-sized screens, else "desktop"; follows rotation and window resizing. */
+function useDevice(): Device {
+  const [device, setDevice] = useState<Device>("desktop");
+  useEffect(() => {
+    const query = typeof window !== "undefined" && window.matchMedia ? window.matchMedia(MOBILE_QUERY) : null;
+    if (!query) return;
+    const update = () => setDevice(query.matches ? "mobile" : "desktop");
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+  return device;
+}
+
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -205,6 +218,9 @@ export type WalkthroughProps = {
 /** The animated 1-minute Lapi tour: six auto-advancing scenes with captions and player controls. */
 export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mode === "modal" }: WalkthroughProps) {
   const reduced = useReducedMotion();
+  const device = useDevice();
+  const SCENES = scenesFor(device);
+  const TOTAL = totalSeconds(SCENES);
   const voice = useNarration();
   const [elapsed, setElapsed] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -212,7 +228,7 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const playRef = useRef<HTMLButtonElement>(null);
-  const { index, offset } = sceneAt(elapsed);
+  const { index, offset } = sceneAt(elapsed, SCENES);
   const scene = SCENES[index];
   const ended = elapsed >= TOTAL;
   const finish = onFinish || onClose;
@@ -226,42 +242,42 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
       const now = performance.now(), step = (now - last) / 1000;
       last = now;
       setElapsed(value => {
-        const at = sceneAt(value).index;
+        const at = sceneAt(value, SCENES).index;
         // Wait at the end of a scene while its line is still being spoken.
-        const limit = voice.busy(SCENES[at].seconds + 8) ? (at === SCENES.length - 1 ? TOTAL : sceneStart(at + 1)) - 0.05 : TOTAL;
+        const limit = voice.busy(SCENES[at].seconds + 8) ? (at === SCENES.length - 1 ? TOTAL : sceneStart(at + 1, SCENES)) - 0.05 : TOTAL;
         return Math.min(limit, value + step);
       });
     }, 100);
     return () => window.clearInterval(timer);
-  }, [playing, voice.busy]);
+  }, [playing, voice.busy, SCENES, TOTAL]);
   // Narrate each scene as it starts; pausing stops the voice.
   const narrating = playing && voice.enabled && voice.supported && !reduced;
   useEffect(() => {
     if (!narrating) { voice.stop(); return; }
     voice.speak(SCENES[index].caption);
-  }, [narrating, index, run]);
+  }, [narrating, index, run, SCENES]);
   useEffect(() => () => voice.stop(), []);
   useEffect(() => { if (ended) setPlaying(false); }, [ended]);
 
   const goTo = useCallback((target: number) => {
-    setElapsed(sceneStart(clampScene(target)));
+    setElapsed(sceneStart(clampScene(target, SCENES), SCENES));
     setRun(value => value + 1);
-  }, []);
+  }, [SCENES]);
   const replay = useCallback(() => { setElapsed(0); setRun(value => value + 1); if (!reduced) setPlaying(true); }, [reduced]);
   const toggle = useCallback(() => {
     if (reduced) return;
     if (ended) { replay(); return; }
     // Resuming with the voice on repeats this scene's line from its start, so words and pictures match.
-    if (!playing && voice.enabled && voice.supported) { setElapsed(sceneStart(index)); setRun(value => value + 1); }
+    if (!playing && voice.enabled && voice.supported) { setElapsed(sceneStart(index, SCENES)); setRun(value => value + 1); }
     setPlaying(value => !value);
-  }, [ended, reduced, replay, playing, voice.enabled, voice.supported, index]);
+  }, [ended, reduced, replay, playing, voice.enabled, voice.supported, index, SCENES]);
   // The tap browsers need before they speak: restart this scene with the voice on.
   const enableVoice = useCallback(() => {
     if (!voice.enabled) voice.toggle();
     voice.setBlocked(false);
-    setElapsed(sceneStart(index)); setRun(value => value + 1); setPlaying(true);
+    setElapsed(sceneStart(index, SCENES)); setRun(value => value + 1); setPlaying(true);
     voice.speak(SCENES[index].caption);
-  }, [voice, index]);
+  }, [voice, index, SCENES]);
 
   // Modal: remember the opener, start on the play control, lock page scroll, and give focus back on close.
   useEffect(() => {
@@ -277,8 +293,8 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
     const target = event.target as HTMLElement;
     const native = /^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(target.tagName);
     if (event.key === "Escape" && mode === "modal") { event.preventDefault(); event.stopPropagation(); onClose?.(); return; }
-    if (event.key === "ArrowRight") { event.preventDefault(); goTo(nextScene(index)); return; }
-    if (event.key === "ArrowLeft") { event.preventDefault(); goTo(previousScene(index)); return; }
+    if (event.key === "ArrowRight") { event.preventDefault(); goTo(nextScene(index, SCENES)); return; }
+    if (event.key === "ArrowLeft") { event.preventDefault(); goTo(previousScene(index, SCENES)); return; }
     if ((event.key === " " || event.key === "Spacebar") && !native) { event.preventDefault(); toggle(); return; }
     if (event.key === "Tab" && mode === "modal" && dialogRef.current) {
       const items = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el => el.offsetParent !== null || el === document.activeElement);
@@ -291,7 +307,7 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
 
   // Paused at the very start of a scene (or reduced motion): show the scene's finished state, not a blank first frame.
   const still = reduced || (!playing && offset < 0.05);
-  const fills = reduced ? SCENES.map((_, i) => (i <= index ? 1 : 0)) : segmentFill(elapsed);
+  const fills = reduced ? SCENES.map((_, i) => (i <= index ? 1 : 0)) : segmentFill(elapsed, SCENES);
   const showEnd = index === SCENES.length - 1 && (still || ended || offset >= END_CARD_AT);
   const endCard = <div className="wt-end" data-show={showEnd || undefined}>
     <LapiMark size={40} />
@@ -301,9 +317,9 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
       <button type="button" className="wt-button" onClick={replay}><RotateCcw size={15} aria-hidden="true" />Replay</button>
     </div>}
   </div>;
-  const scenes: Record<SceneId, ReactNode> = { welcome: <Welcome />, connect: <Connect />, unify: <Unify />, ask: <Ask />, extract: <Extract />, secure: <Secure endCard={endCard} /> };
+  const scenes: Record<SceneId, ReactNode> = { welcome: <Welcome />, connect: <Connect mobile={device === "mobile"} />, unify: <Unify />, ask: <Ask />, extract: <Extract />, secure: <Secure endCard={endCard} /> };
 
-  const player = <div className="wt-player" data-mode={mode} data-playing={playing || undefined} data-still={still || undefined} data-reduced={reduced || undefined}>
+  const player = <div className="wt-player" data-mode={mode} data-device={device} data-playing={playing || undefined} data-still={still || undefined} data-reduced={reduced || undefined}>
     <header className="wt-top">
       <h2 id={titleId} className="wt-title"><LapiMark size={22} />Lapi in one minute</h2>
       <span className="wt-top-actions">
@@ -326,10 +342,10 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
           <span className="wt-segment-track"><i style={{ transform: `scaleX(${fills[i]})` }} /></span>
         </button></li>)}</ol>
       <div className="wt-buttons">
-        <button type="button" className="wt-button wt-icon" onClick={() => goTo(previousScene(index))} disabled={index === 0} aria-label="Previous scene"><ChevronLeft size={18} aria-hidden="true" /></button>
+        <button type="button" className="wt-button wt-icon" onClick={() => goTo(previousScene(index, SCENES))} disabled={index === 0} aria-label="Previous scene"><ChevronLeft size={18} aria-hidden="true" /></button>
         {!reduced && <button ref={playRef} type="button" className="wt-button wt-play" onClick={toggle} aria-label={ended ? "Replay tour" : playing ? "Pause tour" : "Play tour"}>
           {ended ? <RotateCcw size={18} aria-hidden="true" /> : playing ? <Pause size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}<span>{ended ? "Replay" : playing ? "Pause" : "Play"}</span></button>}
-        <button type="button" className="wt-button wt-icon" onClick={() => goTo(nextScene(index))} disabled={index === SCENES.length - 1} aria-label="Next scene"><ChevronRight size={18} aria-hidden="true" /></button>
+        <button type="button" className="wt-button wt-icon" onClick={() => goTo(nextScene(index, SCENES))} disabled={index === SCENES.length - 1} aria-label="Next scene"><ChevronRight size={18} aria-hidden="true" /></button>
         {reduced
           ? <span className="wt-time">Scene {index + 1} of {SCENES.length}</span>
           : <span className="wt-time"><span className="visually-hidden-wt">Elapsed </span><time>{formatClock(elapsed)}</time> / <time>{formatClock(TOTAL)}</time></span>}

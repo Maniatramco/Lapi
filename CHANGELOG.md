@@ -4,7 +4,9 @@ The application version and in-app feature history are maintained in `lapi_front
 
 ## v26.1.16.24 - 29 October 2026
 
-Voice-over for the product tour
+Voice-over and phone and computer versions of the tour
+
+- Two versions: `SCENES` (computer) and `MOBILE_SCENES` (phone), same scene ids and timing; `useDevice` picks by `MOBILE_QUERY` (max-width 640px) and follows resizing. The phone Connect scene shows Tap Add, photo or files, merge pages.
 
 - `walkthrough.tsx` `useNarration`: the browser's speech synthesis speaks each scene's caption when the scene starts (no external service or keys). The timeline holds at the end of a scene until its line has ended (safety limit: scene length + 8 s). Pause cancels speech; resuming with the voice on restarts the scene so words and pictures match.
 - Voice on / off control (`localStorage` `lapi:tour-voice`). A speech `not-allowed` error (no user gesture yet, e.g. the automatic first-login tour) shows "Turn on voice", which restarts the scene with narration.

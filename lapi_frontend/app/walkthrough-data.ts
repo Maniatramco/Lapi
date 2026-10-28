@@ -7,21 +7,43 @@ export type Scene = { id: SceneId; title: string; caption: string; seconds: numb
 export const TOUR_VERSION = 2;
 
 /** Each caption is also the scene's voice-over line, so subtitles always match the narration.
- * Keep lines short enough to speak within the scene (see `wordsPerSecond`). */
+ * Keep lines short enough to speak within the scene (see `wordsPerSecond`). Two versions share
+ * the scene ids and timing: a computer (web) one and a phone one. */
+export type Device = "desktop" | "mobile";
+
 export const SCENES: readonly Scene[] = [
   { id: "welcome", title: "Welcome", seconds: 7,
     caption: "Welcome to Lapi. Connect your knowledge, unify it in one place, and ask it anything." },
   { id: "connect", title: "Connect", seconds: 10,
-    caption: "Use Add knowledge to upload files or photos, or connect cloud storage, Google Drive and SharePoint. A guide helps with each one." },
+    caption: "Use Add knowledge to upload files, or connect cloud storage, Google Drive and SharePoint. A step-by-step guide helps with each one." },
   { id: "unify", title: "Unify", seconds: 12,
     caption: "Documents go into datasets. Lapi reads them, even scans and photos, and indexes them with the models your administrator chose." },
   { id: "ask", title: "Ask", seconds: 12,
-    caption: "Ask in plain language. Lapi answers from your documents and shows the sources, so you can check every answer." },
+    caption: "Ask the Lapi Agent in plain language. Every answer shows its sources. Press the question mark key to see keyboard shortcuts." },
   { id: "extract", title: "Extract & review", seconds: 10,
-    caption: "Need data out? Lapi suggests the fields, pulls out the values, and you review each one next to its source." },
+    caption: "Need data out? Lapi suggests the fields, then you review each value side by side with its source." },
   { id: "secure", title: "Secure by design", seconds: 9,
     caption: "Single sign-on, access per dataset and an activity log keep it safe. You're ready: start with Quick start on your Dashboard." },
 ];
+
+export const MOBILE_SCENES: readonly Scene[] = [
+  { id: "welcome", title: "Welcome", seconds: 7,
+    caption: "Welcome to Lapi on your phone. Bring in documents and ask them anything, in a few taps." },
+  { id: "connect", title: "Add", seconds: 10,
+    caption: "Tap Add at the bottom. Take a photo of a paper document, or pick files. Several pages can be merged into one." },
+  { id: "unify", title: "Read", seconds: 12,
+    caption: "Lapi reads every page, even photos and scans, and keeps them in your dataset, using the models your administrator chose." },
+  { id: "ask", title: "Ask", seconds: 12,
+    caption: "Ask in plain language, right from your phone. Every answer shows its sources, so you can check them." },
+  { id: "extract", title: "Extract", seconds: 10,
+    caption: "Pull out data in Quick start: Lapi suggests the fields, extracts them, and you review each value." },
+  { id: "secure", title: "Secure", seconds: 9,
+    caption: "Sign in once, see only what is shared with you, and every change is logged. Start with Quick start." },
+];
+
+export const scenesFor = (device: Device): readonly Scene[] => device === "mobile" ? MOBILE_SCENES : SCENES;
+/** Phones get the phone version: narrow screens, as the app's own phone layout uses. */
+export const MOBILE_QUERY = "(max-width: 640px)";
 
 /** Spoken words per second a scene's line needs; narration at a normal pace is about 2.5 to 3. */
 export function wordsPerSecond(scene: Scene): number {

@@ -4,11 +4,12 @@
     {
       "version": "26.1.16.24",
       "date": "2026-10-29",
-      "title": "Voice-over for the product tour",
+      "title": "Voice-over and phone and computer versions of the tour",
       "changes": [
         "The 1-minute tour (Dashboard and About) now has a voice-over: each scene's caption is spoken as it plays, with the most natural English voice on your device, and the tour waits for the voice before moving on.",
         "A Voice on / off button in the tour, remembered on your device. When the tour opens by itself, browsers need a tap before they speak: tap Turn on voice.",
-        "The tour's lines are updated for today's Lapi (Quick start, models chosen by your administrator), so everyone sees it once more."
+        "The tour's lines are updated for today's Lapi (Quick start, models chosen by your administrator), so everyone sees it once more.",
+        "Two versions of the tour: on phones it shows and narrates Quick start, the Add tab, taking photos and merging pages; on computers it covers Add knowledge connectors, Lapi Agent, side-by-side review and keyboard shortcuts."
       ]
     },
     {
