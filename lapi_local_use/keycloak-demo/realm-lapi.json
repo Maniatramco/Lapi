@@ -4,37 +4,128 @@
   "bruteForceProtected": true,
   "failureFactor": 5,
   "passwordPolicy": "length(12) and notUsername",
-  "roles": {"realm": [
-    {"name": "lapi-administrator", "description": "Lapi administrators"},
-    {"name": "lapi-auditor", "description": "Lapi auditors: read people, access and activity; change nothing"}
-  ]},
-  "groups": [{"name": "Finance", "path": "/Finance"}],
-  "clients": [{
-    "clientId": "lapi",
-    "name": "Lapi (local demo)",
-    "protocol": "openid-connect",
-    "enabled": true,
-    "publicClient": false,
-    "clientAuthenticatorType": "client-secret",
-    "secret": "lapi-local-demo-client-secret",
-    "standardFlowEnabled": true,
-    "directAccessGrantsEnabled": false,
-    "redirectUris": ["http://localhost:3100/api/auth/keycloak/callback"],
-    "webOrigins": ["http://localhost:3100"],
-    "attributes": {"pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "http://localhost:3100/"},
-    "protocolMappers": [{
-      "name": "groups",
+  "roles": {
+    "realm": [
+      {
+        "name": "lapi-administrator",
+        "description": "Lapi administrators"
+      },
+      {
+        "name": "lapi-auditor",
+        "description": "Lapi auditors: read people, access and activity; change nothing"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "Finance",
+      "path": "/Finance"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "lapi",
+      "name": "Lapi (local demo)",
       "protocol": "openid-connect",
-      "protocolMapper": "oidc-group-membership-mapper",
-      "config": {"claim.name": "groups", "full.path": "true", "id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "true"}
-    }]
-  }],
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "lapi-local-demo-client-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3100/api/auth/keycloak/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:3100"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3100/",
+        "backchannel.logout.url": "http://localhost:3000/api/auth/keycloak/backchannel-logout",
+        "backchannel.logout.session.required": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "frontchannelLogout": false
+    }
+  ],
   "users": [
-    {"username": "alice", "email": "alice@example.test", "firstName": "Alice", "lastName": "Admin", "enabled": true, "emailVerified": true,
-     "credentials": [{"type": "password", "value": "alice-demo-pass", "temporary": false}], "realmRoles": ["lapi-administrator"]},
-    {"username": "bob", "email": "bob@example.test", "firstName": "Bob", "lastName": "User", "enabled": true, "emailVerified": true,
-     "credentials": [{"type": "password", "value": "bob-demo-pass", "temporary": false}], "groups": ["/Finance"]},
-    {"username": "carol", "email": "carol@example.test", "firstName": "Carol", "lastName": "Auditor", "enabled": true, "emailVerified": true,
-     "credentials": [{"type": "password", "value": "carol-demo-pass", "temporary": false}], "realmRoles": ["lapi-auditor"]}
+    {
+      "username": "alice",
+      "email": "alice@example.test",
+      "firstName": "Alice",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice-demo-pass",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "lapi-administrator"
+      ]
+    },
+    {
+      "username": "bob",
+      "email": "bob@example.test",
+      "firstName": "Bob",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob-demo-pass",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/Finance"
+      ]
+    },
+    {
+      "username": "carol",
+      "email": "carol@example.test",
+      "firstName": "Carol",
+      "lastName": "Auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "carol-demo-pass",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "lapi-auditor"
+      ]
+    }
   ]
 }

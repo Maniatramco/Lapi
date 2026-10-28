@@ -2,6 +2,18 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.18 - 28 October 2026
+
+Safer sign-in, set-up questions, phones and shortcuts
+
+- **Sessions** (`sessions.py`): 30-minute idle timeout (`LAPI_SESSION_IDLE_MINUTES`) besides the 12-hour limit; `sessions_tbl` gains last activity, address, browser, Keycloak session id and encrypted Keycloak tokens. My sessions (`/api/me/sessions`), sign out others, and administrators' "Sign out everywhere". With HTTPS the cookie is `__Host-lapi_session` (everyone signs in once more after this release).
+- **Sign-in limits** (`sign_in_limits.py`, `sign_in_attempt_tbl`): 5 failures per username or 20 per address in 15 minutes lock for 15 minutes, kept in the database with hashed keys; success clears only the username. The client address comes from Caddy's X-Forwarded-For only for requests from this instance. Unknown usernames take the same time as known ones.
+- **Authenticator codes** (`totp.py`, `user_totp_tbl`): TOTP for password accounts (break-glass administrators), single-use codes, administrator reset. Password sign-in to an administrator account while Keycloak is on is logged as a break-glass warning.
+- **Keycloak**: sessions re-checked every 5 minutes with the refresh token (disabled or signed-out people end, roles and teams follow); back-channel logout `POST /api/auth/keycloak/backchannel-logout`; `id_token_hint` on sign-out; `azp` checked; administrators can be required to have used a second factor (`LAPI_KEYCLOAK_REQUIRE_ADMIN_MFA`, AMR).
+- **Hosted Keycloak on OCI** (off: `keycloak_hosted = false`): Keycloak image with the Oracle driver (`lapi_deploy/keycloak`), realm with administrator MFA, brute-force lockout and password policy, `sso.<ip>.sslip.io` through Caddy, `KEYCLOAK` database user created by the api from a Vault secret (`keycloak_bootstrap.py`), PROXY protocol v2 on the load balancer so Lapi sees real addresses.
+- **Set-up questions** (`preferences.py`, `setup-guide.ts`, `workspace-assist.tsx`): goals and knowledge sources after the tour, a first step chosen by access level, a "Your next steps" Dashboard card; Add knowledge can open straight into a connector guide (`#Add knowledge/<provider>`).
+- **Phones and shortcuts** (`mobile.css`, `shortcuts.ts`): bottom tab bar, floating Ask, 44 px targets, full-screen sheets; `?`, `/`, `g d`/`g a`/`g k`/`g s`/`g u`, `n`, `Esc`.
+
 ## v26.1.16.17 - 28 October 2026
 
 Dataset roles, teams, Auditor and a 1-minute tour

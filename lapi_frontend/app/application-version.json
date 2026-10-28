@@ -1,6 +1,19 @@
 {
-  "version": "26.1.16.17",
+  "version": "26.1.16.18",
   "releases": [
+    {
+      "version": "26.1.16.18",
+      "date": "2026-10-28",
+      "title": "Safer sign-in, set-up questions, phones and shortcuts",
+      "changes": [
+        "You are signed out after 30 minutes without activity. Users & passwords shows My sessions: where you are signed in, with sign-out for any session; administrators can sign a person out everywhere.",
+        "Failed sign-ins are limited per person (5 in 15 minutes) and per address, so one person's mistakes no longer lock out everyone.",
+        "Password accounts can add an authenticator app; then signing in also needs a 6-digit code. Administrators can reset it when a phone is lost.",
+        "With Keycloak, Lapi re-checks every 5 minutes and signs people out when Keycloak does, so disabling someone or removing a role takes effect within minutes.",
+        "After the tour, two quick questions (what you want to do, where your knowledge is) lead to your first step and a \"Your next steps\" card on the Dashboard.",
+        "Phones: a bottom bar (Dashboard, Ask, Add knowledge, More), larger buttons and full-screen panels. Keyboard: press ? to see the shortcuts."
+      ]
+    },
     {
       "version": "26.1.16.17",
       "date": "2026-10-28",
