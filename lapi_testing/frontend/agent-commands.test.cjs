@@ -16,7 +16,7 @@ test('slash is the command key and earlier @ commands keep working',()=>{
  const {agentInputIssue}=compiled.exports;
  assert.equal(agentOperation('/Extract fields from invoices'),'extract');assert.equal(agentOperation(' /reextract'),'reextract');assert.equal(agentOperation('@Upload files'),'upload');
  assert.equal(insertAgentCommand('/Ex then details',{start:0,end:3},'/Extract'),'/Extract  then details');
- for(const text of ['/Uplaod','/','/Onboarded','/ex'])assert.match(agentInputIssue(text),/Choose \/Onboard, \/Upload, \/Extract, \/ReExtract or \/Manage/);
+ for(const text of ['/Uplaod','/','/Onboarded','/ex'])assert.match(agentInputIssue(text),/Choose \/Onboard, \/Upload, \/Extract, \/ReExtract, \/Manage or \/Start/);
  for(const text of ['/docs/handbook.pdf what does it say','and/or questions','Summarize /Upload'])assert.equal(agentInputIssue(text),'');
  for(const text of ['Summarize /Upload','a/Extract'])assert.equal(agentOperation(text),undefined);
 });
