@@ -199,3 +199,16 @@ def test_sign_in_is_off_without_configuration(accounts, monkeypatch):
     assert accounts.get('/api/auth/status').json()['keycloak'] is False
     assert accounts.get('/api/auth/keycloak/start', follow_redirects=False).status_code == 404
     assert login(accounts, 'Colleague')['user']['is_admin'] is False
+
+
+def test_company_sign_in_buttons_go_straight_to_the_listed_provider(accounts, keycloak, monkeypatch):
+    client = accounts
+    assert client.get('/api/auth/status').json()['providers'] == []
+    monkeypatch.setenv('LAPI_KEYCLOAK_IDENTITY_PROVIDERS', 'microsoft=Microsoft, google=Google,Bad Alias=x,microsoft=Again')
+    assert client.get('/api/auth/status').json()['providers'] == [{'alias': 'microsoft', 'label': 'Microsoft'}, {'alias': 'google', 'label': 'Google'}]
+    start = client.get('/api/auth/keycloak/start', params={'provider': 'microsoft'}, follow_redirects=False)
+    assert start.status_code == 302 and 'kc_idp_hint=microsoft' in start.headers['location']
+    plain = client.get('/api/auth/keycloak/start', follow_redirects=False)
+    assert 'kc_idp_hint' not in plain.headers['location']
+    unknown = client.get('/api/auth/keycloak/start', params={'provider': 'github'}, follow_redirects=False)
+    assert unknown.status_code == 302 and unknown.headers['location'] == '/?sign_in_error=failed'

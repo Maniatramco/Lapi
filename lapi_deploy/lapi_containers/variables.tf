@@ -163,3 +163,9 @@ variable "keycloak_memory_gbs" {
   type        = number
   default     = 2
 }
+
+variable "keycloak_identity_providers" {
+  description = "Company sign-in providers configured in Keycloak (Identity providers), alias => button label, e.g. { microsoft = \"Microsoft\", google = \"Google\" }. Lapi shows one button per provider. Add an alias here only after it exists in Keycloak."
+  type        = map(string)
+  default     = {}
+}

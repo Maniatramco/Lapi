@@ -42,6 +42,8 @@ services:
       LAPI_KEYCLOAK_CLIENT_SECRET_FILE: /run/keycloak/client-secret
       LAPI_KEYCLOAK_ADMIN_ROLE: lapi-administrator
       LAPI_PUBLIC_URL: http://localhost:3100
+      # Company sign-in buttons, once the providers exist in Keycloak (README).
+      LAPI_KEYCLOAK_IDENTITY_PROVIDERS: ${LAPI_KEYCLOAK_IDENTITY_PROVIDERS:-}
     volumes:
       - data:/data
       - ./client-secret.txt:/run/keycloak/client-secret:ro

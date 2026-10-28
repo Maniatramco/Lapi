@@ -96,3 +96,10 @@ html body main.login-shell .lapi-banner-orbit{transform-box:view-box;transform-o
 @media(prefers-reduced-motion:reduce){
   html body main.login-shell .login-card,html body main.login-shell .login-story-panel>*{animation:none}
 }
+
+/* Company sign-in providers (Microsoft, Google): white buttons as their guidelines ask. */
+html body main.login-shell .login-providers{display:grid;gap:12px;margin:0 0 22px}
+html body main.login-shell a.login-provider{display:flex;align-items:center;justify-content:center;gap:12px;min-height:52px;border:1px solid rgba(255,255,255,.6);border-radius:12px;background:#ffffff;color:#1f2937;font-size:1rem;font-weight:700;text-decoration:none;box-shadow:0 10px 24px rgba(11,27,77,.22);transition:transform .15s,box-shadow .15s}
+html body main.login-shell a.login-provider:hover{transform:translateY(-1px);box-shadow:0 14px 28px rgba(11,27,77,.28)}
+html body main.login-shell a.login-keycloak-other{justify-self:center;color:#fed7aa;font-size:.875rem;font-weight:700;text-decoration:none}
+html body main.login-shell a.login-keycloak-other:hover{color:#ffffff;text-decoration:underline;text-underline-offset:3px}

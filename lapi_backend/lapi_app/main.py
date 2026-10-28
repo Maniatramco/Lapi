@@ -152,7 +152,7 @@ class Credentials(BaseModel):
 def auth_status():
     with Session() as s:setup=not bool(s.scalar(select(User)))
     # With Keycloak, password sign-in is only the local administrators' break-glass path.
-    return {'setup_required':setup,'keycloak':keycloak_auth.enabled()}
+    return {'setup_required':setup,'keycloak':keycloak_auth.enabled(),'providers':keycloak_auth.identity_providers() if keycloak_auth.enabled() else []}
 # Unknown usernames still pay for a password check, so response time does not reveal them.
 _UNKNOWN_USER_HASH=password_hash(secrets.token_urlsafe(16))
 @app.post('/api/auth/login')

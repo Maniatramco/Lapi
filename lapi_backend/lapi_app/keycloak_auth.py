@@ -159,6 +159,21 @@ LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout'
 MFA_METHODS = {'otp', 'mfa', 'hwk', 'swk', 'sms', 'webauthn'}
 
 
+def identity_providers():
+    """Company sign-in providers configured in Keycloak (Identity providers), listed in
+    LAPI_KEYCLOAK_IDENTITY_PROVIDERS as "alias=Label,alias=Label" (for example
+    "microsoft=Microsoft,google=Google"). Lapi shows a button per provider that goes straight
+    to it (Keycloak's kc_idp_hint), skipping Keycloak's own username and password page."""
+    import re
+    providers = []
+    for item in os.getenv('LAPI_KEYCLOAK_IDENTITY_PROVIDERS', '').split(','):
+        alias, _, label = item.strip().partition('=')
+        alias, label = alias.strip(), label.strip()
+        if re.fullmatch(r'[a-z0-9][a-z0-9-]{0,39}', alias) and alias not in {p['alias'] for p in providers}:
+            providers.append({'alias': alias, 'label': (label or alias.title())[:40]})
+    return providers
+
+
 def _require_admin_mfa():
     return os.getenv('LAPI_KEYCLOAK_REQUIRE_ADMIN_MFA', 'false') == 'true'
 
@@ -333,7 +348,7 @@ def recently_signed_in(user_id, seconds=600):
 
 
 @router.get(FLOW_PATH + '/start')
-def start(next: str = '/'):
+def start(next: str = '/', provider: str = ''):
     if not enabled():
         raise HTTPException(404, 'Keycloak sign-in is not configured.')
     try:
@@ -348,6 +363,11 @@ def start(next: str = '/'):
     query = {'response_type': 'code', 'client_id': settings['client_id'], 'redirect_uri': settings['redirect_uri'],
              'scope': 'openid profile email', 'state': flow['state'], 'nonce': flow['nonce'],
              'code_challenge': challenge, 'code_challenge_method': 'S256'}
+    if provider:
+        # Only providers this deployment lists: the hint cannot send people anywhere else.
+        if provider not in {item['alias'] for item in identity_providers()}:
+            return _back_to_sign_in('failed')
+        query['kc_idp_hint'] = provider
     response = RedirectResponse(document['authorization_endpoint'] + '?' + urlencode(query), 302)
     # Lax, not Strict: the browser must send it when Keycloak redirects back.
     response.set_cookie(FLOW_COOKIE, _cipher().encrypt(json.dumps(flow).encode()).decode(), max_age=FLOW_SECONDS,
