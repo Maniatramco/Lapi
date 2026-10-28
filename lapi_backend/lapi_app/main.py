@@ -174,6 +174,7 @@ from .user_management import install as install_user_management
 install_user_management(app, auth)
 from . import teams
 teams.install(app, auth)
+from .walkthrough import install as install_walkthrough; install_walkthrough(app, auth)
 from .storage_config import install as install_storage_config
 install_storage_config(app,auth)
 from .database_control import install as install_database_control

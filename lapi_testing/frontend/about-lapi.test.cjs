@@ -1,5 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript'),React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
-const file=path.resolve(__dirname,'../../lapi_frontend/app/about-lapi.tsx'),mod=new Module(file,module);mod.filename=file;mod.paths=module.paths;const original=mod.require.bind(mod);mod.require=id=>id.endsWith('.css')?{}:original(id);
+const file=path.resolve(__dirname,'../../lapi_frontend/app/about-lapi.tsx'),mod=new Module(file,module);mod.filename=file;mod.paths=module.paths;const original=mod.require.bind(mod);
+// The About screen embeds the tour player: compile its local TypeScript modules on the fly.
+const compileLocal=id=>{const base=path.resolve(path.dirname(file),id),source=fs.existsSync(base+'.tsx')?base+'.tsx':base+'.ts';const child=new Module(source,mod);child.filename=source;child.paths=module.paths;child.require=inner=>inner.endsWith('.css')?{}:inner.startsWith('./')?compileLocal(inner):original(inner);child._compile(ts.transpileModule(fs.readFileSync(source,'utf8'),{compilerOptions:{esModuleInterop:true,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,source);return child.exports;};
+mod.require=id=>id.endsWith('.css')?{}:id==='./walkthrough'?compileLocal(id):original(id);
 mod._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{esModuleInterop:true,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,file);
 const release=require('../../lapi_frontend/app/application-version.json');
 test('About presents the current version and complete prior feature history from the shared version source',()=>{
