@@ -67,6 +67,14 @@ class TeamDataset(Times, core.Base):
     dataset_id:Mapped[str]=mapped_column(String(80),ForeignKey('dataset_tbl.dataset_id',ondelete='CASCADE'),primary_key=True)
     access_level:Mapped[str]=mapped_column(String(16),default='viewer')
 
+class ScreenGrant(Times, core.Base):
+    """Who sees a screen on a device (screens.py): grantee_kind everyone | team | user | off."""
+    __tablename__='screen_grant_tbl'
+    screen:Mapped[str]=mapped_column(String(40),primary_key=True)
+    device:Mapped[str]=mapped_column(String(10),primary_key=True)
+    grantee_kind:Mapped[str]=mapped_column(String(10),primary_key=True)
+    grantee_id:Mapped[str]=mapped_column(String(80),primary_key=True)
+
 class SignInAttempt(core.Base):
     """Failed sign-ins per person and per address (sign_in_limits.py); kept across restarts."""
     __tablename__='sign_in_attempt_tbl'

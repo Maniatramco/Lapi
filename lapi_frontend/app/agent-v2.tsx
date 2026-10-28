@@ -9,7 +9,7 @@ import {AgentPromptProgress,type PromptProgress} from './agent-prompt-progress';
 import {promptSelections,restoreSavedPrompt,rememberSavedPrompt,rememberAssistantDataset,assistantDatasetPreference} from './agent-prompt-selection';
 import {AgentDocumentFilter} from './agent-document-filter';
 import {documentMention,documentOptionLabel,matchingDocuments,readyDatasetDocuments,eligibleAgentModels} from './agent-document-selection';
-import {agentCommands,agentMention,agentOperation,agentInputIssue,insertAgentCommand,isManageCommand} from './agent-commands';
+import {agentCommands,agentMention,agentOperation,agentInputIssue,insertAgentCommand,isManageCommand,isStartCommand} from './agent-commands';
 import {readChatStream} from './chat-stream';
 import {AgentChatAnswer,AgentRequest,conversationExchanges} from './agent-v2-chat';
 import {BatchProgress} from './batch-progress';
@@ -26,6 +26,8 @@ import {currentUploadStep, type UploadProgressItem} from './batch-workflow';
 import './agent-v2.css';
 import './agent-workspace.css';
 import {speechCapabilities,startSpeechInput,type SpeechEnvironment} from './agent-voice';
+import {AgentTraining,openAgentTraining} from './agent-training';
+import {openQuickStart} from './quick-start-flow';
 
 type Entity=Record<string,any>;
 const goalWorkflow=(plan:Entity)=>{
@@ -280,6 +282,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  const send=async()=>{
   if(lock.current||onboardingBusy||promptPreview||(!text.trim()&&!files.length)||plans.some(active))return;
   if(isManageCommand(text)){if(!dataset){setError('Choose a dataset above, then use /Manage to edit it here.');return;}setError('');setManaging(dataset);setText('');followLatest();return;}
+  if(isStartCommand(text)){setText('');openQuickStart();return;}  // Guided first workflow, from the agent.
   const issue=agentInputIssue(text);if(issue){setError('');setMentionClosed(false);composer.current?.focus();return;}
   const requestedOperation=agentOperation(text);const onboardingRequest=requestedOperation==='onboard';
   if(onboardingRequest&&!catalog.can_onboard_datasets){setError('Only the administrator can onboard datasets.');return;}
@@ -425,9 +428,10 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
   <div ref={thread} className="agent-v2-thread" aria-label="Agent conversation" tabIndex={0} onScroll={event=>{const area=event.currentTarget;const bottom=area.scrollHeight-area.scrollTop-area.clientHeight<64;followBottom.current=bottom;setShowLatest(!bottom);}}>
    {onboardingOpen&&catalog.can_onboard_datasets&&<AgentOnboarding initialDocuments={documentFiles} initialPrompt={promptAttachment||undefined} onReview={onReview} api={api} models={catalog.models} defaults={datasetConfig} storageKey={key+'-onboarding'} onBusy={setOnboardingBusy} onReady={()=>{onWorkspaceChanged?.();void loadCatalog().catch(e=>setError(e.message));}} onEdit={id=>setManaging(id)} onUse={id=>{setDataset(id);setDocuments([]);setSavedPromptId('');rememberAssistantDataset(sessionStorage,username,id);setOnboardingOpen(false);sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}} onClose={completed=>{setOnboardingOpen(false);if(completed){sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}}}/>}
    {catalogError&&<div className="agent-v2-catalog-error" role="alert"><span>Could not load datasets and models. {catalogError}</span><ActionButton className="btn" disabled={catalogLoading} onClick={()=>{setError('');setCatalogAttempt(value=>value+1);}} label="Retry datasets and models" action="retry"/></div>}
+   <AgentTraining api={api} userId={username} onTry={(action,example)=>{if(action==='ask'&&example){setText(example);composer.current?.focus();}else if(action==='attach')fileInput.current?.click();else if(action==='quick-start')openQuickStart();}}/>
    {!plans.length&&!onboardingOpen&&<div className="agent-v2-welcome"><AgentLogo size={64} label="Lapi Agent"/>{!scopeReady?<p role="status">{catalogError?'Workspace choices are unavailable. Retry loading above.':'Preparing your workspace…'}</p>:<><div className="agent-welcome-hero"><div><h2>How can I help?</h2><p>Ask about Lapi, search indexed documents and saved results, or onboard and extract in one conversation. Answers are retrieved, reranked and checked against cited evidence.</p></div></div>
     <h3 className="agent-welcome-label">Start a workflow</h3>
-    <div className="agent-workflow-cards">{agentCommands.filter(command=>!['skill','instructions','optimize'].includes(command.operation)).map(command=><button key={command.operation} type="button" className="agent-workflow-card" data-operation={command.operation} disabled={attachmentsBlocked} onClick={()=>startWorkflow(command.label)}><span className="agent-workflow-tag">{command.label}</span><strong>{({onboard:'Set up a dataset',upload:'Upload and index',extract:'Extract fields',reextract:'Re-extract',manage:'Manage a dataset'} as Record<string,string>)[command.operation]}</strong><span>{command.description}</span></button>)}</div>
+    <div className="agent-workflow-cards">{agentCommands.filter(command=>!['skill','instructions','optimize','start'].includes(command.operation)).map(command=><button key={command.operation} type="button" className="agent-workflow-card" data-operation={command.operation} disabled={attachmentsBlocked} onClick={()=>startWorkflow(command.label)}><span className="agent-workflow-tag">{command.label}</span><strong>{({onboard:'Set up a dataset',upload:'Upload and index',extract:'Extract fields',reextract:'Re-extract',manage:'Manage a dataset'} as Record<string,string>)[command.operation]}</strong><span>{command.description}</span></button>)}</div>
     <h3 className="agent-welcome-label">Or ask about your knowledge</h3>
     <div className="agent-v2-suggestions">{['What can you do?','Summarize the key points','Upload and extract documents'].map(s=><button key={s} className="btn" onClick={()=>setText(s)}>{s}</button>)}</div></>}</div>}
    {plans.map(plan=>{
@@ -516,6 +520,12 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
      }
      if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}
     }}/></div></div>
+    <div className="agent-v2-chips" aria-label="Quick actions">
+     <button type="button" className="agent-chip" onClick={openQuickStart}>Guided start</button>
+     {!attachmentsBlocked&&<button type="button" className="agent-chip" onClick={()=>fileInput.current?.click()}>Add documents</button>}
+     <button type="button" className="agent-chip" onClick={()=>startWorkflow('/Extract')}>Pull out data</button>
+     <button type="button" className="agent-chip" onClick={openAgentTraining}>How the agent works</button>
+    </div>
     <div className="agent-v2-compose-controls">
      <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json,.xlsx,.csv,.tsv,.png,.jpg,.jpeg,.webp" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>
      <button className="btn icon" aria-label="Attach documents for agent" title="Attach PDF, DOCX, TXT, JSON, spreadsheets (XLSX, CSV, TSV) or images (PNG, JPG, WEBP)" disabled={attachmentsBlocked} onClick={()=>fileInput.current?.click()}><Plus size={21}/></button>

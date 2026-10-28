@@ -21,7 +21,7 @@ class FakeOpenFGA:
     @staticmethod
     def has(tuples, user, relation, obj):
         """Lapi's model: owner > editor > viewer on datasets, and grants to team#member."""
-        if (user, relation, obj) in tuples:
+        if (user, relation, obj) in tuples or ('user:*', relation, obj) in tuples:
             return True
         teams = {o for u, r, o in tuples if u == user and r == 'member' and o.startswith('team:')}
         if any((team + '#member', relation, obj) in tuples for team in teams):

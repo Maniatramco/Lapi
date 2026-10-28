@@ -44,6 +44,12 @@ POLICY = {
     ('GET', '/api/me/walkthrough'): 'signed_in',
     ('POST', '/api/me/walkthrough'): 'signed_in',
     ('GET', '/api/me/preferences'): 'signed_in',
+    ('GET', '/api/me/screens'): 'signed_in',
+    ('GET', '/api/me/agent-training'): 'signed_in',
+    ('POST', '/api/me/agent-training'): 'signed_in',
+    ('GET', '/api/screens'): 'admin',
+    ('PUT', '/api/screens'): 'admin',
+    ('POST', '/api/screens/preset'): 'admin',
     ('PUT', '/api/me/preferences'): 'signed_in',
 
     # People, roles, teams and access

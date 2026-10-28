@@ -203,6 +203,8 @@ from .user_management import install as install_user_management
 install_user_management(app, auth)
 from . import teams
 teams.install(app, auth)
+from . import screens
+screens.install(app, auth)
 from . import sessions as session_routes, totp as totp_routes
 session_routes.install(app, auth)
 totp_routes.install(app, auth)

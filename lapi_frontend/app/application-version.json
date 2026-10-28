@@ -1,6 +1,18 @@
 {
-  "version": "26.1.16.26",
+  "version": "26.1.16.27",
   "releases": [
+    {
+      "version": "26.1.16.27",
+      "date": "2026-10-29",
+      "title": "Agent-first phone version",
+      "changes": [
+        "On phones, Lapi now shows three things: Dashboard, Lapi Agent and Quick start. Everything else runs through the agent. Administrators keep every screen on every device.",
+        "Screens are controlled from the Access map's new Screens tab: per screen, Phone and Computer, for everyone, a team, or off, with presets. Decided by OpenFGA and applied within a minute, with no deploy.",
+        "A short in-agent training (five cards with Try it buttons) shows once, and any time from the How the agent works chip.",
+        "Quick start opens from the agent (Guided start chip or /Start) and can hand back into the agent with the dataset selected.",
+        "The phone Dashboard opens with Lapi Agent as the front door; quick-action chips sit above the agent's message box."
+      ]
+    },
     {
       "version": "26.1.16.26",
       "date": "2026-10-29",

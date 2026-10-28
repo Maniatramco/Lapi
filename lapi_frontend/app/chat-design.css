@@ -132,3 +132,25 @@ body .shell .agent-v2 .answer-workflow-summary{min-height:22px;padding:2px 8px;b
 body .shell .agent-v2 .answer-workflow-summary:hover{background:#f1f4f9;color:#334155}
 body .shell .agent-v2 .agent-answer-workflow[data-status=running] .answer-workflow-label{color:#475569;font-weight:600}
 body .shell .agent-v2 .answer-workflow-expanded{border-color:var(--chat-line);background:#fafbfd;border-radius:12px}
+
+/* Quick-action chips above the composer, and the in-agent training cards (agent-training.tsx). */
+body .shell .agent-v2 .agent-v2-chips{display:flex;flex-wrap:wrap;gap:8px;max-width:var(--chat-col);margin:0 auto;padding:4px 14px 8px}
+.agent-chip{min-height:34px;padding:0 13px;border:1px solid var(--chat-line,#e3e7ef);border-radius:999px;background:#fff;color:#1d2d6b;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
+.agent-chip:hover{background:#eef2fb;border-color:#c9d4f5}
+.agent-training{max-width:var(--chat-col,768px);margin:0 auto 22px;padding:16px 18px 14px;border:1px solid #c9d4f5;border-radius:18px;background:linear-gradient(135deg,#f5f8ff,#fff);box-shadow:0 10px 28px rgba(30,58,138,.08);font-family:Inter,ui-sans-serif,system-ui,sans-serif;animation:chat-in .28s ease-out both}
+.agent-training header{display:flex;align-items:center;gap:10px;margin-bottom:10px;color:#1e3a8a}
+.agent-training header strong{display:inline-flex;align-items:center;gap:6px;flex:1;font-size:14px}
+.agent-training-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#fff;border:1px solid #dbe5f7}
+.agent-training-count{font-size:12.5px;color:#64748b;font-variant-numeric:tabular-nums}
+.agent-training-dots{display:flex;gap:6px;margin:0 0 10px;padding:0;list-style:none}
+.agent-training-dots li{flex:1;height:4px;border-radius:2px;background:#e3e7ef}.agent-training-dots li.done{background:#2563eb}.agent-training-dots li.on{background:#fb923c}
+.agent-training h3{margin:0 0 6px;font-size:18px;color:#1f2430}.agent-training p{margin:0 0 12px;font-size:15px;line-height:1.55;color:#334155}
+.agent-training-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.agent-training-nav{display:inline-flex;align-items:center;gap:6px;margin-left:auto}
+.agent-training .btn.primary{display:inline-flex;align-items:center;gap:4px;background:#fb923c;border-color:#fb923c;color:#14213d;font-weight:800}
+/* Screens tab in the Access map (screens-admin.tsx). */
+.screens-admin{display:grid;gap:12px}
+.screens-presets{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13.5px;color:#475569}
+.screens-matrix th[scope=row] small{display:block;font-size:11.5px;color:#64748b;font-weight:500}
+.screens-matrix select{min-height:36px;padding:0 8px;border:1px solid #d6deef;border-radius:9px;background:#fff;font:inherit;font-size:13.5px}
+.screens-matrix td.screens-changed select{border-color:#fb923c;box-shadow:0 0 0 2px rgba(251,146,60,.25)}

@@ -88,3 +88,18 @@
   html body .shell > .topbar { padding-top: max(6px, env(safe-area-inset-top)); }
   .toast { left: 12px; right: 12px; max-width: none; bottom: calc(12px + env(safe-area-inset-bottom)); }
 }
+
+/* Agent-first Dashboard on phones; the agent-only phone version hides the navigation drawer. */
+.agent-hero{display:none}
+@media (max-width: 640px) {
+ .agent-hero{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;margin:0 0 14px;padding:16px;border-radius:20px;color:#fff;
+  background:radial-gradient(70% 120% at 100% 0%,rgba(253,186,116,.65),rgba(253,186,116,0) 60%),linear-gradient(130deg,#1e3a8a 0%,#2563eb 50%,#5b5fe8 85%);box-shadow:0 14px 30px rgba(30,58,138,.22)}
+ .agent-hero-mark{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.16)}
+ .agent-hero>div{display:grid;gap:3px;align-content:center}.agent-hero strong{font-size:18px}.agent-hero small{color:#dbeafe;font-size:13.5px;line-height:1.4}
+ .agent-hero-actions{grid-column:1/-1;display:flex;gap:8px}
+ .agent-hero-primary{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:48px;border:0;border-radius:13px;background:#fb923c;color:#14213d;font:inherit;font-weight:800;box-shadow:0 8px 18px rgba(251,146,60,.35)}
+ .agent-hero-secondary{min-height:48px;padding:0 16px;border:1px solid rgba(255,255,255,.45);border-radius:13px;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-weight:700}
+ .shell[data-agent-only=true] .menu-toggle{display:none}
+ body .shell .agent-v2 .agent-v2-chips{padding:4px 8px 6px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+ .agent-chip{flex:none;min-height:36px}
+}

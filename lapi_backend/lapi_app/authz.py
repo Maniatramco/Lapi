@@ -32,6 +32,9 @@ MODEL = {'schema_version': '1.1', 'type_definitions': [
      'metadata': {'relations': {'member': _DIRECT([{'type': 'user'}])}}},
     {'type': 'lapi', 'relations': {'administrator': {'this': {}}, 'auditor': {'this': {}}, 'contributor': {'this': {}}},
      'metadata': {'relations': {role: _DIRECT([{'type': 'user'}]) for role in ('administrator', 'auditor', 'contributor')}}},
+    # Screens: enabled for everyone (user:*), a team's members, or a person (screens.py).
+    {'type': 'screen', 'relations': {'enabled': {'this': {}}},
+     'metadata': {'relations': {'enabled': _DIRECT([{'type': 'user'}, {'type': 'user', 'wildcard': {}}, {'type': 'team', 'relation': 'member'}])}}},
     {'type': 'dataset', 'relations': {
         'owner': {'this': {}},
         'editor': {'union': {'child': [{'this': {}}, {'computedUserset': {'relation': 'owner'}}]}},
@@ -171,6 +174,11 @@ def _desired(user_id=None):
         if user_id is None:
             team_grants = select(relational.TeamDataset.team_id, relational.TeamDataset.dataset_id, relational.TeamDataset.access_level)
             tuples |= {('team:' + team + '#member', _level(level), 'dataset:' + dataset) for team, dataset, level in session.execute(team_grants)}
+            from . import screens
+            tuples |= screens.tuples(session)
+        else:
+            from . import screens
+            tuples |= {t for t in screens.tuples(session) if t[0] == 'user:' + user_id}
     return tuples
 
 
@@ -202,7 +210,7 @@ def _reconcile(store, user_id=None):
         current = _read(store)
     else:
         user = 'user:' + user_id
-        current = (_read(store, {'user': user, 'object': 'dataset:'}) | _read(store, {'user': user, 'object': 'team:'})
+        current = (_read(store, {'user': user, 'object': 'dataset:'}) | _read(store, {'user': user, 'object': 'team:'}) | _read(store, {'user': user, 'object': 'screen:'})
                    | _read(store, _key(user, 'administrator', WORKSPACE)) | _read(store, _key(user, 'auditor', WORKSPACE))
                    | _read(store, _key(user, 'contributor', WORKSPACE)))
     _write(store, desired - current, current - desired)
@@ -249,6 +257,14 @@ def is_contributor(user_id):
         'POST', f'/stores/{store}/check', {'tuple_key': _key('user:' + user_id, 'contributor', WORKSPACE)}).get('allowed') is True)
 
 
+def enabled_screens(user_id):
+    """Screen objects (screen:<id>, screen:<id>-phone) the person may see."""
+    def ask(store):
+        objects = _call('POST', f'/stores/{store}/list-objects', {'type': 'screen', 'relation': 'enabled', 'user': 'user:' + user_id}).get('objects') or []
+        return frozenset(objects)
+    return _remembered(('screens', user_id), ask) if user_id else frozenset()
+
+
 def datasets_at(user_id, level):
     """Dataset IDs where the user has at least this level, directly or through a team."""
     def ask(store):
@@ -276,7 +292,7 @@ def _note_changes(session, context):
             touched.add(row.id)
         elif isinstance(row, (relational.UserDataset, relational.WorkspaceRole, relational.WorkspaceContributor, relational.TeamMember)):
             touched.add(row.user_id)
-        elif isinstance(row, (relational.Team, relational.TeamDataset)):
+        elif isinstance(row, (relational.Team, relational.TeamDataset, relational.ScreenGrant)):
             touched.add(None)  # A team's grants reach all its members: rebuild everything.
 
 

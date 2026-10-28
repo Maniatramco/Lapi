@@ -26,6 +26,7 @@ Reference files in this folder:
 - `reference/quick-start.md`: the guided one-workflow Quick start (phone + web), merge files, extraction workflow.
 - `reference/chat-design.md`: the Claude-style chat layout for Lapi Agent and the Dashboard chat.
 - `reference/spreadsheets-and-charts.md`: XLSX/CSV/TSV with row-aware indexing, exact `query_table` answers, charts.
+- `reference/mobile-agent-first.md`: the agent-first phone version, screen control through OpenFGA, agent training.
 
 ## How the user works (follow this)
 
@@ -134,6 +135,8 @@ Read `reference/keycloak-realm.md`, `reference/sessions-and-sign-in.md` and `ref
 - Chat: `reference/chat-design.md` (centred column, serif answers, question bubbles, rounded composer, live status;
   the answer-workflow panel never opens by itself — a slim status line instead).
 - Spreadsheets and charts: `reference/spreadsheets-and-charts.md`.
+- Agent-first phones and screen control: `reference/mobile-agent-first.md` (Release 2 planned: Azure and other
+  stores through the agent with secure fields, consent and once-or-keep; review-in-chat; share-by-chat; /Datasets).
 - Mobile compact layouts, keyboard shortcuts (`?` lists them) and "ask first, then guide" set-up questions.
 
 ## Production deploy routine (Lapi on an OCI Container Instance)
@@ -180,7 +183,8 @@ Read `reference/keycloak-realm.md`, `reference/sessions-and-sign-in.md` and `ref
 | Chat design | `lapi_frontend/app/{chat-design.css,chat-phase.ts,agent-v2-chat.tsx,agent-answer-workflow.tsx}`, `agent-workspace.css` |
 | Spreadsheets and charts | `lapi_backend/lapi_app/spreadsheet.py`, `worker.py` (`chunk_pages`, `table_chunks`), `lapi_agent/agent_tools_v2.py` (`query_table`), `lapi_frontend/app/answer-chart{.tsx,-data.ts}`, `lapi_testing/backend/test_spreadsheets.py` |
 | Local Keycloak demo | `lapi_local_use/keycloak-demo/` (compose, realm, start script, README) |
-| Release notes | `CHANGELOG.md` entries v26.1.16.13 to v26.1.16.26 |
+| Screen control, training | `lapi_backend/lapi_app/screens.py`, `lapi_frontend/app/{screens-client.ts,screens-admin.tsx,agent-training.tsx}`, `lapi_testing/backend/test_screens.py` |
+| Release notes | `CHANGELOG.md` entries v26.1.16.13 to v26.1.16.27 |
 
 ## Pitfalls we actually hit (avoid them)
 

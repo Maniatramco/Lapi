@@ -57,3 +57,12 @@ def test_post_requires_csrf_token(accounts):
     login(client,'Colleague')
     del client.headers['X-CSRF-Token']
     assert client.post('/api/me/walkthrough',json={'version':1}).status_code==403
+
+
+def test_agent_training_is_shown_once_per_person(accounts):
+    client=accounts
+    login(client,'Colleague')
+    assert client.get('/api/me/agent-training').json()=={'seen':False,'version':walkthrough.TRAINING_VERSION}
+    assert client.post('/api/me/agent-training',json={'version':walkthrough.TRAINING_VERSION}).json()['seen'] is True
+    assert client.get('/api/me/agent-training').json()['seen'] is True
+    assert client.get('/api/me/walkthrough').json()['seen'] is False  # separate from the tour

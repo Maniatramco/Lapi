@@ -20,6 +20,7 @@ import { AboutLapi } from "./about-lapi";
 import { WalkthroughGate } from "./walkthrough";
 import { WorkspaceAssist } from "./workspace-assist";
 import { OPEN_REVIEW_EVENT } from "./quick-start-flow";
+import { deviceFor, viewAllowed, agentOnly, type ScreenState } from "./screens-client";
 import { OperationProgress, extractionProgressJob } from "./operation-progress";
 import "./workspace-flow.css";
 import { DatasetWorkspace, DatasetMappings, ModelPicker, eligibleModels, modelLabel } from "./dataset-workspace";
@@ -228,6 +229,20 @@ export default function App() {
   useEffect(()=>{if(view!=='Home')setHomeSearch('');},[view]);
   const [agentTab,setAgentTab]=useState("Chat");
   const [user, setUser] = useState<Entity | null>(null);
+  // Screens this person may see on this device (OpenFGA, /api/me/screens); re-read every minute and when the device class changes.
+  const [screens, setScreens] = useState<ScreenState | null>(null);
+  useEffect(() => {
+    if (!user) { setScreens(null); return; }
+    let stopped = false, device = deviceFor(window.innerWidth);
+    const read = () => fetch(`/api/me/screens?device=${device}`, { credentials: "include" }).then(r => r.ok ? r.json() : null).then(state => { if (!stopped && state) setScreens(state); }).catch(() => undefined);
+    void read();
+    const timer = window.setInterval(() => void read(), 60000);
+    const resized = () => { const next = deviceFor(window.innerWidth); if (next !== device) { device = next; void read(); } };
+    window.addEventListener("resize", resized);
+    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener("resize", resized); };
+  }, [user?.id]);
+  const allowedView = (name: string) => viewAllowed(name, screens, Boolean(user?.is_admin));
+  const phoneAgentOnly = agentOnly(screens, Boolean(user?.is_admin));
   const [authChecked, setAuthChecked] = useState(false);
   const [csrf, setCsrf] = useState("");
   const authSession = useRef({ userId: user?.id as string | undefined, csrf });
@@ -259,6 +274,7 @@ export default function App() {
   const navigationIsDrawer = compactNavigation || view === 'Lapi agent V2' || view === 'Home';
   const drawerOpen = mobile && navigationIsDrawer;
   useEffect(() => { setMobile(false); }, [view]);
+  useEffect(() => { if (user && screens && !allowedView(view)) navigate("Home"); }, [view, screens, user?.id]);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 960px)");
     const sync = () => {
@@ -790,7 +806,7 @@ export default function App() {
           <span className="brand-name">Lapi</span>
         </div>
         <div className="brand-sub">AI Data Platform</div>
-        <WorkspaceNavigation view={view} isAdmin={Boolean(user.is_admin)} onNavigate={navigate} adminOpen={adminNavigation} onAdminToggle={()=>setAdminNavigation(!adminNavigation)} adminItems={sections.filter(s=>!["About","Home","Datasets","Add knowledge","Lapi Agent","Lapi agent V2","Skills & memory","Extract","Extract Data","Review","Extraction Review","Re-extract","Prompt templates","Model Registration","Model Mapping"].includes(s.name)&&(user.is_admin||["Users & passwords","Jobs & activity"].includes(s.name)||(Boolean((user as {is_auditor?:boolean}).is_auditor)&&s.name==="Access map")))}/>
+        <WorkspaceNavigation view={view} isAdmin={Boolean(user.is_admin)} allowed={allowedView} onNavigate={navigate} adminOpen={adminNavigation} onAdminToggle={()=>setAdminNavigation(!adminNavigation)} adminItems={sections.filter(s=>allowedView(s.name)&&!["About","Home","Datasets","Add knowledge","Lapi Agent","Lapi agent V2","Skills & memory","Extract","Extract Data","Review","Extraction Review","Re-extract","Prompt templates","Model Registration","Model Mapping"].includes(s.name)&&(user.is_admin||["Users & passwords","Jobs & activity"].includes(s.name)||(Boolean((user as {is_auditor?:boolean}).is_auditor)&&s.name==="Access map")))}/>
 
         <div className="nav-footer">
           <div className="row" style={{ marginBottom: 9 }}>
@@ -800,7 +816,7 @@ export default function App() {
           Originals protected. Insights grounded.
         </div>
       </aside>
-      <div className={`shell ${view === "Lapi agent V2" ? "assistant-shell" : view === "Home" ? "notebook-shell" : view === "Extract Data" ? "extract-data-shell" : ""}`} inert={drawerOpen}>
+      <div className={`shell ${view === "Lapi agent V2" ? "assistant-shell" : view === "Home" ? "notebook-shell" : view === "Extract Data" ? "extract-data-shell" : ""}`} inert={drawerOpen} data-agent-only={phoneAgentOnly || undefined}>
         <header className="topbar">
           <div className="breadcrumb">
             <button title="Open navigation"
@@ -875,7 +891,7 @@ export default function App() {
               </button>
             </Notice>
           )}
-          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload}/>
+          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset}/>
           {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin||user.is_contributor)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
           {view === "About" && <AboutLapi/>}
           <WalkthroughGate api={api} active={view === "Home"} userId={user.id as string | undefined}/>

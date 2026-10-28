@@ -22,7 +22,7 @@ const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
  * reading → a first answer with sources, or a first extraction with a prompt the AI drafts
  * from the document. Full screen on phones, a dialog on larger screens. */
 const ENLARGED_KEY='lapi:quick-start-enlarged';
-export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNavigate}:{api:Api;user:Entity;datasets:Entity[];sources?:string[];onClose:()=>void;onChanged:()=>void;onNavigate:(view:string)=>void}){
+export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNavigate,onSelectDataset}:{api:Api;user:Entity;datasets:Entity[];sources?:string[];onClose:()=>void;onChanged:()=>void;onNavigate:(view:string)=>void;onSelectDataset?:(id:string)=>void}){
  // Contributors (Keycloak lapi-contributor) create datasets and are Owner on all of them, like administrators.
  const isAdmin=Boolean(user?.is_admin||user?.is_contributor);
  const editor=canAddDocuments(datasets,isAdmin);
@@ -282,6 +282,7 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
      <div className="quick-start-next">
       {path==='extract'?<button type="button" onClick={()=>{if(extraction)openReviewPage(extraction.extraction_id||extraction.id);else onNavigate('Extract');onClose();}}><FileSearch size={18}/><span>Check the results in Review</span></button>
        :<button type="button" onClick={()=>{onClose();onNavigate('Home');}}><MessageSquare size={18}/><span>Keep asking on the Dashboard</span></button>}
+      {dataset&&<button type="button" onClick={()=>{onSelectDataset?.(dataset.id);onClose();onNavigate('Lapi agent V2');}}><Sparkles size={18}/><span>Continue in Lapi Agent</span></button>}
       {editor&&<button type="button" onClick={()=>{setAnswer(null);setQuestion('');setUploaded([]);setExtraction(null);go('documents');}}><FileUp size={18}/><span>Add more documents</span></button>}
       {canShare&&dataset&&<button type="button" onClick={()=>{onClose();openDatasetEditor(dataset.id,'members');}}><Users size={18}/><span>Share with your team</span></button>}
      </div>

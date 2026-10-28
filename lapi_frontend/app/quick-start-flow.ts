@@ -14,6 +14,10 @@ export type Field={key:string;label:string;type:FieldType;description:string};
 export const ACCEPT='.pdf,.docx,.txt,.json,.xlsx,.csv,.tsv,.png,.jpg,.jpeg,.webp,application/pdf,image/*';
 export const MAX_FILES=10;
 
+/** Opens the Quick start from anywhere (Dashboard, About, the agent's chips and /Start). */
+export const OPEN_QUICK_START_EVENT='lapi:open-quick-start';
+export function openQuickStart(){if(typeof window!=='undefined')window.dispatchEvent(new Event(OPEN_QUICK_START_EVENT));}
+
 /** Opens an extraction on the Review page (handled in page.tsx). */
 export const OPEN_REVIEW_EVENT='lapi:open-review';
 export function openReviewPage(id:string){if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent(OPEN_REVIEW_EVENT,{detail:{id}}));}

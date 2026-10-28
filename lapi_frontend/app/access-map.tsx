@@ -4,11 +4,13 @@ import {useEffect,useMemo,useRef,useState,type KeyboardEvent} from "react";
 import {BookOpen,Plus,RefreshCw,Search,ShieldCheck,Trash2,User,Users} from "lucide-react";
 import "./access-map.css";
 import {SummaryTiles} from "./summary-tiles";
+import {ScreensAdmin} from "./screens-admin";
+import {Monitor} from "lucide-react";
 import {LEVEL_HELP,LEVEL_LABEL,access,changed,changedCell,changedTeams,changedUsers,cycle,differenceText,effective,initialDraft,initialTeamDraft,openfgaDifference,openfgaSummary,savedLevels,
  type Access,type AccessMapData,type Draft,type MapTeam,type MapUser} from "./access-map-data";
 
 type Api=(path:string,method?:string,body?:any)=>Promise<any>;
-type Mode="person"|"dataset"|"team";
+type Mode="person"|"dataset"|"team"|"screens";
 type Node={id:string;label:string;access:Access;viaTeam?:string;changed:boolean;warning?:string;locked:boolean;team?:boolean};
 
 const ROW=62,TOP=26;
@@ -157,12 +159,14 @@ export function AccessMap({api}:{api:Api}){
      <button role="tab" aria-selected={mode==="person"} className={mode==="person"?"selected":""} onClick={()=>switchMode("person")}><User size={15}/> By person</button>
      <button role="tab" aria-selected={mode==="dataset"} className={mode==="dataset"?"selected":""} onClick={()=>switchMode("dataset")}><BookOpen size={15}/> By dataset</button>
      <button role="tab" aria-selected={mode==="team"} className={mode==="team"?"selected":""} onClick={()=>switchMode("team")}><Users size={15}/> By team</button>
+     {!readOnly&&<button role="tab" aria-selected={mode==="screens"} className={mode==="screens"?"selected":""} onClick={()=>switchMode("screens")}><Monitor size={15}/> Screens</button>}
     </div>
     <ul className="access-legend" aria-label="Legend">
      <li><span className="key key-team"/>Through a team</li><li><span className="key key-none"/>No access</li><li><span className="key key-changed"/>Unsaved change</li>{data.openfga.enabled&&<li><span className="key key-warn">!</span>OpenFGA differs</li>}
     </ul>
    </div>
-   <div className="access-columns">
+   {mode==="screens"&&<ScreensAdmin api={api} onNotice={setNotice}/>}
+   <div className="access-columns" hidden={mode==="screens"}>
     <div className="access-picker">
      <label className="account-search" htmlFor="access-search"><Search size={16}/><input id="access-search" placeholder={mode==="person"?"Search people":mode==="dataset"?"Search datasets":"Search teams"} value={search} onChange={e=>setSearch(e.target.value)}/></label>
      <ul aria-label={mode==="person"?"People":mode==="dataset"?"Datasets":"Teams"}>{list.map(item=><li key={item.id}>
@@ -194,7 +198,7 @@ export function AccessMap({api}:{api:Api}){
     </div>
    </div>
   </section>
-  <section className="card access-matrix-card">
+  <section className="card access-matrix-card" hidden={mode==="screens"}>
    <h2>Everyone at a glance</h2>
    <p className="muted small">Rows are people and teams, columns are datasets. V, E and O are Viewer, Editor and Owner; a faded cell comes from a team.{readOnly?"":" Click a cell to move it to the next level."}</p>
    <div className="access-matrix"><table><thead><tr><th scope="col">Person or team</th>{data.datasets.map(d=><th key={d.id} scope="col" title={d.name}><span>{short(d.name,18)}</span></th>)}</tr></thead>

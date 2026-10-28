@@ -2,6 +2,17 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.27 - 29 October 2026
+
+Agent-first phone version (mobile Release 1)
+
+- `screens.py` + `screen_grant_tbl`: every non-core screen is an OpenFGA object (`screen:<id>`, `screen:<id>-phone`) with relation `enabled` granted to `user:*`, `team#member` or a person; defaults are computer = everyone, phone = off; administrators always see all. `GET /api/me/screens?device=`, admin `GET/PUT /api/screens`, `POST /api/screens/preset` (`agent-only-phone`, `everything`). Grants sync to OpenFGA with the other tuples (`authz.enabled_screens` list-objects; wildcard type in the model).
+- Frontend `screens-client.ts`: device by width (< 640 px = phone), `viewAllowed`, `agentOnly`; `page.tsx` re-reads the state every minute and on device change, hides screens from the navigation (`WorkspaceNavigation allowed`), redirects hidden routes to the Dashboard, hides the phone More menu and drawer toggle when agent-only.
+- Access map → Screens tab (`screens-admin.tsx`): Phone / Computer grid (Everyone, Off, one team), presets, save bar.
+- Agent training (`agent-training.tsx`, `TRAINING_CARDS`; `GET/POST /api/me/agent-training`): five cards with Try it actions (ask example, open Quick start), shown once per person and from the chip.
+- Agent: quick-action chips (Guided start, Add documents, Pull out data, How the agent works), `/Start` opens Quick start (`openQuickStart` now in `quick-start-flow.ts`), Quick start's done step offers "Continue in Lapi Agent" with the dataset selected.
+- Phone Dashboard hero "Ask Lapi Agent / How it works" (`workspace-assist.tsx`, `mobile.css`).
+
 ## v26.1.16.26 - 29 October 2026
 
 Spreadsheets, exact answers and charts
