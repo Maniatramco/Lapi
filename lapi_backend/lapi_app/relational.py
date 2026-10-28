@@ -90,6 +90,14 @@ class WorkspaceRole(Times, core.Base):
     user_id:Mapped[str]=mapped_column(String(80),ForeignKey(user_fk,ondelete='CASCADE'),primary_key=True)
     role:Mapped[str]=mapped_column(String(20),default='auditor')
 
+class WorkspaceContributor(Times, core.Base):
+    """Contributors (Keycloak role lapi-contributor) are Owner on every dataset and may create,
+    delete and restore datasets; managing the workspace (users, teams, storage, settings,
+    models) stays with Administrators. Kept apart from workspace_role_tbl so a person can be
+    both Auditor and Contributor."""
+    __tablename__='workspace_contributor_tbl'
+    user_id:Mapped[str]=mapped_column(String(80),ForeignKey(user_fk,ondelete='CASCADE'),primary_key=True)
+
 class Document(Times, core.Base):
     __tablename__='document_tbl'
     document_id:Mapped[str]=mapped_column(String(80),ForeignKey(item_fk,ondelete='CASCADE'),primary_key=True)

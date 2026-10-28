@@ -172,7 +172,7 @@ def login(body:Credentials,response:Response,request:Request):
                 if not body.code:raise HTTPException(401,'Enter the 6-digit code from your authenticator app.')
                 if not totp.verify(s,u.id,body.code):failure=(401,'That authenticator code is not valid. Wait for the next code and try again.')
             if not failure:
-                user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s)}
+                user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'is_contributor':access.is_contributor(u.id,s)}
                 user_id,mfa=u.id,totp.enabled(u.id,s)
     if failure:
         sign_in_limits.fail(attempt)
@@ -189,7 +189,7 @@ def me(request:Request,owner=Depends(auth)):
     from . import sessions, totp
     with Session() as s:
         u=s.get(User,owner);l=s.get(Login,sessions.session_id(sessions.token_from(request)))
-        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'mfa':totp.enabled(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else '','session':{'idle_minutes':sessions.idle_seconds()//60,'expires_at':l.expires if l else None}}
+        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'is_contributor':access.is_contributor(u.id,s),'mfa':totp.enabled(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else '','session':{'idle_minutes':sessions.idle_seconds()//60,'expires_at':l.expires if l else None}}
 @app.post('/api/auth/logout')
 def logout(request:Request,response:Response,owner=Depends(auth)):
     from . import sessions
@@ -242,7 +242,7 @@ class KBInput(BaseModel):name:str=Field(min_length=1,max_length=200);description
 def kbs(owner=Depends(auth)):return [routing.dataset_public(r) for r in records(owner,'knowledge_base')]
 @app.post('/api/knowledge-bases')
 def create_kb(body:KBInput,owner=Depends(auth)):
-    access.require_admin(owner)
+    access.require_contributor(owner)
     return routing.dataset_public(new_record('knowledge_base',owner,body.name,data=body.model_dump()|routing.ROUTING_DEFAULTS|{'routing_version':1}))
 @app.get('/api/documents')
 def documents(kb_id:str|None=None,dataset_id:str|None=None,owner=Depends(auth)):

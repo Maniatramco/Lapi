@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.21 - 29 October 2026
+
+Contributor role from Keycloak
+
+- **`lapi-contributor`** (Keycloak realm role, `LAPI_KEYCLOAK_CONTRIBUTOR_ROLE`): synced at every sign-in and 5-minute re-check into `workspace_contributor_tbl` and the OpenFGA relation `lapi:workspace#contributor`. Contributors are Owner on every dataset (`dataset_access.manages_datasets`) and pass the new `contributor` route policy: creating, deleting and restoring datasets, dataset status and models, assigning documents, dataset onboarding. Workspace management stays `admin`.
+- Screens: dataset creation, deletion and model mapping show for contributors; the Access map and Users list label them "Contributor"; `auth/me` returns `is_contributor`.
+- To let everyone play around: add `lapi-contributor` to the realm's default roles in Keycloak (`lapi_docs/company-sign-in.md`).
+
 ## v26.1.16.20 - 28 October 2026
 
 Quick start and company sign-in

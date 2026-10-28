@@ -43,9 +43,9 @@ export function toggleGoal(current:Goal[],id:Goal):Goal[]{
 type Dataset={active?:boolean;my_access?:string};
 export type Access={isAdmin:boolean;canAddKnowledge:boolean;datasetCount:number};
 /** Administrators, and Editors or Owners of any active dataset, can add knowledge; Viewers only read and ask. */
-export function accessFor(user:{is_admin?:boolean}|null|undefined,datasets:Dataset[]):Access{
+export function accessFor(user:{is_admin?:boolean;is_contributor?:boolean}|null|undefined,datasets:Dataset[]):Access{
  const active=datasets.filter(d=>d.active!==false);
- const isAdmin=Boolean(user?.is_admin);
+ const isAdmin=Boolean(user?.is_admin||user?.is_contributor);
  return {isAdmin,canAddKnowledge:isAdmin||active.some(d=>d.my_access==='editor'||d.my_access==='owner'),datasetCount:active.length};
 }
 /** The set-up sheet opens until the person finishes or skips it once. */

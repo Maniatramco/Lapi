@@ -22,7 +22,8 @@ const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
  * reading → a first answer with sources, or a first extraction with a prompt the AI drafts
  * from the document. Full screen on phones, a dialog on larger screens. */
 export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNavigate}:{api:Api;user:Entity;datasets:Entity[];sources?:string[];onClose:()=>void;onChanged:()=>void;onNavigate:(view:string)=>void}){
- const isAdmin=Boolean(user?.is_admin);
+ // Contributors (Keycloak lapi-contributor) create datasets and are Owner on all of them, like administrators.
+ const isAdmin=Boolean(user?.is_admin||user?.is_contributor);
  const editor=canAddDocuments(datasets,isAdmin);
  const choices=editor?uploadable(datasets,isAdmin):askable(datasets);
  const [path,setPath]=useState<Path>('ask');

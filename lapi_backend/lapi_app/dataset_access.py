@@ -32,6 +32,27 @@ def is_auditor(actor, session=None):
     return bool(row and row.role == 'auditor')
 
 
+def is_contributor(actor, session=None):
+    """Contributors are Owner on every dataset and may create datasets (not manage the workspace)."""
+    from . import authz
+    if authz.enabled():
+        return authz.is_contributor(actor)
+    if session is None:
+        with core.Session() as active:
+            return is_contributor(actor, active)
+    return session.get(relational.WorkspaceContributor, actor) is not None
+
+
+def manages_datasets(actor, session=None):
+    return core.is_administrator(actor, session) or is_contributor(actor, session)
+
+
+def require_contributor(actor):
+    """Creating, deleting and restoring datasets: Administrators and Contributors."""
+    if request_actor.get() is not None and not manages_datasets(actor):
+        raise HTTPException(403, 'Only administrators and contributors can create, delete or restore datasets.')
+
+
 def _saved_levels(actor, session):
     """Highest saved level per dataset, from the person's own grants and their teams' grants."""
     levels = {}
@@ -49,9 +70,9 @@ def _saved_levels(actor, session):
 
 
 def dataset_levels(actor, session):
-    """Each dataset this person can open, with their level: 'owner' for administrators."""
+    """Each dataset this person can open, with their level: 'owner' for administrators and contributors."""
     live = select(core.Record.id).where(core.Record.kind == 'knowledge_base', core.Record.status != 'deleted')
-    if core.is_administrator(actor, session):
+    if manages_datasets(actor, session):
         return {id: 'owner' for id in session.scalars(live)}
     if not session.get(core.User, actor) and request_actor.get() is None:
         return {id: 'owner' for id in session.scalars(live.where(core.Record.owner == actor))}
@@ -95,7 +116,7 @@ def record_dataset(record):
 
 def dataset_ids(actor, session):
     live = select(core.Record.id).where(core.Record.kind == 'knowledge_base', core.Record.status != 'deleted')
-    if core.is_administrator(actor,session):
+    if manages_datasets(actor, session):
         return set(session.scalars(live))
     if not session.get(core.User, actor) and request_actor.get() is None:
         return set(session.scalars(live.where(core.Record.owner == actor)))

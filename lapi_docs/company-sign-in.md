@@ -70,6 +70,12 @@ break-glass administrator form stays below.
 - **First sign-in**: Keycloak creates the person from their Microsoft/Google profile. If a Keycloak
   user with the same email already exists (for example one you created by hand), Keycloak asks to
   link the two accounts once.
+- **Contributors**: the realm role `lapi-contributor` makes someone Owner on every dataset and lets
+  them create, delete and restore datasets, without managing the workspace (users, teams, Access
+  map, storage, settings, models, token usage stay with `lapi-administrator`). To give it to
+  everyone, add it to the realm's default roles (Realm settings → User registration → Default
+  roles → Assign role); remove it there to go back to per-dataset access. Lapi applies a change
+  at the next sign-in, or within 5 minutes for people already signed in.
 - **Roles**: new people are plain users. Give `lapi-administrator` or `lapi-auditor` in Keycloak
   (**Users → person → Role mapping**); it applies at their next sign-in or within 5 minutes.
 - **Second factor**: people signing in with Microsoft or Google use their company's own MFA

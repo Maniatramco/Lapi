@@ -27,7 +27,8 @@
   "roles": {
     "realm": [
       {"name": "lapi-administrator", "description": "Lapi administrators (an authenticator app is required at sign-in)"},
-      {"name": "lapi-auditor", "description": "Lapi auditors: read people, access and activity; change nothing"}
+      {"name": "lapi-auditor", "description": "Lapi auditors: read people, access and activity; change nothing"},
+      {"name": "lapi-contributor", "description": "Lapi contributors: Owner on every dataset and can create datasets; cannot manage the workspace (users, storage, settings, models)"}
     ]
   },
   "clients": [

@@ -4,7 +4,7 @@
 export type Level='viewer'|'editor'|'owner';
 export type LevelMap=Record<string,Level>;
 export type OpenFgaAnswer={administrator:boolean;auditor?:boolean;levels?:LevelMap;dataset_ids:string[];in_step:boolean};
-export type MapUser={id:string;username:string;is_admin:boolean;is_auditor?:boolean;workspace_role?:string;sign_in?:string;
+export type MapUser={id:string;username:string;is_admin:boolean;is_auditor?:boolean;is_contributor?:boolean;workspace_role?:string;sign_in?:string;
  dataset_ids:string[];levels?:LevelMap;effective?:LevelMap;team_ids?:string[];openfga?:OpenFgaAnswer};
 export type MapTeam={id:string;name:string;source:'local'|'keycloak'|string;member_ids:string[];grants:LevelMap};
 export type MapDataset={id:string;name:string;status?:string};

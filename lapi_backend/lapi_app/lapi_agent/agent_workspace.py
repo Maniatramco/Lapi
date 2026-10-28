@@ -517,8 +517,8 @@ def install(app, auth, main):
         body=body.model_copy(update={'allow_external':True})
         if not body.text.strip(): raise HTTPException(422, 'Describe what you want the agent to do.')
         if body.agent_operation=='onboard':
-            from ..dataset_access import require_admin
-            require_admin(owner)
+            from ..dataset_access import require_contributor
+            require_contributor(owner)
         selected_dataset=routing.owned(body.dataset_id,owner,'knowledge_base') if body.dataset_id else None
         if body.document_ids: routing.documents_scope(owner, body.dataset_id, body.document_ids)
         if body.template_id: routing.owned(body.template_id, owner, 'template')

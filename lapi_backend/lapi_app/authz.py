@@ -30,8 +30,8 @@ MODEL = {'schema_version': '1.1', 'type_definitions': [
     {'type': 'user'},
     {'type': 'team', 'relations': {'member': {'this': {}}},
      'metadata': {'relations': {'member': _DIRECT([{'type': 'user'}])}}},
-    {'type': 'lapi', 'relations': {'administrator': {'this': {}}, 'auditor': {'this': {}}},
-     'metadata': {'relations': {'administrator': _DIRECT([{'type': 'user'}]), 'auditor': _DIRECT([{'type': 'user'}])}}},
+    {'type': 'lapi', 'relations': {'administrator': {'this': {}}, 'auditor': {'this': {}}, 'contributor': {'this': {}}},
+     'metadata': {'relations': {role: _DIRECT([{'type': 'user'}]) for role in ('administrator', 'auditor', 'contributor')}}},
     {'type': 'dataset', 'relations': {
         'owner': {'this': {}},
         'editor': {'union': {'child': [{'this': {}}, {'computedUserset': {'relation': 'owner'}}]}},
@@ -154,15 +154,18 @@ def _desired(user_id=None):
     with core.Session() as session:
         admins = select(core.User.id).where(core.User.role == 'administrator')
         auditors = select(relational.WorkspaceRole.user_id).where(relational.WorkspaceRole.role == 'auditor')
+        contributors = select(relational.WorkspaceContributor.user_id)
         grants = select(relational.UserDataset.user_id, relational.UserDataset.dataset_id, relational.UserDataset.access_level).where(relational.UserDataset.enabled == True)
         members = select(relational.TeamMember.user_id, relational.TeamMember.team_id)
         if user_id is not None:
             admins = admins.where(core.User.id == user_id)
             auditors = auditors.where(relational.WorkspaceRole.user_id == user_id)
+            contributors = contributors.where(relational.WorkspaceContributor.user_id == user_id)
             grants = grants.where(relational.UserDataset.user_id == user_id)
             members = members.where(relational.TeamMember.user_id == user_id)
         tuples = {('user:' + admin, 'administrator', WORKSPACE) for admin in session.scalars(admins)}
         tuples |= {('user:' + auditor, 'auditor', WORKSPACE) for auditor in session.scalars(auditors)}
+        tuples |= {('user:' + contributor, 'contributor', WORKSPACE) for contributor in session.scalars(contributors)}
         tuples |= {('user:' + user, _level(level), 'dataset:' + dataset) for user, dataset, level in session.execute(grants)}
         tuples |= {('user:' + user, 'member', 'team:' + team) for user, team in session.execute(members)}
         if user_id is None:
@@ -200,7 +203,8 @@ def _reconcile(store, user_id=None):
     else:
         user = 'user:' + user_id
         current = (_read(store, {'user': user, 'object': 'dataset:'}) | _read(store, {'user': user, 'object': 'team:'})
-                   | _read(store, _key(user, 'administrator', WORKSPACE)) | _read(store, _key(user, 'auditor', WORKSPACE)))
+                   | _read(store, _key(user, 'administrator', WORKSPACE)) | _read(store, _key(user, 'auditor', WORKSPACE))
+                   | _read(store, _key(user, 'contributor', WORKSPACE)))
     _write(store, desired - current, current - desired)
 
 
@@ -238,6 +242,13 @@ def is_auditor(user_id):
         'POST', f'/stores/{store}/check', {'tuple_key': _key('user:' + user_id, 'auditor', WORKSPACE)}).get('allowed') is True)
 
 
+def is_contributor(user_id):
+    if not user_id:
+        return False
+    return _remembered(('contributor', user_id), lambda store: _call(
+        'POST', f'/stores/{store}/check', {'tuple_key': _key('user:' + user_id, 'contributor', WORKSPACE)}).get('allowed') is True)
+
+
 def datasets_at(user_id, level):
     """Dataset IDs where the user has at least this level, directly or through a team."""
     def ask(store):
@@ -263,7 +274,7 @@ def _note_changes(session, context):
     for row in list(session.new) + list(session.dirty) + list(session.deleted):
         if isinstance(row, core.User):
             touched.add(row.id)
-        elif isinstance(row, (relational.UserDataset, relational.WorkspaceRole, relational.TeamMember)):
+        elif isinstance(row, (relational.UserDataset, relational.WorkspaceRole, relational.WorkspaceContributor, relational.TeamMember)):
             touched.add(row.user_id)
         elif isinstance(row, (relational.Team, relational.TeamDataset)):
             touched.add(None)  # A team's grants reach all its members: rebuild everything.

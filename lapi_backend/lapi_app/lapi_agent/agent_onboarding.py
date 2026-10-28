@@ -203,17 +203,17 @@ def install(app, auth):
     from .. import main
     @app.get('/api/agent-v2/onboarding')
     def history(owner=Depends(auth)):
-        access.require_admin(owner)
+        access.require_contributor(owner)
         return [public(r) for r in routing.rows(owner, 'agent_onboarding')][:20]
 
     @app.get('/api/agent-v2/onboarding/{id}')
     def read(id: str, owner=Depends(auth)):
-        access.require_admin(owner)
+        access.require_contributor(owner)
         return public(routing.owned(id, owner, 'agent_onboarding'))
 
     @app.post('/api/agent-v2/onboarding')
     def prepare(body: Setup, owner=Depends(auth)):
-        access.require_admin(owner)
+        access.require_contributor(owner)
         values = body.model_dump(mode='json', by_alias=True); values['name'] = values['name'].strip()
         if body.plan_id:
             plan = routing.owned(body.plan_id, owner, 'agent_plan')
@@ -254,7 +254,7 @@ def install(app, auth):
 
     @app.post('/api/agent-v2/onboarding/{id}/files')
     async def stage_files(id: str, files: list[UploadFile] = File(...), owner=Depends(auth)):
-        access.require_admin(owner)
+        access.require_contributor(owner)
         with core.document_lock('onboarding-' + id):
             record = routing.owned(id, owner, 'agent_onboarding'); data = core.store.json(record.ref)
             processing = data.get('processing')
@@ -287,7 +287,7 @@ def install(app, auth):
 
 async def advance_workflow(id: str, owner: str, retry=False):
     from .. import main
-    access.require_admin(owner)
+    access.require_contributor(owner)
     with core.document_lock('onboarding-' + id):
         record = routing.owned(id, owner, 'agent_onboarding'); data = core.store.json(record.ref)
         if data['status'] == 'completed':

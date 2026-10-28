@@ -6,10 +6,12 @@
   viewer    reads dataset content; the route code requires Viewer on that dataset
   editor    changes dataset content; the route code requires Editor on that dataset
   owner     changes a dataset's settings or members; the route code requires Owner
+  contributor Administrators and Contributors (creating, deleting and restoring datasets,
+            dataset models and onboarding; Contributors are Owner on every dataset)
   audit     Administrators and Auditors (read-only views of people, access and usage)
-  admin     Administrators only
+  admin     Administrators only: managing the workspace
 
-auth() enforces 'admin' and 'audit' here, for every route. Dataset levels need the
+auth() enforces 'admin', 'contributor' and 'audit' here, for every route. Dataset levels need the
 dataset, so the route code enforces them (dataset_access.require_level and
 get_record(level=...)); test_route_policy.py checks both. A route missing from this
 table is refused, so a new route cannot ship without a decision.
@@ -116,20 +118,20 @@ POLICY = {
 
     # Datasets
     ('GET', '/api/knowledge-bases'): 'signed_in',
-    ('POST', '/api/knowledge-bases'): 'admin',
+    ('POST', '/api/knowledge-bases'): 'contributor',
     ('GET', '/api/datasets'): 'signed_in',
-    ('POST', '/api/datasets'): 'admin',
+    ('POST', '/api/datasets'): 'contributor',
     ('GET', '/api/datasets/{id}'): 'viewer',
     ('PATCH', '/api/datasets/{id}'): 'owner',
-    ('PATCH', '/api/datasets/{id}/status'): 'admin',
+    ('PATCH', '/api/datasets/{id}/status'): 'contributor',
     ('GET', '/api/datasets/{id}/models'): 'viewer',
-    ('PUT', '/api/datasets/{id}/models'): 'admin',
-    ('POST', '/api/datasets/{id}/migrate-settings'): 'admin',
-    ('POST', '/api/datasets/{id}/assign-documents'): 'admin',
-    ('POST', '/api/datasets/{id}/local-models'): 'admin',
-    ('DELETE', '/api/datasets/{id}'): 'admin',
-    ('GET', '/api/dataset-trash'): 'admin',
-    ('POST', '/api/dataset-trash/{id}/restore'): 'admin',
+    ('PUT', '/api/datasets/{id}/models'): 'contributor',
+    ('POST', '/api/datasets/{id}/migrate-settings'): 'contributor',
+    ('POST', '/api/datasets/{id}/assign-documents'): 'contributor',
+    ('POST', '/api/datasets/{id}/local-models'): 'contributor',
+    ('DELETE', '/api/datasets/{id}'): 'contributor',
+    ('GET', '/api/dataset-trash'): 'contributor',
+    ('POST', '/api/dataset-trash/{id}/restore'): 'contributor',
     ('GET', '/api/datasets/{dataset_id}/instructions'): 'viewer',
     ('GET', '/api/datasets/{dataset_id}/instructions/versions'): 'viewer',
     ('PUT', '/api/datasets/{dataset_id}/instructions'): 'owner',
@@ -229,11 +231,11 @@ POLICY = {
     ('POST', '/api/agent-v2/plans/{id}/calls/{index}/upload'): 'editor',
     ('POST', '/api/agent-v2/plans/{id}/restart'): 'signed_in',
     ('POST', '/api/agent-v2/plans/{id}/calls/{index}/recover'): 'signed_in',
-    ('GET', '/api/agent-v2/onboarding'): 'admin',
-    ('GET', '/api/agent-v2/onboarding/{id}'): 'admin',
-    ('POST', '/api/agent-v2/onboarding'): 'admin',
-    ('POST', '/api/agent-v2/onboarding/{id}/files'): 'admin',
-    ('POST', '/api/agent-v2/onboarding/{id}/advance'): 'admin',
+    ('GET', '/api/agent-v2/onboarding'): 'contributor',
+    ('GET', '/api/agent-v2/onboarding/{id}'): 'contributor',
+    ('POST', '/api/agent-v2/onboarding'): 'contributor',
+    ('POST', '/api/agent-v2/onboarding/{id}/files'): 'contributor',
+    ('POST', '/api/agent-v2/onboarding/{id}/advance'): 'contributor',
     ('GET', '/api/skills'): 'signed_in',
     # Personal skills; sharing with a dataset or the workspace is administrator-only in skills.py.
     ('POST', '/api/skills'): 'signed_in',
@@ -241,7 +243,7 @@ POLICY = {
     ('DELETE', '/api/skills/{skill_id}'): 'signed_in',
 }
 
-LEVELS = {'public', 'signed_in', 'viewer', 'editor', 'owner', 'audit', 'admin'}
+LEVELS = {'public', 'signed_in', 'viewer', 'editor', 'owner', 'contributor', 'audit', 'admin'}
 
 
 def check(method, path, actor):
@@ -253,6 +255,8 @@ def check(method, path, actor):
         raise HTTPException(403, 'This action is not available.')
     if policy == 'admin' and not core.is_administrator(actor):
         raise HTTPException(403, 'Administrator access is required.')
+    if policy == 'contributor' and not dataset_access.manages_datasets(actor):
+        raise HTTPException(403, 'Administrator or Contributor access is required.')
     if policy == 'audit' and not (core.is_administrator(actor) or dataset_access.is_auditor(actor)):
         raise HTTPException(403, 'Administrator or Auditor access is required.')
     return policy

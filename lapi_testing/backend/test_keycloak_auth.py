@@ -128,6 +128,22 @@ def test_role_follows_keycloak_at_every_sign_in(accounts, keycloak):
     assert client.get('/api/auth/me').status_code == 401  # The role changed: older sessions end.
 
 
+def test_contributor_role_follows_keycloak(accounts, keycloak):
+    from lapi_app import relational
+    keycloak.roles = ['lapi-contributor']
+    sign_in(accounts, keycloak)
+    user = me(accounts)
+    assert user['is_contributor'] is True and user['is_admin'] is False
+    with core.Session() as session:
+        assert session.get(relational.WorkspaceContributor, user['id']) is not None
+    keycloak.roles = []
+    with TestClient(main.app) as second:
+        sign_in(second, keycloak)
+        assert me(second)['is_contributor'] is False
+    with core.Session() as session:
+        assert session.get(relational.WorkspaceContributor, user['id']) is None
+
+
 def test_only_local_administrators_keep_password_sign_in(accounts, keycloak):
     client = accounts
     refused = client.post('/api/auth/login', json={'username': 'Colleague', 'password': OLD})

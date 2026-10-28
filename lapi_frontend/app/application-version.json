@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.20",
+  "version": "26.1.16.21",
   "releases": [
+    {
+      "version": "26.1.16.21",
+      "date": "2026-10-29",
+      "title": "Contributor role from Keycloak",
+      "changes": [
+        "New Keycloak role lapi-contributor: people who have it are Owner on every dataset and can create, delete and restore datasets, change dataset models and run dataset onboarding. Managing the workspace (users, teams, Access map, storage, settings, model registration, token usage) stays with administrators. Give it to everyone by adding it to the Keycloak realm's default roles; Lapi follows the change at the next sign-in, or within 5 minutes."
+      ]
+    },
     {
       "version": "26.1.16.20",
       "date": "2026-10-28",

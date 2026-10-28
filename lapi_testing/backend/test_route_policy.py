@@ -123,6 +123,31 @@ def test_owner_shares_with_a_team_and_auditor_reads_but_cannot_change(accounts):
         assert session.get(relational.WorkspaceRole, 'third') is None
 
 
+def test_contributor_owns_every_dataset_but_cannot_manage_the_workspace(accounts):
+    admin = accounts
+    login(admin)
+    d = dataset(SimpleNamespace(api=admin))
+    with core.Session.begin() as session:
+        session.add(relational.WorkspaceContributor(user_id='colleague'))
+    with TestClient(main.app) as person:
+        user = login(person, 'Colleague')['user']
+        assert user['is_contributor'] is True and user['is_admin'] is False
+        assert [(row['id'], row['my_access']) for row in person.get('/api/datasets').json()] == [(d['id'], 'owner')]
+        assert upload(person, d).status_code == 200
+        created = person.post('/api/datasets', json={'name': 'Play area'})
+        assert created.status_code == 200, created.text
+        assert person.get('/api/datasets/' + d['id'] + '/members').status_code == 200
+        removed = person.request('DELETE', '/api/datasets/' + created.json()['id'], json={'confirmation': 'Play area', 'expected_version': created.json()['version']})
+        assert removed.status_code == 200, removed.text
+        assert person.get('/api/dataset-trash').status_code == 200
+        # Managing the workspace stays with administrators.
+        for method, path in [('get', '/api/users'), ('get', '/api/access-map'), ('get', '/api/storage'), ('get', '/api/admin/token-usage'),
+                             ('post', '/api/teams'), ('patch', '/api/settings'), ('post', '/api/models'), ('get', '/api/admin/documents')]:
+            assert getattr(person, method)(path, **({} if method == 'get' else {'json': {}})).status_code == 403, path
+    listed = {row['username']: row for row in admin.get('/api/users').json()}
+    assert listed['Colleague']['is_contributor'] is True and listed['Admin']['is_contributor'] is False
+
+
 def test_existing_grants_become_editor_and_bootstrap_owners_become_owner(accounts):
     login(accounts)
     d = dataset(SimpleNamespace(api=accounts))

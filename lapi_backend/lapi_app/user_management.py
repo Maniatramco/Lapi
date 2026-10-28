@@ -71,15 +71,20 @@ def keycloak_owns_password(user):
         raise HTTPException(409, 'This account signs in with Keycloak; change its password in Keycloak.')
 
 
-def public_user(user, auditor=None):
-    if auditor is None:
+def public_user(user, auditor=None, contributor=None):
+    if auditor is None or contributor is None:
         with core.Session() as session:
-            row = session.get(relational.WorkspaceRole, user.id)
-            auditor = bool(row and row.role == 'auditor')
+            if auditor is None:
+                row = session.get(relational.WorkspaceRole, user.id)
+                auditor = bool(row and row.role == 'auditor')
+            if contributor is None:
+                contributor = session.get(relational.WorkspaceContributor, user.id) is not None
     return {key: getattr(user, key) for key in (
         'id', 'username', 'role', 'created_at', 'updated_at', 'created_by', 'updated_by')
     } | {'is_admin': user.role == 'administrator', 'is_auditor': bool(auditor) and user.role != 'administrator',
          'workspace_role': 'administrator' if user.role == 'administrator' else 'auditor' if auditor else 'user',
+         # Keycloak role lapi-contributor: Owner on every dataset, creates datasets; no workspace management.
+         'is_contributor': bool(contributor) and user.role != 'administrator',
          'sign_in': 'keycloak' if user.id.startswith('kc-') else 'password'}
 
 
@@ -195,7 +200,8 @@ def install(app, auth):
     def users(owner=Depends(reader)):
         with core.Session() as session:
             auditors = set(session.scalars(select(relational.WorkspaceRole.user_id).where(relational.WorkspaceRole.role == 'auditor')))
-            return [public_user(user, user.id in auditors) for user in session.scalars(
+            contributors = set(session.scalars(select(relational.WorkspaceContributor.user_id)))
+            return [public_user(user, user.id in auditors, user.id in contributors) for user in session.scalars(
                 select(core.User).order_by(core.User.username))]
 
     @router.post('/api/users')
@@ -324,6 +330,7 @@ def install(app, auth):
             people=list(session.scalars(select(core.User).order_by(core.User.username)))
             datasets=[{'id':row.dataset_id,'name':row.dataset_name,'status':row.status} for row in session.scalars(select(relational.Dataset).order_by(relational.Dataset.dataset_name))]
             auditors=set(session.scalars(select(relational.WorkspaceRole.user_id).where(relational.WorkspaceRole.role=='auditor')))
+            contributors=set(session.scalars(select(relational.WorkspaceContributor.user_id)))
             direct={}
             for grant in session.scalars(select(relational.UserDataset).where(relational.UserDataset.enabled==True)):
                 direct.setdefault(grant.user_id,{})[grant.dataset_id]=grant.access_level or 'viewer'
@@ -337,15 +344,16 @@ def install(app, auth):
         users=[]
         for user in people:
             levels=direct.get(user.id,{})
-            row=public_user(user,user.id in auditors)|{'dataset_ids':sorted(levels),'levels':levels,
+            row=public_user(user,user.id in auditors,user.id in contributors)|{'dataset_ids':sorted(levels),'levels':levels,
                 'effective':effective.get(user.id,{}),'team_ids':sorted(member_of.get(user.id,[]))}
             if openfga['enabled'] and openfga['reachable'] is not False:
                 try:
                     answered={}
                     for level in ('viewer','editor','owner'):answered.update({id:level for id in authz.datasets_at(user.id,level)})
-                    answer={'administrator':authz.is_administrator(user.id),'auditor':authz.is_auditor(user.id),'levels':answered,'dataset_ids':sorted(answered)}
+                    answer={'administrator':authz.is_administrator(user.id),'auditor':authz.is_auditor(user.id),'contributor':authz.is_contributor(user.id),'levels':answered,'dataset_ids':sorted(answered)}
                     openfga['reachable']=True
                     row['openfga']=answer|{'in_step':answer['administrator']==row['is_admin'] and answer['auditor']==(user.id in auditors)
+                                          and answer['contributor']==(user.id in contributors)
                                           and answered==row['effective']}
                     openfga['differences']+=not row['openfga']['in_step']
                 except authz.AuthorizationUnavailable:

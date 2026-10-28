@@ -127,7 +127,7 @@ export function AccessMap({api}:{api:Api}){
  }
  const list=mode==="person"
   ?data.users.filter(u=>u.username.toLowerCase().includes(lower)).map(u=>{const n=Object.keys(draft[u.id]||{}).length,teamCount=(u.team_ids||[]).length;
-   return {id:u.id,label:u.username,detail:u.is_admin?"Administrator · every dataset":[`${n} dataset${n===1?"":"s"}`,teamCount?`${teamCount} team${teamCount===1?"":"s"}`:"",u.is_auditor?"Auditor":"",u.sign_in==="keycloak"?"Keycloak":""].filter(Boolean).join(" · "),
+   return {id:u.id,label:u.username,detail:u.is_admin?"Administrator · every dataset":[`${n} dataset${n===1?"":"s"}`,teamCount?`${teamCount} team${teamCount===1?"":"s"}`:"",u.is_contributor?"Contributor · every dataset":"",u.is_auditor?"Auditor":"",u.sign_in==="keycloak"?"Keycloak":""].filter(Boolean).join(" · "),
     warn:Boolean(u.openfga&&!u.openfga.in_step),dirty:pending.includes(u.id)};})
   :mode==="dataset"?data.datasets.filter(d=>d.name.toLowerCase().includes(lower)).map(d=>{const count=data.users.filter(u=>effective(u,draft,teams,teamDraft,d.id).access!=="none").length;
    return {id:d.id,label:d.name,detail:`${count} ${count===1?"person":"people"}`,warn:data.users.some(u=>!u.is_admin&&openfgaDifference(u,d.id)),dirty:data.users.some(u=>changed(u,draft,d.id))||teams.some(t=>changedCell(t.grants,teamDraft,t.id,d.id))};})
@@ -198,7 +198,7 @@ export function AccessMap({api}:{api:Api}){
    <h2>Everyone at a glance</h2>
    <p className="muted small">Rows are people and teams, columns are datasets. V, E and O are Viewer, Editor and Owner; a faded cell comes from a team.{readOnly?"":" Click a cell to move it to the next level."}</p>
    <div className="access-matrix"><table><thead><tr><th scope="col">Person or team</th>{data.datasets.map(d=><th key={d.id} scope="col" title={d.name}><span>{short(d.name,18)}</span></th>)}</tr></thead>
-    <tbody>{data.users.map(u=><tr key={u.id}><th scope="row"><button className="access-matrix-name" onClick={()=>{setMode("person");setSearch("");setSelected(u.id);}}>{u.username}</button>{u.is_admin?<small>Administrator</small>:u.is_auditor?<small>Auditor</small>:null}</th>
+    <tbody>{data.users.map(u=><tr key={u.id}><th scope="row"><button className="access-matrix-name" onClick={()=>{setMode("person");setSearch("");setSelected(u.id);}}>{u.username}</button>{u.is_admin?<small>Administrator</small>:u.is_contributor?<small>Contributor</small>:u.is_auditor?<small>Auditor</small>:null}</th>
      {data.datasets.map(d=>{const e=effective(u,draft,teams,teamDraft,d.id),own=access(u,draft,d.id),dirty=changed(u,draft,d.id),warning=warn(u,d.id);
       const label=`${u.username} · ${d.name}: ${STATE_TEXT[e.access]}${e.viaTeam?" via "+e.viaTeam:""}${dirty?" (unsaved)":""}${warning?". "+warning:""}`;
       return <td key={d.id}><button className={`access-cell access-cell-${e.access}${e.viaTeam&&own==="none"?" access-cell-team":""}${dirty?" access-cell-changed":""}`} disabled={u.is_admin||saving||readOnly}

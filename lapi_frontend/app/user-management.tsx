@@ -8,7 +8,7 @@ import { SummaryTiles } from "./summary-tiles";
 import { AuthenticatorSetup, MySessions } from "./account-security";
 
 type Role = "user" | "auditor" | "administrator";
-type Account = {id:string;username:string;role:Role;is_admin:boolean;is_auditor?:boolean;workspace_role?:Role;sign_in?:"keycloak"|"password";created_at:number;updated_at:number;created_by?:string;updated_by?:string};
+type Account = {id:string;username:string;role:Role;is_admin:boolean;is_auditor?:boolean;is_contributor?:boolean;workspace_role?:Role;sign_in?:"keycloak"|"password";created_at:number;updated_at:number;created_by?:string;updated_by?:string};
 type Props = {
  api:(path:string,method?:string,body?:any)=>Promise<any>;
  user:{id:string;username:string;is_admin?:boolean;is_auditor?:boolean;sign_in?:string};
@@ -116,7 +116,7 @@ export function UserManagement({api,user,keycloak=false,onPasswordChanged,onRole
    <label className="account-search" htmlFor="account-search"><Search size={16}/><input id="account-search" placeholder="Search usernames" value={search} onChange={e=>setSearch(e.target.value)}/></label>
    <div className="account-table"><table><thead><tr><th>Username</th><th>Access</th><th>Created</th><th>Last updated</th><th>Manage</th></tr></thead><tbody>{accounts.filter(account=>account.username.toLowerCase().includes(search.toLowerCase())).map(account=><tr key={account.id}>
     <td><strong>{account.username}</strong>{account.id===user.id&&<div className="muted small">You</div>}{account.sign_in==="keycloak"&&<div className="muted small">Keycloak</div>}</td>
-    <td>{account.is_admin?"Administrator":account.is_auditor?"Auditor":"User"}</td>
+    <td>{account.is_admin?"Administrator":[account.is_contributor&&"Contributor",account.is_auditor&&"Auditor"].filter(Boolean).join(" · ")||"User"}</td>
     <td>{stamp(account.created_at)}<div className="muted small">{names.get(account.created_by||"")||"Creator not recorded"}</div></td>
     <td>{stamp(account.updated_at)}<div className="muted small">{names.get(account.updated_by||"")||"Updater not recorded"}</div></td>
     <td>{!isAdmin?<small className="muted">Read-only</small>:<div className="row">

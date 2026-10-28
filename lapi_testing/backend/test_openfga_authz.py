@@ -173,7 +173,7 @@ def test_access_map_shows_database_grants_beside_openfga_answers(accounts, fga):
     assert {row['id'] for row in result['datasets']} == {d['id'], other['id']}
     users = {row['id']: row for row in result['users']}
     assert users['colleague']['dataset_ids'] == [d['id']] and not users['colleague']['is_admin']
-    assert users['colleague']['openfga'] == {'administrator': False, 'auditor': False, 'levels': {d['id']: 'viewer'}, 'dataset_ids': [d['id']], 'in_step': True}
+    assert users['colleague']['openfga'] == {'administrator': False, 'auditor': False, 'contributor': False, 'levels': {d['id']: 'viewer'}, 'dataset_ids': [d['id']], 'in_step': True}
     assert users['administrator']['openfga']['administrator'] and users['administrator']['openfga']['in_step']
     assert result['openfga'] == {'enabled': True, 'reachable': True, 'differences': 0}
     # A tuple OpenFGA lost shows as a difference until Lapi rebuilds it.
@@ -181,7 +181,7 @@ def test_access_map_shows_database_grants_beside_openfga_answers(accounts, fga):
         store['tuples'].discard(('user:colleague', 'viewer', 'dataset:' + d['id']))
     result = client.get('/api/access-map').json()
     colleague = next(row for row in result['users'] if row['id'] == 'colleague')
-    assert colleague['openfga'] == {'administrator': False, 'auditor': False, 'levels': {}, 'dataset_ids': [], 'in_step': False}
+    assert colleague['openfga'] == {'administrator': False, 'auditor': False, 'contributor': False, 'levels': {}, 'dataset_ids': [], 'in_step': False}
     assert result['openfga']['differences'] == 1
     with TestClient(main.app) as other_client:
         login(other_client, 'Colleague')
@@ -221,3 +221,11 @@ def test_levels_and_team_grants_are_answered_by_openfga(accounts, fga):
     assert mapped['colleague']['openfga']['levels'] == {d['id']: 'owner'} and mapped['colleague']['openfga']['in_step']
     assert client.patch('/api/users/colleague/role', json={'role': 'auditor', 'current_password': OLD}).status_code == 200
     assert ('user:colleague', 'auditor', 'lapi:workspace') in fga.tuples()
+    # Contributor (Keycloak lapi-contributor): OpenFGA answers the role; every dataset opens as Owner.
+    from lapi_app import core, relational
+    with core.Session.begin() as session:
+        session.add(relational.WorkspaceContributor(user_id='colleague'))
+    assert ('user:colleague', 'contributor', 'lapi:workspace') in fga.tuples()
+    with core.Session.begin() as session:
+        session.delete(session.get(relational.WorkspaceContributor, 'colleague'))
+    assert ('user:colleague', 'contributor', 'lapi:workspace') not in fga.tuples()

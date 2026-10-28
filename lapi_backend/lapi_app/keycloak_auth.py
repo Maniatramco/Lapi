@@ -62,7 +62,8 @@ def _settings():
             'client_id': os.environ['LAPI_KEYCLOAK_CLIENT_ID'].strip(),
             'redirect_uri': os.environ['LAPI_PUBLIC_URL'].strip().rstrip('/') + FLOW_PATH + '/callback',
             'admin_role': os.getenv('LAPI_KEYCLOAK_ADMIN_ROLE', 'lapi-administrator').strip(),
-            'auditor_role': os.getenv('LAPI_KEYCLOAK_AUDITOR_ROLE', 'lapi-auditor').strip()}
+            'auditor_role': os.getenv('LAPI_KEYCLOAK_AUDITOR_ROLE', 'lapi-auditor').strip(),
+            'contributor_role': os.getenv('LAPI_KEYCLOAK_CONTRIBUTOR_ROLE', 'lapi-contributor').strip()}
 
 
 def _secure():
@@ -208,7 +209,7 @@ def _identity(tokens, document, settings, nonce=None, signing_in=True):
     if signing_in and administrator and _require_admin_mfa() and not methods & MFA_METHODS:
         raise SignInFailed('mfa_required', 'An administrator signed in without a second factor (amr %s).' % sorted(methods))
     return {'subject': claims['sub'], 'administrator': administrator,
-            'auditor': settings['auditor_role'] in roles, 'groups': sorted(g for g in groups if isinstance(g, str)),
+            'auditor': settings['auditor_role'] in roles, 'contributor': settings['contributor_role'] in roles, 'groups': sorted(g for g in groups if isinstance(g, str)),
             'username': (claims.get('preferred_username') or claims.get('email') or claims['sub']).strip()[:120],
             'sid': str(claims.get('sid') or '')[:100] or None,
             'tokens': {'refresh': tokens.get('refresh_token') or '', 'id': tokens['id_token']}}
@@ -307,8 +308,13 @@ def provision(identity):
                 if user.role != role:
                     user.role = role
                     session.execute(delete(core.Login).where(core.Login.owner == user_id))
-            # The Auditor role and team memberships follow Keycloak at every sign-in.
+            # The Auditor and Contributor roles and team memberships follow Keycloak at every sign-in.
             from . import relational, teams
+            contributor = session.get(relational.WorkspaceContributor, user_id)
+            if identity.get('contributor') and role != 'administrator' and contributor is None:
+                session.add(relational.WorkspaceContributor(user_id=user_id))
+            elif contributor is not None and (not identity.get('contributor') or role == 'administrator'):
+                session.delete(contributor)
             auditor = session.get(relational.WorkspaceRole, user_id)
             if identity.get('auditor') and role != 'administrator' and auditor is None:
                 session.add(relational.WorkspaceRole(user_id=user_id, role='auditor'))

@@ -52,7 +52,7 @@ def ensure_idle(dataset, session, ignore_workflows=()):
 
 
 def delete_dataset(id, body, actor):
-    access.require_admin(actor)
+    access.require_contributor(actor)
     with core.document_lock('dataset-' + id):
         row = access.get_record(id, actor, 'knowledge_base')
         if body.confirmation != row.name:
@@ -70,14 +70,14 @@ def delete_dataset(id, body, actor):
 
 
 def trash(actor):
-    access.require_admin(actor)
+    access.require_contributor(actor)
     with core.Session() as session:
         rows = session.scalars(select(core.Record).where(core.Record.kind == 'knowledge_base', core.Record.status == 'deleted').order_by(core.Record.updated_at.desc()))
         return [dict(core.store.json(receipt_ref(row.id)), version=row.version) for row in rows]
 
 
 def restore_dataset(id, actor):
-    access.require_admin(actor)
+    access.require_contributor(actor)
     with core.document_lock('dataset-' + id):
         with core.Session.begin() as session:
             row = deleted_dataset(id, session)

@@ -134,8 +134,8 @@ class Tools:
                 'total':len(found),'next_offset':offset+10 if offset+10<len(found) else None}
 
     def prepare_dataset_onboarding(self, name='', description=''):
-        from ..dataset_access import require_admin
-        require_admin(self.owner)
+        from ..dataset_access import require_contributor
+        require_contributor(self.owner)
         self.proposal = {'onboarding': {'name': name.strip(), 'description': description}, 'calls': []}
         return {'proposed': self.proposal, 'executed': False, 'confirmation_required': True,
                 'message': 'Review the new dataset name and select registered Embedding, Chat and Extraction models before confirming onboarding.'}
