@@ -78,7 +78,8 @@ Keycloak is yours (not deployed here). To sign people in with it:
    sign-in, so a new secret version takes effect within five minutes, no restart.
 
 Accounts are created at each person's first Keycloak sign-in; their role follows
-`lapi-administrator` at every sign-in. Lapi passwords stay only for local
+`lapi-administrator` (and `lapi-auditor` for Auditors) at every sign-in. Add a Group Membership
+mapper (claim `groups`, full path) to the client so Keycloak groups become Lapi teams. Lapi passwords stay only for local
 administrators such as `admin` (break-glass). Lapi sessions last 12 hours, so
 disabling someone in Keycloak takes effect at their next sign-in: delete their
 Lapi account to end access at once. Keycloak should be served over HTTPS.

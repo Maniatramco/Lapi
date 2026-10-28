@@ -103,7 +103,8 @@ def dataset_ids(actor, session):
     if authz.enabled():
         # Intersect in Python: Oracle limits IN lists to 1000 values.
         return set(session.scalars(live)) & authz.viewable_datasets(actor)
-    return set(session.scalars(select(relational.UserDataset.dataset_id).where(relational.UserDataset.user_id == actor,relational.UserDataset.enabled == True,relational.UserDataset.dataset_id.in_(live))))
+    # Own grants and team grants (without OpenFGA, the database answers).
+    return set(_saved_levels(actor, session)) & set(session.scalars(live))
 
 
 def allowed(record, actor, session, datasets=None, models=None):

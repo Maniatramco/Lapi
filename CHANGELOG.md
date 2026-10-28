@@ -2,6 +2,19 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.17 - 28 October 2026
+
+Dataset roles, teams, Auditor and a 1-minute tour
+
+- **Dataset levels.** Grants carry a level: Viewer (read and chat), Editor (also upload, reindex, delete documents, prompts, extractions, reviews, connectors, retry or cancel others' jobs) or Owner (also rename, instructions, prompt guide and members). Model mappings, activation and deletion stay administrator-only. The upgrade adds `user_dataset_tbl.access_level` and sets existing grants to `editor`, which is what they could already do.
+- **Teams.** New tables `team_tbl`, `team_member_tbl` and `team_dataset_tbl`. Keycloak groups (a `groups` claim from the Group Membership mapper) become teams at each sign-in; local teams are managed in the Access map (`/api/teams`). A person gets the highest of their own and their teams' levels.
+- **Owners share datasets** from a Members tab in Manage dataset (`GET`/`PUT /api/datasets/{id}/members`).
+- **Auditor** (`workspace_role_tbl`, or Keycloak role `lapi-auditor`): reads Users & passwords and the Access map, no dataset content, no changes.
+- **OpenFGA model** now has `dataset` owner ⊃ editor ⊃ viewer, `team#member` grants and `lapi:workspace auditor`; the Access map compares every level with OpenFGA's answer.
+- **Route policy.** `route_policy.py` lists every API route and method with who may call it (public, signed in, viewer, editor, owner, audit, admin). Sign-in enforces administrator and auditor routes for every request; dataset levels are enforced by the routes. An unclassified route is refused, and a test fails if any route is missing or stale. This replaces the old path-prefix rule.
+- **Product tour.** A 60-second animated walkthrough (Connect, Unify, Ask, Extract and review, Secure by design) opens once on the Dashboard after a person's first sign-in, remembered on the server (`/api/me/walkthrough`), and is in About as "Watch the 1-minute tour".
+- Local Keycloak demo (`lapi_local_use/keycloak-demo`) with test users for administrator, user-in-a-group and auditor.
+
 ## v26.1.16.16 - 28 October 2026
 
 HTTPS certificate saved for updates

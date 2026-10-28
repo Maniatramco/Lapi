@@ -35,3 +35,8 @@
 .manage-inline .manage-body{overflow:visible;padding:14px 16px 16px}.manage-inline .manage-head{padding:14px 16px 10px}.manage-inline .manage-tabs{padding:0 16px}
 .manage-inline .manage-head h2{font-size:16px}
 .agent-manage-exchange{display:grid;gap:8px}
+
+/* Members tab: people and teams with their level on this dataset. */
+.dataset-members{display:grid;gap:12px}.dataset-members h3{margin:6px 0 0;font-size:14px}
+.dataset-members .manage-list li{display:flex;align-items:center;gap:12px}.dataset-members select{min-height:36px;max-width:100%}
+.dataset-members .manage-actions select{flex:1;min-width:0}

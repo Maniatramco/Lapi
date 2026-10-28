@@ -153,7 +153,7 @@ def login(body:Credentials,response:Response,request:Request):
             if keycloak_auth.enabled() and (keycloak_auth.managed(u.id) or u.role!='administrator'):raise HTTPException(403,'This account signs in with Keycloak.')
             token=secrets.token_urlsafe(40);csrf=secrets.token_urlsafe(32)
             s.add(Login(id=hashlib.sha256(token.encode()).hexdigest(),owner=u.id,expires=now+43200,csrf=csrf))
-            user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s)}
+            user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s)}
     _login_attempts.pop(client,None)
     response.set_cookie('lapi_session',token,httponly=True,secure=os.getenv('COOKIE_SECURE','false')=='true',samesite='strict',max_age=43200,path='/')
     return {'user':user,'csrf_token':csrf,'chat_session_id':hashlib.sha256(('chat:'+hashlib.sha256(token.encode()).hexdigest()).encode()).hexdigest()}
@@ -161,7 +161,7 @@ def login(body:Credentials,response:Response,request:Request):
 def me(request:Request,owner=Depends(auth)):
     with Session() as s:
         u=s.get(User,owner);token=request.cookies.get('lapi_session','');l=s.get(Login,hashlib.sha256(token.encode()).hexdigest())
-        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else ''}
+        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else ''}
 @app.post('/api/auth/logout')
 def logout(request:Request,response:Response,owner=Depends(auth)):
     with Session.begin() as s:

@@ -1,6 +1,20 @@
 {
-  "version": "26.1.16.16",
+  "version": "26.1.16.17",
   "releases": [
+    {
+      "version": "26.1.16.17",
+      "date": "2026-10-28",
+      "title": "Dataset roles, teams, Auditor and a 1-minute tour",
+      "changes": [
+        "Each person or team now has a level on each dataset: Viewer (chat and read results), Editor (also upload, extract and review) or Owner (also the dataset's name, instructions and members). Existing access became Editor, so nobody lost what they could do.",
+        "Teams give dataset access to groups of people. Keycloak groups become teams automatically at sign-in; administrators can also create Lapi teams.",
+        "Dataset owners share their dataset from a new Members tab in Manage dataset, without being administrators.",
+        "New Auditor role (in Users & passwords, or the Keycloak role lapi-auditor): sees people and the Access map read-only, and no dataset content.",
+        "The Access map shows levels and teams, and OpenFGA checks every level and team grant.",
+        "Every API route now has a written access rule that is checked on each request; a route without one is refused.",
+        "A 1-minute animated tour of Connect · Unify · Ask opens once after your first sign-in and is always in About."
+      ]
+    },
     {
       "version": "26.1.16.16",
       "date": "2026-10-28",

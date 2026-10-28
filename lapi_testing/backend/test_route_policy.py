@@ -75,6 +75,7 @@ def test_viewer_reads_editor_changes_owner_manages(accounts):
         assert renamed.status_code == 200 and renamed.json()['name'] == 'Renamed'
         members = person.get('/api/datasets/' + d['id'] + '/members').json()
         assert members['people'] == [{'user_id': 'colleague', 'level': 'owner'}]
+        assert [row['username'] for row in members['directory']] == ['Colleague']
         # Owners are not administrators: model mappings, deletion and people stay admin-only.
         assert person.put('/api/datasets/' + d['id'] + '/models', json={'mappings': []}).status_code == 403
         assert person.get('/api/users').status_code == 403

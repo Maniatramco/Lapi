@@ -197,3 +197,27 @@ def test_access_map_without_openfga_lists_database_grants_only(accounts):
     assert result['openfga'] == {'enabled': False, 'reachable': None, 'differences': 0}
     colleague = next(row for row in result['users'] if row['id'] == 'colleague')
     assert colleague['dataset_ids'] == [d['id']] and 'openfga' not in colleague
+
+
+def test_levels_and_team_grants_are_answered_by_openfga(accounts, fga):
+    client = accounts
+    login(client)
+    d = dataset(SimpleNamespace(api=client))
+    team = client.post('/api/teams', json={'name': 'Finance'}).json()['id']
+    assert client.put('/api/teams/' + team + '/members', json={'user_ids': ['colleague']}).status_code == 200
+    assert client.put('/api/teams/' + team + '/datasets', json={'grants': {d['id']: 'editor'}}).status_code == 200
+    assert ('user:colleague', 'member', 'team:' + team) in fga.tuples()
+    assert ('team:' + team + '#member', 'editor', 'dataset:' + d['id']) in fga.tuples()
+    with TestClient(main.app) as colleague:
+        login(colleague, 'Colleague')
+        assert [(row['id'], row['my_access']) for row in colleague.get('/api/datasets').json()] == [(d['id'], 'editor')]
+        # OpenFGA decides: dropping the team tuple removes access before the database changes.
+        for store in fga.stores.values():
+            store['tuples'].discard(('team:' + team + '#member', 'editor', 'dataset:' + d['id']))
+        assert colleague.get('/api/datasets').json() == []
+    assert client.put('/api/users/colleague/datasets', json={'dataset_ids': [d['id']], 'levels': {d['id']: 'owner'}}).status_code == 200
+    assert ('user:colleague', 'owner', 'dataset:' + d['id']) in fga.tuples()
+    mapped = {row['id']: row for row in client.get('/api/access-map').json()['users']}
+    assert mapped['colleague']['openfga']['levels'] == {d['id']: 'owner'} and mapped['colleague']['openfga']['in_step']
+    assert client.patch('/api/users/colleague/role', json={'role': 'auditor', 'current_password': OLD}).status_code == 200
+    assert ('user:colleague', 'auditor', 'lapi:workspace') in fga.tuples()

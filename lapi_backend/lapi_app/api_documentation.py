@@ -59,13 +59,23 @@ NOTES = {
     'POST /api/auth/logout': 'Invalidate the current session and clear its cookie. For a Keycloak account, logout_url ends the Keycloak session too.',
     'GET /api/auth/keycloak/start': 'Begin Keycloak sign-in (authorization code with PKCE): redirect to Keycloak with a short-lived, encrypted flow cookie.',
     'GET /api/auth/keycloak/callback': 'Finish Keycloak sign-in: verify state, nonce and token signatures, create or update the account, set the session cookie and return to Lapi.',
-    'GET /api/users': 'Administrator only: list account identity and audit metadata. Password hashes are never returned.',
+    'GET /api/users': 'Administrators and Auditors: list account identity, workspace role (administrator, auditor or user) and audit metadata. Password hashes are never returned.',
     'POST /api/users': 'Administrator only: create a user with matching passwords of 12–200 characters and a unique username. The account starts with no dataset assignments.',
     'POST /api/users/{user_id}/password': 'Administrator only: verify the administrator current password, reset another user password, and revoke all target sessions. Existing documents and results are preserved.',
     'PATCH /api/users/{user_id}/role': 'Administrator only: verify the acting administrator password, change role, revoke target sessions, preserve dataset assignments, and protect the last administrator.',
     'POST /api/auth/password': 'Change your own password after verifying your current password. Revoke all your sessions and sign in again. Cookie authentication requires X-CSRF-Token.',
-    'GET /api/users/{user_id}/datasets': 'Administrator only: read the user dataset assignments and their audit metadata. The administrator has automatic access to every dataset.',
-    'PUT /api/users/{user_id}/datasets': 'Administrator only: replace dataset assignments atomically. Assigned users can use shared documents, prompts and extraction results; revoked access blocks new reads and operations immediately. Empty assignments remove all dataset access. Existing content is preserved.',
+    'GET /api/users/{user_id}/datasets': 'Administrators and Auditors: read the user dataset assignments, their levels and their audit metadata. The administrator has automatic access to every dataset.',
+    'PUT /api/users/{user_id}/datasets': 'Administrator only: replace dataset assignments atomically, with an optional level per dataset (viewer: read and chat; editor: also upload, extract and review; owner: also the dataset\'s settings and members; new grants default to viewer). Assigned users can use shared documents, prompts and extraction results; revoked access blocks new reads and operations immediately. Empty assignments remove all dataset access. Existing content is preserved.',
+    'GET /api/access-map': 'Administrators and Auditors: every person\'s dataset levels (own grants and through teams), teams, and OpenFGA\'s answer for each person with any difference flagged. can_edit is false for Auditors.',
+    'GET /api/teams': 'Administrators and Auditors: teams with their source (local or Keycloak), member IDs and dataset levels.',
+    'POST /api/teams': 'Administrator only: create a local team with a unique name.',
+    'PUT /api/teams/{team_id}/members': 'Administrator only: replace a local team\'s members. Keycloak teams take their members from Keycloak groups at each sign-in (409).',
+    'PUT /api/teams/{team_id}/datasets': 'Administrator only: replace a team\'s dataset levels (viewer, editor or owner); every member gets them. OpenFGA is updated after the change commits.',
+    'DELETE /api/teams/{team_id}': 'Administrator only: delete a team and the access it gave. Keycloak re-creates a Keycloak team at the next sign-in of anyone still in the group.',
+    'GET /api/datasets/{id}/members': 'Dataset Owners and administrators: people and teams with access to this dataset and their levels, plus the people and teams that can be added.',
+    'PUT /api/datasets/{id}/members': 'Dataset Owners and administrators: set (viewer, editor, owner) or remove (null) the level of the named people and teams; others are unchanged. Administrators always have access and cannot be listed.',
+    'GET /api/me/walkthrough': 'Whether you have seen the current 1-minute product tour.',
+    'POST /api/me/walkthrough': 'Record that you have seen this version of the 1-minute product tour, so it does not open again on any device.',
     'POST /api/auth/recovery/prepare': 'Prepare a loopback-only native SQLite recovery challenge. A private legacy grant token is optional; direct desktop recovery uses the recovery cookie and CSRF challenge. The application API proxy blocks this route. Oracle and network deployments do not enable it.',
     'POST /api/auth/recovery/reset': 'Complete native SQLite desktop recovery with its recovery cookie, X-CSRF-Token, and matching new passwords; supply a token only for the legacy private-grant flow. Loopback and origin checks apply. Oracle and network deployments do not enable this route.',
     'GET /health': 'Basic process liveness check. A running API does not by itself prove that its dependencies are ready.',
@@ -269,7 +279,13 @@ def documented_routes(app):
     from .browser_recovery import router
     from .user_management import router as account_router
     from .keycloak_auth import router as keycloak_router
-    for route in [*app.routes, *router.routes, *account_router.routes, *keycloak_router.routes]:
+    def walk(routes):
+        for route in routes:
+            if type(route).__name__ == '_IncludedRouter':  # Lazily included routers (FastAPI 0.14x).
+                yield from walk(route.original_router.routes)
+            else:
+                yield route
+    for route in walk([*app.routes, *router.routes, *account_router.routes, *keycloak_router.routes]):
         if isinstance(route, APIRoute) and (route.path, frozenset(route.methods)) not in seen:
             seen.add((route.path, frozenset(route.methods)))
             yield route

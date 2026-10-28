@@ -212,8 +212,13 @@ def test_signed_in_users_own_connections_for_datasets_they_can_access(system, re
     assert s.api.get('/api/source-connections/' + c['id'] + '/files').status_code == 404
     assert submit(s, c, [token]).status_code == 404
     with core.Session.begin() as session:
-        session.add(relational.UserDataset(user_id='bob', dataset_id=d['id'], enabled=True))
-    # With access he can connect his own storage, but other users' connections stay private.
+        session.add(relational.UserDataset(user_id='bob', dataset_id=d['id'], enabled=True, access_level='viewer'))
+    # A Viewer reads the dataset but cannot connect storage to it.
+    refused = s.api.post('/api/source-connections', json=body(d) | {'name': 'Bob files'})
+    assert refused.status_code == 403 and 'Editor access' in refused.json()['detail']
+    with core.Session.begin() as session:
+        session.get(relational.UserDataset, ('bob', d['id'])).access_level = 'editor'
+    # As Editor he can connect his own storage, but other users' connections stay private.
     assert s.api.get('/api/source-connections/' + c['id'] + '/files').status_code == 404
     mine = post(s, '/api/source-connections', body(d) | {'name': 'Bob files'})
     assert mine['owner'] == 'bob' and [item['id'] for item in s.api.get('/api/source-connections').json()] == [mine['id']]

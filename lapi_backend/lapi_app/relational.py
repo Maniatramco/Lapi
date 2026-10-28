@@ -45,7 +45,8 @@ class UserDataset(Times, core.Base):
     enabled:Mapped[bool]=mapped_column(Boolean,default=True)
     # viewer: read and chat; editor: also upload, extract and review; owner: also the dataset's
     # settings and members. Grants made before levels existed could do all editor work.
-    access_level:Mapped[str]=mapped_column(String(16),default='viewer')
+    # Nullable like the column the upgrade adds to existing databases; empty means 'viewer'.
+    access_level:Mapped[str|None]=mapped_column(String(16),default='viewer')
 
 class Team(Times, core.Base):
     """People who get dataset access together. Keycloak teams mirror the person's
