@@ -67,6 +67,22 @@ class TeamDataset(Times, core.Base):
     dataset_id:Mapped[str]=mapped_column(String(80),ForeignKey('dataset_tbl.dataset_id',ondelete='CASCADE'),primary_key=True)
     access_level:Mapped[str]=mapped_column(String(16),default='viewer')
 
+class SignInAttempt(core.Base):
+    """Failed sign-ins per person and per address (sign_in_limits.py); kept across restarts."""
+    __tablename__='sign_in_attempt_tbl'
+    attempt_key:Mapped[str]=mapped_column(String(100),primary_key=True)
+    failures:Mapped[int]=mapped_column(Integer,default=0)
+    window_start:Mapped[float]=mapped_column(timestamp_type(),default=time.time)
+    locked_until:Mapped[float|None]=mapped_column(timestamp_type(),nullable=True)
+
+class UserTotp(Times, core.Base):
+    """Authenticator-app secret for password accounts (break-glass administrators), encrypted."""
+    __tablename__='user_totp_tbl'
+    user_id:Mapped[str]=mapped_column(String(80),ForeignKey(user_fk,ondelete='CASCADE'),primary_key=True)
+    secret:Mapped[str]=mapped_column(String(400))
+    enabled:Mapped[bool]=mapped_column(Boolean,default=False)
+    last_step:Mapped[int|None]=mapped_column(Integer,nullable=True)
+
 class WorkspaceRole(Times, core.Base):
     """Workspace roles besides Administrator (users_tbl.role): 'auditor' reads users,
     access and activity but no dataset content and changes nothing."""

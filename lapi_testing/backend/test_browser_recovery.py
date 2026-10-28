@@ -14,7 +14,7 @@ HEADERS={'Origin':'http://127.0.0.1:3000','Sec-Fetch-Site':'same-site'}
 def local(system, monkeypatch):
     monkeypatch.setenv('LAPI_LOCAL_ONLY','true')
     main.app.dependency_overrides.clear()
-    web._attempts.clear();main._login_attempts.clear()
+    web._attempts.clear()
     with system.session.begin() as s:
         s.add(core.User(id='administrator',username='Dottie',password_hash=core.password_hash(OLD),role='administrator'))
     with TestClient(main.app,base_url='http://127.0.0.1:8000',client=('127.0.0.1',41000),headers=HEADERS) as client:
@@ -48,7 +48,7 @@ def test_reset_login_replay_and_data_preservation(local):
     assert redeem(client,token).status_code in (400,403)
     assert client.post('/api/auth/login',json={'username':'Dottie','password':OLD}).status_code==401
     assert client.post('/api/auth/login',json={'username':'Dottie','password':NEW}).status_code==200
-    assert client.get('/api/auth/me').json()['user']=={'id':'administrator','username':'Dottie','role':'administrator','is_admin':True,'is_auditor':False,'sign_in':'password'}
+    assert client.get('/api/auth/me').json()['user']=={'id':'administrator','username':'Dottie','role':'administrator','is_admin':True,'is_auditor':False,'mfa':False,'sign_in':'password'}
     with sqlite3.connect(path) as db:
         assert db.execute('SELECT * FROM records ORDER BY id').fetchall()==before
         assert db.execute('SELECT COUNT(*) FROM recovery_grants').fetchone()==(0,)

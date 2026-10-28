@@ -154,25 +154,28 @@ def _back_to_sign_in(code):
     return response
 
 
-def _exchange(code, flow):
-    settings, document = _settings(), _discovery()
-    form = {'grant_type': 'authorization_code', 'code': code, 'redirect_uri': settings['redirect_uri'],
-            'client_id': settings['client_id'], 'code_verifier': flow['verifier']}
-    secret = _client_secret()
-    if secret:
-        form['client_secret'] = secret
-    with _http() as client:
-        response = client.post(document['token_endpoint'], data=form)
-    if response.status_code >= 300:
-        from .lapi_models.connection import provider_reason
-        raise SignInFailed('failed', 'Keycloak refused the code (HTTP %d): %s' % (response.status_code, provider_reason(response, {'secret': secret})))
-    tokens = response.json()
+RECHECK_SECONDS = 300
+LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout'
+MFA_METHODS = {'otp', 'mfa', 'hwk', 'swk', 'sms', 'webauthn'}
+
+
+def _require_admin_mfa():
+    return os.getenv('LAPI_KEYCLOAK_REQUIRE_ADMIN_MFA', 'false') == 'true'
+
+
+def _identity(tokens, document, settings, nonce=None, signing_in=True):
+    """Who signed in, from Keycloak's tokens: subject, username, roles, groups, Keycloak
+    session id, and the tokens Lapi keeps (encrypted) for re-checks and sign-out."""
     claims = _verified(tokens['id_token'], document, audience=settings['client_id'])
-    if not secrets.compare_digest(str(claims.get('nonce', '')), flow['nonce']):
+    if nonce is not None and not secrets.compare_digest(str(claims.get('nonce', '')), nonce):
         raise SignInFailed('failed', 'The ID token nonce does not match this sign-in.')
+    audience = claims.get('aud')
+    if (isinstance(audience, list) and len(audience) > 1 or 'azp' in claims) and claims.get('azp') != settings['client_id']:
+        raise SignInFailed('failed', 'The ID token was issued to another client (azp).')
     roles = _roles(claims, settings['client_id'])
     # Group paths from Keycloak's "Group Membership" mapper (claim "groups") become teams.
     groups = set(claims.get('groups') or []) if isinstance(claims.get('groups'), list) else set()
+    methods = set(claims.get('amr') or []) if isinstance(claims.get('amr'), list) else set()
     access = tokens.get('access_token') or ''
     if access.count('.') == 2:
         # Keycloak puts roles in the access token unless "Add to ID token" is on.
@@ -182,11 +185,90 @@ def _exchange(code, flow):
                 roles |= _roles(granted, settings['client_id'])
                 if isinstance(granted.get('groups'), list):
                     groups |= set(granted['groups'])
+                if isinstance(granted.get('amr'), list):
+                    methods |= set(granted['amr'])
         except jwt.PyJWTError:
             log.warning('Keycloak access token could not be verified; using roles from the ID token only.')
-    return {'subject': claims['sub'], 'administrator': settings['admin_role'] in roles,
+    administrator = settings['admin_role'] in roles
+    if signing_in and administrator and _require_admin_mfa() and not methods & MFA_METHODS:
+        raise SignInFailed('mfa_required', 'An administrator signed in without a second factor (amr %s).' % sorted(methods))
+    return {'subject': claims['sub'], 'administrator': administrator,
             'auditor': settings['auditor_role'] in roles, 'groups': sorted(g for g in groups if isinstance(g, str)),
-            'username': (claims.get('preferred_username') or claims.get('email') or claims['sub']).strip()[:120]}
+            'username': (claims.get('preferred_username') or claims.get('email') or claims['sub']).strip()[:120],
+            'sid': str(claims.get('sid') or '')[:100] or None,
+            'tokens': {'refresh': tokens.get('refresh_token') or '', 'id': tokens['id_token']}}
+
+
+def _token_request(form):
+    settings, document = _settings(), _discovery()
+    form = form | {'client_id': settings['client_id']}
+    secret = _client_secret()
+    if secret:
+        form['client_secret'] = secret
+    with _http() as client:
+        return client.post(document['token_endpoint'], data=form), secret
+
+
+def _exchange(code, flow):
+    settings, document = _settings(), _discovery()
+    response, secret = _token_request({'grant_type': 'authorization_code', 'code': code, 'redirect_uri': settings['redirect_uri'],
+                                       'code_verifier': flow['verifier']})
+    if response.status_code >= 300:
+        from .lapi_models.connection import provider_reason
+        raise SignInFailed('failed', 'Keycloak refused the code (HTTP %d): %s' % (response.status_code, provider_reason(response, {'secret': secret})))
+    return _identity(response.json(), document, settings, nonce=flow['nonce'])
+
+
+def _saved_tokens(login_id):
+    from . import sessions
+    with core.Session() as session:
+        row = session.get(core.Login, login_id)
+        data = row.kc_tokens if row else None
+    if not data:
+        return None
+    try:
+        return json.loads(sessions.cipher().decrypt(data.encode()))
+    except (InvalidToken, ValueError):
+        return None
+
+
+def id_token_of(login_id):
+    return (_saved_tokens(login_id) or {}).get('id', '')
+
+
+def recheck(login_id):
+    """Ask Keycloak whether this session is still valid (refresh-token grant). A disabled or
+    signed-out person, or an ended Keycloak session, ends the Lapi session; roles, the Auditor
+    role and teams follow what Keycloak says now. If Keycloak cannot be reached the session
+    continues and is checked again later."""
+    from fastapi import HTTPException
+    from . import sessions
+    tokens, now = _saved_tokens(login_id), time.time()
+    if not tokens or not tokens.get('refresh'):
+        sessions.end(login_id)
+        raise HTTPException(401, 'Sign in again with Keycloak.')
+    try:
+        response, _ = _token_request({'grant_type': 'refresh_token', 'refresh_token': tokens['refresh']})
+    except (httpx.HTTPError, SignInFailed) as exc:
+        log.warning('Keycloak could not be reached to re-check a session: %s', type(exc).__name__)
+        sessions.touch_check(login_id, now)
+        return
+    if response.status_code in (400, 401):
+        sessions.end(login_id)
+        raise HTTPException(401, 'Your Keycloak session has ended. Sign in again.')
+    if response.status_code >= 300:
+        log.warning('Keycloak answered HTTP %d to a session re-check.', response.status_code)
+        sessions.touch_check(login_id, now)
+        return
+    try:
+        identity = _identity(response.json(), _discovery(), _settings(), signing_in=False)
+    except (SignInFailed, jwt.PyJWTError, KeyError, ValueError) as exc:
+        log.warning('Keycloak re-check returned tokens that could not be verified: %s', type(exc).__name__)
+        sessions.end(login_id)
+        raise HTTPException(401, 'Sign in again with Keycloak.')
+    provision(identity)  # A role change signs the person out everywhere (provision).
+    if not sessions.save_keycloak(login_id, identity['tokens'], now):
+        raise HTTPException(401, 'Your access changed. Sign in again.')
 
 
 @audit_as('keycloak')
@@ -221,16 +303,15 @@ def provision(identity):
     return user_id
 
 
-def open_session(user_id):
-    token, csrf = secrets.token_urlsafe(40), secrets.token_urlsafe(32)
-    with core.Session.begin() as session:
-        session.add(core.Login(id=hashlib.sha256(token.encode()).hexdigest(), owner=user_id,
-                               expires=time.time() + SESSION_SECONDS, csrf=csrf))
-    return token
+def open_session(user_id, request=None, identity=None):
+    from . import sessions
+    keycloak = {'sid': identity.get('sid'), 'tokens': identity.get('tokens')} if identity else None
+    return sessions.create(user_id, request, keycloak)[0]
 
 
-def logout_url():
-    """Keycloak's end-session address, so signing out of Lapi also ends the Keycloak session."""
+def logout_url(id_token_hint=''):
+    """Keycloak's end-session address, so signing out of Lapi also ends the Keycloak session.
+    With the ID token as a hint Keycloak signs out straight away instead of asking."""
     try:
         endpoint = _discovery().get('end_session_endpoint')
     except Exception:
@@ -238,8 +319,10 @@ def logout_url():
     if not endpoint:
         return ''
     settings = _settings()
-    return endpoint + '?' + urlencode({'client_id': settings['client_id'],
-                                       'post_logout_redirect_uri': os.environ['LAPI_PUBLIC_URL'].strip().rstrip('/') + '/'})
+    query = {'client_id': settings['client_id'], 'post_logout_redirect_uri': os.environ['LAPI_PUBLIC_URL'].strip().rstrip('/') + '/'}
+    if id_token_hint:
+        query['id_token_hint'] = id_token_hint
+    return endpoint + '?' + urlencode(query)
 
 
 def recently_signed_in(user_id, seconds=600):
@@ -285,7 +368,8 @@ def callback(request: Request, code: str = '', state: str = '', error: str = '')
     if error or not code:
         return _back_to_sign_in('denied' if error == 'access_denied' else 'failed')
     try:
-        user_id = provision(_exchange(code, flow))
+        identity = _exchange(code, flow)
+        user_id = provision(identity)
     except SignInFailed as exc:
         log.warning('Keycloak sign-in failed: %s', exc)
         return _back_to_sign_in(exc.code)
@@ -293,7 +377,38 @@ def callback(request: Request, code: str = '', state: str = '', error: str = '')
         log.warning('Keycloak sign-in failed: %s', type(exc).__name__)
         return _back_to_sign_in('failed')
     response = RedirectResponse(flow['next'], 302)
-    response.set_cookie('lapi_session', open_session(user_id), httponly=True, secure=_secure(), samesite='strict',
-                        max_age=SESSION_SECONDS, path='/')
+    from . import sessions
+    sessions.set_cookie(response, open_session(user_id, request, identity))
     response.delete_cookie(FLOW_COOKIE, path=FLOW_PATH)
     return response
+
+
+@router.post(FLOW_PATH + '/backchannel-logout')
+async def backchannel_logout(request: Request):
+    """Keycloak calls this when a Keycloak session ends (sign-out elsewhere, an administrator
+    signing someone out, session expiry): the matching Lapi sessions end at once."""
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import or_
+    if not enabled():
+        raise HTTPException(404, 'Keycloak sign-in is not configured.')
+    form = await request.form()
+    token = str(form.get('logout_token') or '')
+    try:
+        settings, document = _settings(), _discovery()
+        key = _signing_key(token, document)
+        claims = jwt.decode(token, key.key, algorithms=[key.algorithm_name], issuer=document['issuer'], audience=settings['client_id'],
+                            leeway=30, options={'require': ['iat', 'iss', 'aud']})
+    except Exception as exc:
+        log.warning('Rejected a Keycloak logout token: %s', type(exc).__name__)
+        return JSONResponse({'error': 'invalid_request'}, 400)
+    if LOGOUT_EVENT not in (claims.get('events') or {}) or 'nonce' in claims or not (claims.get('sid') or claims.get('sub')):
+        return JSONResponse({'error': 'invalid_request'}, 400)
+    conditions = []
+    if claims.get('sid'):
+        conditions.append(core.Login.kc_sid == str(claims['sid']))
+    if claims.get('sub') and not claims.get('sid'):
+        conditions.append(core.Login.owner == PREFIX + str(claims['sub']))
+    with core.Session.begin() as session:
+        ended = session.execute(delete(core.Login).where(or_(*conditions))).rowcount or 0
+    log.info('Keycloak back-channel logout ended %d Lapi session(s).', ended)
+    return JSONResponse({}, 200)

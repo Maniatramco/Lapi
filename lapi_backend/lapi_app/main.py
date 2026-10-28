@@ -76,15 +76,23 @@ async def security_headers(request,call_next):
         access.request_actor.reset(actor_token);relational.actor_override.reset(audit_token);authz.forget_answers(answers_token)
 
 def authenticate(request:Request):
-    token=request.cookies.get('lapi_session','');bearer=request.headers.get('authorization','')
+    from . import sessions
+    token=sessions.token_from(request);bearer=request.headers.get('authorization','')
     if bearer.startswith('Bearer '):token=bearer[7:]
     if not token:raise HTTPException(401,'Sign in required')
+    now=time.time()
     with Session() as s:
-        login=s.get(Login,hashlib.sha256(token.encode()).hexdigest())
-        if not login or login.expires<time.time():raise HTTPException(401,'Session expired')
+        login=s.get(Login,sessions.session_id(token))
+        touch=sessions.check(login,now)  # 12 hours after sign-in, or idle too long: 401.
         if not s.get(User,login.owner):raise HTTPException(401,'Account unavailable')
         if request.method not in ('GET','HEAD','OPTIONS') and not bearer.startswith('Bearer ') and not secrets.compare_digest(request.headers.get('x-csrf-token',''),login.csrf):raise HTTPException(403,'Invalid CSRF token')
-        return login.owner
+        owner,login_id=login.owner,login.id
+        recheck=bool(login.kc_tokens) and now-(login.kc_checked or 0)>=keycloak_auth.RECHECK_SECONDS
+    # Keycloak sessions: every few minutes Keycloak confirms the person is still enabled and
+    # signed in there, and their roles and groups are brought up to date.
+    if recheck:keycloak_auth.recheck(login_id)
+    if touch:sessions.touch(login_id,now)
+    return owner
 
 async def auth(request:Request):
     from starlette.concurrency import run_in_threadpool
@@ -133,47 +141,66 @@ def external_check(consent,embedding=False,cfg=None):
 class Credentials(BaseModel):
     username:str=Field(min_length=1,max_length=120)
     password:str=Field(min_length=1,max_length=200)
+    code:str|None=Field(default=None,pattern=r'^\d{6}$')
 
 @app.get('/api/auth/status')
 def auth_status():
     with Session() as s:setup=not bool(s.scalar(select(User)))
     # With Keycloak, password sign-in is only the local administrators' break-glass path.
     return {'setup_required':setup,'keycloak':keycloak_auth.enabled()}
-_login_attempts={}
+# Unknown usernames still pay for a password check, so response time does not reveal them.
+_UNKNOWN_USER_HASH=password_hash(secrets.token_urlsafe(16))
 @app.post('/api/auth/login')
 def login(body:Credentials,response:Response,request:Request):
-    client=request.client.host if request.client else 'unknown';now=time.time()
-    attempts=[t for t in _login_attempts.get(client,[]) if t>now-300]
-    if len(attempts)>=15:raise HTTPException(429,'Too many login attempts; try again in five minutes')
-    _login_attempts[client]=attempts+[now]
+    from . import sessions, sign_in_limits, totp
+    ip=sessions.client_ip(request);attempt=sign_in_limits.keys(body.username,ip)
+    sign_in_limits.check(attempt)
+    failure=None
     with document_lock('administrator-auth'):
         with Session.begin() as s:
             u=s.scalar(select(User).where(User.username==body.username))
-            if not u or not password_valid(body.password,u.password_hash):raise HTTPException(401,'Invalid username or password')
-            if keycloak_auth.enabled() and (keycloak_auth.managed(u.id) or u.role!='administrator'):raise HTTPException(403,'This account signs in with Keycloak.')
-            token=secrets.token_urlsafe(40);csrf=secrets.token_urlsafe(32)
-            s.add(Login(id=hashlib.sha256(token.encode()).hexdigest(),owner=u.id,expires=now+43200,csrf=csrf))
-            user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s)}
-    _login_attempts.pop(client,None)
-    response.set_cookie('lapi_session',token,httponly=True,secure=os.getenv('COOKIE_SECURE','false')=='true',samesite='strict',max_age=43200,path='/')
-    return {'user':user,'csrf_token':csrf,'chat_session_id':hashlib.sha256(('chat:'+hashlib.sha256(token.encode()).hexdigest()).encode()).hexdigest()}
+            valid=password_valid(body.password,u.password_hash if u else _UNKNOWN_USER_HASH)
+            if not u or not valid:failure=(401,'Invalid username or password')
+            elif keycloak_auth.enabled() and (keycloak_auth.managed(u.id) or u.role!='administrator'):raise HTTPException(403,'This account signs in with Keycloak.')
+            elif totp.enabled(u.id,s):
+                # The password was right: ask for the code without counting a failure.
+                if not body.code:raise HTTPException(401,'Enter the 6-digit code from your authenticator app.')
+                if not totp.verify(s,u.id,body.code):failure=(401,'That authenticator code is not valid. Wait for the next code and try again.')
+            if not failure:
+                user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s)}
+                user_id,mfa=u.id,totp.enabled(u.id,s)
+    if failure:
+        sign_in_limits.fail(attempt)
+        raise HTTPException(*failure)
+    sign_in_limits.succeed(body.username)
+    token,csrf=sessions.create(user_id,request)
+    if keycloak_auth.enabled():
+        # Password sign-in is the break-glass path once Keycloak is on: record every use.
+        import logging;logging.getLogger(__name__).warning('Break-glass administrator sign-in: %s from %s (authenticator: %s).',body.username,ip,'yes' if mfa else 'NO')
+    sessions.set_cookie(response,token)
+    return {'user':user|{'mfa':mfa},'csrf_token':csrf,'chat_session_id':hashlib.sha256(('chat:'+sessions.session_id(token)).encode()).hexdigest()}
 @app.get('/api/auth/me')
 def me(request:Request,owner=Depends(auth)):
+    from . import sessions, totp
     with Session() as s:
-        u=s.get(User,owner);token=request.cookies.get('lapi_session','');l=s.get(Login,hashlib.sha256(token.encode()).hexdigest())
-        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else ''}
+        u=s.get(User,owner);l=s.get(Login,sessions.session_id(sessions.token_from(request)))
+        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'mfa':totp.enabled(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else '','session':{'idle_minutes':sessions.idle_seconds()//60,'expires_at':l.expires if l else None}}
 @app.post('/api/auth/logout')
 def logout(request:Request,response:Response,owner=Depends(auth)):
-    with Session.begin() as s:
-        row=s.get(Login,hashlib.sha256(request.cookies.get('lapi_session','').encode()).hexdigest())
-        if row:s.delete(row)
-    response.delete_cookie('lapi_session')
-    return {'ok':True,'logout_url':keycloak_auth.logout_url() if keycloak_auth.enabled() and keycloak_auth.managed(owner) else ''}
+    from . import sessions
+    login_id=sessions.session_id(sessions.token_from(request))
+    hint=keycloak_auth.id_token_of(login_id) if keycloak_auth.enabled() and keycloak_auth.managed(owner) else ''
+    sessions.end(login_id)
+    sessions.clear_cookie(response)
+    return {'ok':True,'logout_url':keycloak_auth.logout_url(hint) if keycloak_auth.enabled() and keycloak_auth.managed(owner) else ''}
 app.include_router(keycloak_auth.router)
 from .user_management import install as install_user_management
 install_user_management(app, auth)
 from . import teams
 teams.install(app, auth)
+from . import sessions as session_routes, totp as totp_routes
+session_routes.install(app, auth)
+totp_routes.install(app, auth)
 from .walkthrough import install as install_walkthrough; install_walkthrough(app, auth)
 from .storage_config import install as install_storage_config
 install_storage_config(app,auth)

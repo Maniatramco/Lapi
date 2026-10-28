@@ -131,6 +131,7 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   expired: "That sign-in took too long or was started in another tab. Try again.",
   unavailable: "Keycloak is unreachable right now. Try again in a minute.",
   account_conflict: "A local Lapi account already uses your Keycloak username. Ask an administrator to rename or delete it.",
+  mfa_required: "Administrators must sign in with an authenticator code. Set up your authenticator app in Keycloak, then sign in again.",
   failed: "Keycloak sign-in did not complete. Try again, or ask an administrator to check the server log.",
 };
 /** With Keycloak, Lapi's password form is only the local administrators' break-glass path. */
@@ -225,6 +226,8 @@ export default function App() {
   const [keycloak, setKeycloak] = useState(false);
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
+  // Accounts with an authenticator app: the server asks for the 6-digit code after a correct password.
+  const [totpCode, setTotpCode] = useState(""), [needsCode, setNeedsCode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordChangedNotice, setPasswordChangedNotice] = useState(false);
   const [roleChangedNotice, setRoleChangedNotice] = useState(false);
@@ -610,7 +613,14 @@ export default function App() {
   const reload = () => setRefresh((v) => v + 1);
   const authenticate = () =>
     run(async () => {
-      const d = await api("/auth/login", "POST", { username, password });
+      let d;
+      try {
+        d = await api("/auth/login", "POST", needsCode&&totpCode ? { username, password, code: totpCode } : { username, password });
+      } catch (e) {
+        if (e instanceof Error && /authenticator/i.test(e.message)) { setNeedsCode(true); setTotpCode(""); window.setTimeout(()=>document.getElementById("login-code")?.focus(),0); }
+        throw e;
+      }
+      setNeedsCode(false); setTotpCode("");
       prepareFreshLoginChat(sessionStorage,d.user.username,d.chat_session_id||'');
       navigate("Home");
       setUser(d.user);
@@ -720,6 +730,12 @@ export default function App() {
               </div>
               {signInErrors.password && <small className="field-error" id="login-password-error">{signInErrors.password}</small>}
             </div>
+            {needsCode && <div className="field">
+              <label htmlFor="login-code">Authenticator code</label>
+              <input id="login-code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={totpCode}
+                placeholder="6 digits" onChange={e => { setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              <small className="muted">From the authenticator app on your phone.</small>
+            </div>}
             <button className="btn primary login-submit" type="submit" disabled={busy}>
               {busy && <Loader2 size={17} className="animate-spin" aria-hidden="true" />}
               {busy ? "Signing in..." : "Sign in"}

@@ -263,7 +263,8 @@ def install(app, auth):
                 session.execute(delete(core.Login).where(core.Login.owner==user.id))
                 session.flush()
                 result=public_user(user,body.role=='auditor')
-        if user_id==owner:response.delete_cookie('lapi_session',path='/')
+        if user_id==owner:
+            from .sessions import clear_cookie;clear_cookie(response)
         return {'user':result,'sessions_revoked':True}
 
     @router.post('/api/auth/password')
@@ -278,7 +279,8 @@ def install(app, auth):
                 verify_password(user, body.current_password.get_secret_value())
                 user.password_hash = core.password_hash(password)
                 session.execute(delete(core.Login).where(core.Login.owner == owner))
-        response.delete_cookie('lapi_session', path='/')
+        from .sessions import clear_cookie
+        clear_cookie(response)
         return {'ok': True, 'sessions_revoked': True}
 
     @router.get('/api/users/{user_id}/datasets')

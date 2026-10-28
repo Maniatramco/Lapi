@@ -167,6 +167,6 @@ async def reset(request: Request, response: Response):
     except Exception:
         raise HTTPException(503,'Password could not be changed. Nothing was committed; try again.')
     response.delete_cookie(COOKIE,path=PREFIX)
-    response.delete_cookie('lapi_session',path='/')
+    from .sessions import clear_cookie;clear_cookie(response)
     response.headers['Cache-Control']='no-store'
     return {'ok':True}
