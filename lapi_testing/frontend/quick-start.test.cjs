@@ -2,13 +2,14 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const filename=path.resolve(__dirname,'../../lapi_frontend/app/quick-start-flow.ts'),compiled=new Module(filename,module);compiled.paths=module.paths;
 compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
-const {stepsFor,uploadable,askable,fileState,progress,pickFiles,sourceName,defaultDatasetName,MAX_FILES}=compiled.exports;
+const {stepsFor,uploadable,askable,fileState,progress,pickFiles,sourceName,defaultDatasetName,fieldKey,fieldsToSchema,fieldProblems,resultRows,MAX_FILES}=compiled.exports;
 const datasets=[{id:'v',name:'Policies',my_access:'viewer'},{id:'e',name:'Contracts',my_access:'editor'},{id:'o',name:'Old',my_access:'owner',active:false}];
 
-test('people who can add documents get the full workflow; Viewers choose a dataset and ask',()=>{
- assert.deepEqual(stepsFor(datasets,false),['dataset','documents','processing','ask','done']);
+test('people who can add documents choose to ask or extract; Viewers choose a dataset and ask',()=>{
+ assert.deepEqual(stepsFor(datasets,false),['dataset','documents','processing','choose','ask','done']);
+ assert.deepEqual(stepsFor(datasets,false,'extract'),['dataset','documents','processing','choose','prompt','extracting','done']);
  assert.deepEqual(stepsFor([datasets[0]],false),['dataset','ask','done']);
- assert.deepEqual(stepsFor([],true),['dataset','documents','processing','ask','done']);
+ assert.deepEqual(stepsFor([],true),['dataset','documents','processing','choose','ask','done']);
  assert.deepEqual(uploadable(datasets,false).map(d=>d.id),['e']);
  assert.deepEqual(uploadable(datasets,true).map(d=>d.id),['v','e']);
  assert.deepEqual(askable(datasets).map(d=>d.id),['v','e']);
@@ -35,4 +36,26 @@ test('sources and default names read well',()=>{
  assert.equal(sourceName({title:'Lease.pdf',page:3}),'Lease.pdf · page 3');
  assert.equal(sourceName({}),'Source');
  assert.equal(defaultDatasetName('poorni',new Date('2026-10-28T10:00:00Z')),"poorni's documents Oct 2026");
+});
+
+test('edited fields become a strict Lapi prompt schema',()=>{
+ assert.equal(fieldKey('Due date'),'due_date');assert.equal(fieldKey('Due date',['due_date']),'due_date_2');assert.equal(fieldKey('2nd party'),'f_2nd_party');assert.equal(fieldKey('!!'),'field');
+ const fields=[{key:'due_date',label:'Due date',type:'date',description:'As YYYY-MM-DD.'},{key:'amount',label:'Amount',type:'number',description:'Plain number.'},
+  {key:'paid',label:'Paid',type:'yes_no',description:'Whether it is paid.'},{key:'items',label:'Items',type:'list',description:'Line items.'}];
+ const schema=fieldsToSchema(fields);
+ assert.deepEqual(schema.required,['due_date','amount','paid','items']);assert.equal(schema.additionalProperties,false);
+ assert.deepEqual(schema.properties.due_date,{type:['string','null'],format:'date',description:'Due date: As YYYY-MM-DD.'});
+ assert.deepEqual(schema.properties.paid.type,['boolean','null']);assert.deepEqual(schema.properties.items.items,{type:'string'});
+ assert.deepEqual(fieldProblems(fields),[]);
+ assert.match(fieldProblems([])[0],/at least one/);
+ assert.ok(fieldProblems([{...fields[0],description:' '}]).some(p=>/description/.test(p)));
+ assert.ok(fieldProblems([fields[0],fields[0]]).some(p=>/same name/.test(p)));
+});
+
+test('extracted values show as labelled rows, missing ones as Not found',()=>{
+ const fields=[{key:'due_date',label:'Due date',type:'date',description:'x'}];
+ assert.deepEqual(resultRows({due_date:'2026-03-01',paid:true,items:['a','b'],note:null},fields),[
+  {label:'Due date',value:'2026-03-01'},{label:'paid',value:'Yes'},{label:'items',value:'a, b'},{label:'note',value:'Not found'}]);
+ assert.deepEqual(resultRows([{due_date:'x'}],fields),[{label:'Due date',value:'x'}]);
+ assert.deepEqual(resultRows(null,fields),[]);
 });

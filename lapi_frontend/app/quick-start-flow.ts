@@ -1,10 +1,14 @@
-/** Quick start: one guided workflow from "nothing" to a first cited answer, kept small enough
- * for a phone. Pick or create a dataset → add documents (camera or files) → wait for them to be
- * read → ask a first question → done. Viewers skip straight to choosing a dataset and asking. */
+/** Quick start: one guided workflow from "nothing" to a first result, kept small enough for a
+ * phone. Pick or create a dataset → add documents (camera or files) → wait for them to be read
+ * → choose: ask a question, or pull out data with an extraction prompt the AI drafts → done.
+ * Viewers choose a dataset and ask. Every step that sends data to an AI model asks first. */
 type Entity=Record<string,any>;
 
-export type Step='dataset'|'documents'|'processing'|'ask'|'done';
+export type Step='dataset'|'documents'|'processing'|'choose'|'ask'|'prompt'|'extracting'|'done';
+export type Path='ask'|'extract';
 export type FileState='working'|'ready'|'failed';
+export type FieldType='text'|'number'|'date'|'yes_no'|'list';
+export type Field={key:string;label:string;type:FieldType;description:string};
 
 /** Files people can add from a phone or computer (Lapi reads PDF, Word, text, JSON and images). */
 export const ACCEPT='.pdf,.docx,.txt,.json,.png,.jpg,.jpeg,.webp,application/pdf,image/*';
@@ -14,6 +18,10 @@ export const SUGGESTED_QUESTIONS=[
  'Summarize this in five bullet points',
  'What are the key dates, amounts and names?',
  'What should I do next based on this?',
+];
+
+export const FIELD_TYPES:{id:FieldType;label:string}[]=[
+ {id:'text',label:'Text'},{id:'number',label:'Number'},{id:'date',label:'Date'},{id:'yes_no',label:'Yes / no'},{id:'list',label:'List'},
 ];
 
 const active=(datasets:Entity[])=>datasets.filter(d=>d.active!==false);
@@ -26,9 +34,12 @@ export function uploadable(datasets:Entity[],isAdmin:boolean){
 /** Datasets this person can ask about (any level). */
 export const askable=(datasets:Entity[])=>active(datasets);
 
-/** The steps this person goes through, in order. */
-export function stepsFor(datasets:Entity[],isAdmin:boolean):Step[]{
- return isAdmin||uploadable(datasets,isAdmin).length?['dataset','documents','processing','ask','done']:['dataset','ask','done'];
+export const canAddDocuments=(datasets:Entity[],isAdmin:boolean)=>isAdmin||uploadable(datasets,isAdmin).length>0;
+
+/** The steps this person goes through, in order, for the chosen path. */
+export function stepsFor(datasets:Entity[],isAdmin:boolean,path:Path='ask'):Step[]{
+ if(!canAddDocuments(datasets,isAdmin))return ['dataset','ask','done'];
+ return ['dataset','documents','processing','choose',...(path==='extract'?['prompt','extracting'] as Step[]:['ask'] as Step[]),'done'];
 }
 
 export function canCreateDataset(isAdmin:boolean){return isAdmin;}
@@ -39,7 +50,7 @@ export function fileState(status:string|undefined):FileState{
  return 'working';
 }
 
-export const FILE_STATE_TEXT:Record<FileState,string>={working:'Reading…',ready:'Ready to ask',failed:'Could not read'};
+export const FILE_STATE_TEXT:Record<FileState,string>={working:'Reading…',ready:'Ready',failed:'Could not read'};
 
 /** Overall progress of the uploaded files: done when none is still being read. */
 export function progress(states:FileState[]){
@@ -65,4 +76,46 @@ export function sourceName(citation:Entity){
 export function defaultDatasetName(username:string|undefined,now=new Date()){
  const month=now.toLocaleString('en',{month:'short'});
  return `${username?username+"'s ":''}documents ${month} ${now.getFullYear()}`.slice(0,120);
+}
+
+/** A field key from a label: "Due date" → "due_date". */
+export function fieldKey(label:string,taken:string[]=[]){
+ let key=label.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)||'field';
+ if(!/^[a-z]/.test(key))key='f_'+key.slice(0,38);
+ let unique=key,n=2;while(taken.includes(unique)){unique=`${key.slice(0,36)}_${n++}`;}
+ return unique;
+}
+
+/** The editable fields as the JSON Schema Lapi prompt templates use (strict: every field required, nullable). */
+export function fieldsToSchema(fields:Field[]){
+ const properties:Record<string,Entity>={};
+ for(const field of fields){
+  const description=`${field.label}: ${field.description}`;
+  properties[field.key]=field.type==='list'?{type:['array','null'],items:{type:'string'},description}
+   :{type:[field.type==='number'?'number':field.type==='yes_no'?'boolean':'string','null'],...(field.type==='date'?{format:'date'}:{}),description};
+ }
+ return {type:'object',additionalProperties:false,properties,required:Object.keys(properties)};
+}
+
+/** Field problems to fix before saving, in plain words; empty when the list is fine. */
+export function fieldProblems(fields:Field[]){
+ const problems:string[]=[];
+ if(!fields.length)problems.push('Keep at least one field.');
+ if(fields.some(f=>!f.label.trim()))problems.push('Every field needs a name.');
+ if(fields.some(f=>!f.description.trim()))problems.push('Every field needs a short description of what to pull out.');
+ if(new Set(fields.map(f=>f.key)).size!==fields.length)problems.push('Two fields have the same name.');
+ return problems;
+}
+
+/** Extracted values as label/value rows for a small results card (first record when there are several). */
+export function resultRows(result:unknown,fields:Field[]):{label:string;value:string}[]{
+ let record:any=result;
+ if(Array.isArray(record))record=record[0];
+ if(record&&typeof record==='object'&&!Array.isArray(record)&&record.records&&Array.isArray(record.records))record=record.records[0];
+ if(!record||typeof record!=='object')return [];
+ const label=(key:string)=>fields.find(f=>f.key===key)?.label||key.replace(/_/g,' ');
+ const show=(value:unknown):string=>value===null||value===undefined||value===''?'Not found':Array.isArray(value)?value.map(show).join(', '):typeof value==='boolean'?(value?'Yes':'No'):typeof value==='object'?JSON.stringify(value):String(value);
+ // In the order of the person's fields; anything else the model returned comes after.
+ const order=(key:string)=>{const index=fields.findIndex(f=>f.key===key);return index<0?fields.length:index;};
+ return Object.entries(record).sort(([a],[b])=>order(a)-order(b)).map(([key,value])=>({label:label(key),value:show(value)}));
 }

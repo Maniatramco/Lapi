@@ -207,6 +207,8 @@ from . import sessions as session_routes, totp as totp_routes
 session_routes.install(app, auth)
 totp_routes.install(app, auth)
 from .walkthrough import install as install_walkthrough; install_walkthrough(app, auth)
+from . import prompt_suggest
+prompt_suggest.install(app, auth)
 from .preferences import install as install_preferences; install_preferences(app, auth)
 from .storage_config import install as install_storage_config
 install_storage_config(app,auth)
