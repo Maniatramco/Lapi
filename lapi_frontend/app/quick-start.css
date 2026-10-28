@@ -1,7 +1,8 @@
 /* Quick start: a guided sheet in Lapi's look (the sign-in page's blended blue → indigo → peach
    band and orange primary button), full screen on phones and a centred dialog on larger screens. */
 .quick-start-backdrop{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:24px;background:rgba(15,23,42,.5);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
-.quick-start{display:grid;grid-template-rows:auto 1fr auto;width:min(580px,100%);max-height:min(800px,100%);border-radius:24px;background:#fff;color:var(--ink);box-shadow:0 30px 70px rgba(15,23,42,.35);overflow:hidden}
+.quick-start{display:grid;width:min(580px,100%);max-height:min(800px,100%);border-radius:24px;background:#fff;color:var(--ink);box-shadow:0 30px 70px rgba(15,23,42,.35);overflow:hidden}
+.quick-start-main{display:grid;grid-template-rows:auto 1fr auto;min-height:0;min-width:0}
 
 .quick-start-head{position:relative;padding:12px 20px 18px;color:#fff;
  background:radial-gradient(60% 120% at 100% 0%,rgba(253,186,116,.75),rgba(253,186,116,0) 60%),radial-gradient(50% 120% at 0% 100%,rgba(56,189,248,.35),rgba(56,189,248,0) 70%),linear-gradient(115deg,#1e3a8a 0%,#2563eb 40%,#5b5fe8 72%,#c0759a 100%)}
@@ -99,3 +100,43 @@
  .quick-start-field-row{grid-template-columns:1fr 104px 44px}
 }
 @media(prefers-reduced-motion:reduce){.quick-start-meter span{transition:none}}
+
+/* Dashboard launcher (workspace-assist.tsx): always there, in the same blended band. */
+.quick-start-launch{display:flex;align-items:center;gap:14px;margin:0 0 16px;padding:14px 16px;border-radius:18px;color:#fff;
+ background:radial-gradient(60% 140% at 100% 0%,rgba(253,186,116,.7),rgba(253,186,116,0) 60%),linear-gradient(115deg,#1e3a8a 0%,#2563eb 45%,#5b5fe8 78%,#c0759a 100%);box-shadow:0 14px 30px rgba(30,58,138,.22)}
+.quick-start-launch-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.18);flex:none}
+.quick-start-launch>div{display:grid;gap:2px;flex:1;min-width:0}
+.quick-start-launch strong{font-size:16px}.quick-start-launch small{color:#dbeafe;font-size:13.5px;line-height:1.4}
+.quick-start-launch-button{display:inline-flex;align-items:center;gap:6px;min-height:46px;padding:0 18px;border:0;border-radius:12px;background:#fb923c;color:#14213d;font:inherit;font-weight:800;cursor:pointer;flex:none;box-shadow:0 8px 18px rgba(251,146,60,.35)}
+.quick-start-launch-button:hover{background:#fdba74}
+@media(max-width:640px){.quick-start-launch{flex-wrap:wrap}.quick-start-launch-button{width:100%;justify-content:center}}
+
+/* Step rail: only on wide screens, where the Quick start is a two-column panel. */
+.quick-start-rail{display:none}
+@media(min-width:900px){
+ .quick-start{width:min(920px,100%);height:min(720px,100%);grid-template-columns:240px minmax(0,1fr)}
+ .quick-start-rail{display:flex;flex-direction:column;gap:18px;padding:22px 18px;color:#fff;
+  background:radial-gradient(80% 50% at 100% 100%,rgba(253,186,116,.55),rgba(253,186,116,0) 70%),linear-gradient(170deg,#1e3a8a 0%,#2563eb 45%,#5b5fe8 75%,#c0759a 100%)}
+ .quick-start-rail-brand{display:flex;align-items:center;gap:8px;margin:0;font-size:17px;font-weight:800}
+ .quick-start-rail ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+ .quick-start-rail li{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;color:rgba(255,255,255,.75);font-size:14.5px;font-weight:700}
+ .quick-start-rail li.on{background:rgba(255,255,255,.16);color:#fff}
+ .quick-start-rail li.done{color:#fff}
+ .quick-start-rail-dot{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;border:1.5px solid rgba(255,255,255,.5);font-size:12px;flex:none}
+ .quick-start-rail li.on .quick-start-rail-dot{background:#fdba74;border-color:#fdba74;color:#14213d}
+ .quick-start-rail li.done .quick-start-rail-dot{background:rgba(255,255,255,.9);border-color:transparent;color:#1e3a8a}
+ .quick-start-rail-note{margin:auto 0 0;color:rgba(255,255,255,.75);font-size:12.5px;line-height:1.45}
+ .quick-start-head{background:#fff;color:var(--ink);padding:16px 26px 8px}
+ .quick-start-head .quick-start-progress{visibility:hidden}
+ .quick-start-head .quick-start-icon{background:var(--bg);color:var(--ink)}
+ .quick-start-head .quick-start-icon:hover{background:var(--line)}
+ .quick-start-head .quick-start-eyebrow{color:#c2410c;margin-top:4px}
+ .quick-start-head h2{color:var(--ink);font-size:28px}
+ .quick-start-body{padding:10px 26px 22px}
+ .quick-start-foot{padding:14px 26px 18px;display:flex;justify-content:flex-end}
+ .quick-start-primary{width:auto;min-width:240px;padding:0 28px}
+ .quick-start-foot-note{width:100%}
+ .quick-start-paths{grid-template-columns:1fr 1fr}
+ .quick-start-paths button{align-items:flex-start;flex-direction:column;min-height:140px}
+ .quick-start-options{grid-template-columns:1fr 1fr}
+}

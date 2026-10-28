@@ -13,6 +13,8 @@ type Uploaded={id:string;name:string;state:FileState;error:string};
 
 const STEP_TITLE:Record<Step,string>={dataset:'Choose where it goes',documents:'Add your documents',processing:'Reading your documents',choose:'What would you like to do?',
  ask:'Ask your first question',prompt:'What should Lapi pull out?',extracting:'Pulling out your data',done:'You did it'};
+// Short names for the step rail on wide screens.
+const STEP_RAIL:Record<Step,string>={dataset:'Dataset',documents:'Documents',processing:'Reading',choose:'Ask or extract',ask:'Ask',prompt:'Fields',extracting:'Results',done:'Done'};
 const POLL_MS=3000,POLL_LIMIT_MS=10*60*1000;
 const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
 
@@ -134,6 +136,13 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
 
  return <div className="quick-start-backdrop" onClick={event=>{if(event.target===event.currentTarget&&!busy)onClose();}}>
   <div ref={sheet} className="quick-start" role="dialog" aria-modal="true" aria-labelledby="quick-start-title">
+   <nav className="quick-start-rail" aria-label="Quick start steps">
+    <p className="quick-start-rail-brand"><Sparkles size={18}/> Quick start</p>
+    <ol>{steps.map((s,i)=><li key={s} className={i<position?'done':i===position?'on':''} aria-current={i===position?'step':undefined}>
+     <span className="quick-start-rail-dot">{i<position?<Check size={14}/>:i+1}</span>{STEP_RAIL[s]}</li>)}</ol>
+    <p className="quick-start-rail-note">Each step that sends data to an AI model asks first.</p>
+   </nav>
+   <div className="quick-start-main">
    <header className="quick-start-head">
     <div className="quick-start-bar-row">
      {position>0&&!['done','processing','extracting'].includes(step)?<button type="button" className="quick-start-icon" aria-label="Back" onClick={back} disabled={busy}><ArrowLeft size={20}/></button>:<span className="quick-start-icon-space"/>}
@@ -259,6 +268,7 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
     {step==='extracting'&&<button type="button" className="quick-start-primary" disabled={busy||!rows.length} onClick={next}>{rows.length?'Finish':'Extracting…'}</button>}
     {step==='done'&&<button type="button" className="quick-start-primary" onClick={onClose}>Close</button>}
    </footer>
+   </div>
   </div>
  </div>;
 }

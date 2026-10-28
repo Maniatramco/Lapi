@@ -7,6 +7,7 @@
       "title": "Quick start and company sign-in",
       "changes": [
         "New Quick start in Lapi's look: a short guided sheet that takes you through one complete workflow: choose or create a dataset, add a photo or files, watch them being read, then either ask your first question with sources, or pull out data. It is the first suggested step after the set-up questions, and the Add button on phones. Each step that sends data to an AI model asks for your consent first.",
+        "The Quick start is always on the Dashboard. On a computer it opens as a wide panel with a step list; on a phone it fills the screen.",
         "Pull out data without writing a prompt: Lapi reads your document and suggests the fields to extract, you edit them or ask the AI to rewrite them (\"add the due date\"), then Lapi saves the prompt and runs the extraction.",
         "Sign in with Microsoft or Google (and other providers) through Keycloak: one button each on the sign-in page, shown once they are set up in Keycloak.",
         "When the chat model cannot answer, Lapi now says so instead of showing a server error."

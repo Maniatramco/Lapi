@@ -50,6 +50,9 @@ function trapTab(event:ReactKeyboardEvent<HTMLElement>,root:HTMLElement|null){
  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
 }
 
+/** Opens the Quick start from anywhere (Dashboard, About, shortcuts). */
+export const OPEN_QUICK_START_EVENT='lapi:open-quick-start';
+export function openQuickStart(){if(typeof window!=='undefined')window.dispatchEvent(new Event(OPEN_QUICK_START_EVENT));}
 const STEP_ICON:Record<string,typeof Database>={'quick-start':Sparkles,'create-dataset':Database,connect:CloudUpload,'add-knowledge':CloudUpload,upload:CloudUpload,ask:MessageSquare,research:Search,agent:Sparkles,extract:Table2};
 const GOAL_ICON:Record<Goal,typeof Database>={ask:MessageSquare,extract:Table2,research:FileSearch,knowledge_base:Users};
 
@@ -139,6 +142,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
  // Ask first: after the tour, on the Dashboard, until answered or skipped once.
  useEffect(()=>{if(view==='Home'&&tourDone&&shouldAskSetup(preferences))setSheetOpen(true);},[view,tourDone,preferences]);
  useEffect(()=>{const open=()=>{setHelpOpen(false);setSheetOpen(true);};window.addEventListener(OPEN_SETUP_EVENT,open);return()=>window.removeEventListener(OPEN_SETUP_EVENT,open);},[]);
+ useEffect(()=>{const open=()=>{setHelpOpen(false);setSheetOpen(false);setQuickOpen(true);};window.addEventListener(OPEN_QUICK_START_EVENT,open);return()=>window.removeEventListener(OPEN_QUICK_START_EVENT,open);},[]);
  const save=useCallback(async(next:Preferences)=>{const saved=cleanPreferences(await api('/me/preferences','PUT',next,undefined,true));setPreferences(saved);return saved;},[api]);
  const skip=()=>{setSheetOpen(false);const next={...(preferences||cleanPreferences({})),completed:true};setPreferences(next);void save(next).catch(()=>undefined);say('Set-up skipped. You can answer later from the Dashboard or About.');};
  const dismissCard=()=>{if(!preferences)return;const next={...preferences,dismissed_next_steps:true};setPreferences(next);void save(next).catch(()=>undefined);say('Next steps hidden. Open About to change your answers.');};
@@ -221,6 +225,13 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
  const guidance=preferences?recommendNextSteps(preferences,access):null;
  const goalNames=preferences?.goals.map(id=>GOALS.find(g=>g.id===id)?.title).filter(Boolean)||[];
  const sourceNames=preferences?.sources.map(id=>SOURCES.find(s=>s.id===id)?.title).filter(Boolean)||[];
+ // Always on the Dashboard: one tap to the guided workflow, whatever the person answered.
+ const launcher=view==='Home'&&userId?<section className="quick-start-launch" aria-label="Quick start">
+  <span className="quick-start-launch-icon" aria-hidden="true"><Sparkles size={22}/></span>
+  <div><strong>{access.canAddKnowledge?'Add documents, then ask or pull out data':'Ask your first question'}</strong>
+   <small>{access.canAddKnowledge?'A guided 2-minute workflow: photo or files, then an answer with sources or an AI-written extraction.':'Pick a dataset shared with you and get an answer with its sources.'}</small></div>
+  <button type="button" className="quick-start-launch-button" onClick={()=>setQuickOpen(true)}>Quick start <ArrowRight size={16} aria-hidden="true"/></button>
+ </section>:null;
  const card=view==='Home'&&showNextSteps(preferences)&&guidance?<section className="next-steps-card" aria-labelledby="next-steps-title">
   <header><div><h2 id="next-steps-title">Your next steps</h2><p>{goalNames.length||sourceNames.length?[goalNames.length?`For: ${goalNames.join(', ')}`:'',sourceNames.length?`Knowledge in: ${sourceNames.join(', ')}`:''].filter(Boolean).join(' · '):'Suggested for your access'}</p></div>
    <button type="button" className="btn icon next-steps-hide" aria-label="Hide next steps" title="Hide next steps" onClick={dismissCard}><X size={16}/></button></header>
@@ -243,5 +254,5 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   {quickOpen&&<QuickStart api={api} user={user} datasets={datasets} sources={preferences?.sources||[]} onClose={()=>setQuickOpen(false)} onChanged={onChanged} onNavigate={target=>go(target)}/>}
   <p className="sr-only" aria-live="polite" role="status">{announcement}</p>
  </div>;
- return <>{card}{mounted&&createPortal(layer,document.body)}</>;
+ return <>{launcher}{card}{mounted&&createPortal(layer,document.body)}</>;
 }
