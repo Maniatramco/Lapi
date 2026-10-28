@@ -148,3 +148,39 @@ def test_many_tuples_are_written_in_batches_of_100(accounts, fga, monkeypatch):
     monkeypatch.setattr(authz, '_desired', lambda user_id=None: rows)
     authz.prepare()
     assert fga.tuples() == rows
+
+
+def test_access_map_shows_database_grants_beside_openfga_answers(accounts, fga):
+    client = accounts
+    login(client)
+    d = dataset(SimpleNamespace(api=client))
+    other = dataset(SimpleNamespace(api=client), name='Other')
+    assert client.put('/api/users/colleague/datasets', json={'dataset_ids': [d['id']]}).status_code == 200
+    result = client.get('/api/access-map').json()
+    assert {row['id'] for row in result['datasets']} == {d['id'], other['id']}
+    users = {row['id']: row for row in result['users']}
+    assert users['colleague']['dataset_ids'] == [d['id']] and not users['colleague']['is_admin']
+    assert users['colleague']['openfga'] == {'administrator': False, 'dataset_ids': [d['id']], 'in_step': True}
+    assert users['administrator']['openfga']['administrator'] and users['administrator']['openfga']['in_step']
+    assert result['openfga'] == {'enabled': True, 'reachable': True, 'differences': 0}
+    # A tuple OpenFGA lost shows as a difference until Lapi rebuilds it.
+    for store in fga.stores.values():
+        store['tuples'].discard(('user:colleague', 'viewer', 'dataset:' + d['id']))
+    result = client.get('/api/access-map').json()
+    colleague = next(row for row in result['users'] if row['id'] == 'colleague')
+    assert colleague['openfga'] == {'administrator': False, 'dataset_ids': [], 'in_step': False}
+    assert result['openfga']['differences'] == 1
+    with TestClient(main.app) as other_client:
+        login(other_client, 'Colleague')
+        assert other_client.get('/api/access-map').status_code == 403
+
+
+def test_access_map_without_openfga_lists_database_grants_only(accounts):
+    client = accounts
+    login(client)
+    d = dataset(SimpleNamespace(api=client))
+    assert client.put('/api/users/colleague/datasets', json={'dataset_ids': [d['id']]}).status_code == 200
+    result = client.get('/api/access-map').json()
+    assert result['openfga'] == {'enabled': False, 'reachable': None, 'differences': 0}
+    colleague = next(row for row in result['users'] if row['id'] == 'colleague')
+    assert colleague['dataset_ids'] == [d['id']] and 'openfga' not in colleague
