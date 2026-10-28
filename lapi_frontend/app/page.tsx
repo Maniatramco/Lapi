@@ -23,6 +23,7 @@ import { DatasetWorkspace, DatasetMappings, ModelPicker, eligibleModels, modelLa
 import { ModelRegistration } from "./model-registration";
 import { KnowledgeIndexBanner } from "./knowledge-index-banner";
 import { UserManagement } from "./user-management";
+import { AccessMap } from "./access-map";
 import { AdminDocuments } from "./admin-documents";
 import { TokenUsageAdmin } from "./token-usage";
 import { AgentV2 } from "./agent-v2";
@@ -57,6 +58,7 @@ import {
   Server,
   CloudUpload,
   Coins,
+  Network,
 } from "lucide-react";
 import { AddKnowledge } from "./add-knowledge";
 import { PageBand, PAGE_INTROS } from "./page-band";
@@ -86,6 +88,7 @@ type View =
   | "Model Registration"
   | "Model Mapping"
   | "Users & passwords"
+  | "Access map"
   | "Token usage"
   | "Add knowledge";
 const sections: { name: View; icon: typeof Shield; group?: string }[] = [
@@ -94,6 +97,7 @@ const sections: { name: View; icon: typeof Shield; group?: string }[] = [
   { name: "Lapi agent V2", icon: Bot, group: "WORKSPACE" },
   { name: "Skills & memory", icon: Bot, group: "WORKSPACE" },
   { name: "Users & passwords", icon: KeyRound },
+  { name: "Access map", icon: Network },
   { name: "Datasets", icon: BookOpen },
   { name: "Extract", icon: FileSearch },
   { name: "Extract Data", icon: Database },
@@ -834,6 +838,7 @@ export default function App() {
           {view === "Add knowledge" && <AddKnowledge api={api} datasets={kbs} documents={docs} selectedDataset={kb} onChanged={reload} onBack={()=>navigate("Home")} onExtract={()=>navigate("Extract Data")} onAsk={scope=>{if(navigate("Home")){setDashboardDatasetId('');setDashboardHandoff({...scope,key:Date.now()});}}}/>}
           {view === "Files & processing" && (user.is_admin?<AdminDocuments api={api} onChanged={reload} onReview={openReview}/>:<div className="panel" role="alert">Administrator access is required to manage files and processing.</div>)}
           {view === "Token usage" && (user.is_admin?<TokenUsageAdmin api={api}/>:<div className="panel" role="alert">Administrator access is required to view token usage.</div>)}
+          {view === "Access map" && (user.is_admin?<AccessMap api={api}/>:<div className="panel" role="alert">Administrator access is required to view the access map.</div>)}
           {view === "Users & passwords" && <UserManagement api={api} keycloak={keycloak} user={user as {id:string;username:string;is_admin?:boolean;sign_in?:string}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
           {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This dataset is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
           {view === "Datasets" && <DatasetWorkspace directorySearch={directorySearch} onClearDirectorySearch={()=>setDirectorySearch('')} onDirectoryVisibilityChange={setDatasetDirectoryVisible} canManage={Boolean(user.is_admin)} datasets={kbs} models={models} documents={docs}

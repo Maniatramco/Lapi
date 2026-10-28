@@ -285,4 +285,30 @@ def install(app, auth):
                 for id in ids-existing.keys():session.add(relational.UserDataset(user_id=user_id,dataset_id=id))
         return {'ok':True,'user_id':user_id,'dataset_ids':sorted(ids)}
 
+    @router.get('/api/access-map')
+    def access_map(owner=Depends(administrator)):
+        """Every person's dataset access as the database records it and, when OpenFGA is on,
+        as OpenFGA answers it, so the Access map can show both and flag any difference."""
+        from . import authz
+        with core.Session() as session:
+            people=list(session.scalars(select(core.User).order_by(core.User.username)))
+            datasets=[{'id':row.dataset_id,'name':row.dataset_name,'status':row.status} for row in session.scalars(select(relational.Dataset).order_by(relational.Dataset.dataset_name))]
+            granted={}
+            for grant in session.scalars(select(relational.UserDataset).where(relational.UserDataset.enabled==True)):
+                granted.setdefault(grant.user_id,set()).add(grant.dataset_id)
+        openfga={'enabled':authz.enabled(),'reachable':None,'differences':0}
+        users=[]
+        for user in people:
+            row=public_user(user)|{'dataset_ids':sorted(granted.get(user.id,()))}
+            if openfga['enabled'] and openfga['reachable'] is not False:
+                try:
+                    answer={'administrator':authz.is_administrator(user.id),'dataset_ids':sorted(authz.viewable_datasets(user.id))}
+                    openfga['reachable']=True
+                    row['openfga']=answer|{'in_step':answer['administrator']==row['is_admin'] and answer['dataset_ids']==row['dataset_ids']}
+                    openfga['differences']+=not row['openfga']['in_step']
+                except authz.AuthorizationUnavailable:
+                    openfga['reachable']=False
+            users.append(row)
+        return {'users':users,'datasets':datasets,'openfga':openfga}
+
     app.include_router(router)
