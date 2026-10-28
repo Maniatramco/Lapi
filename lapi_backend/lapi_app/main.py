@@ -25,6 +25,11 @@ async def lifespan(app):
         # First, so Caddy (which waits for this) starts with the saved certificate.
         import asyncio
         await asyncio.to_thread(tls_state.restore, tls_root)
+    from . import keycloak_bootstrap
+    if keycloak_root := keycloak_bootstrap.directory():
+        # Hosted Keycloak waits for its database user and secrets (never stops Lapi starting).
+        import asyncio
+        await asyncio.to_thread(keycloak_bootstrap.prepare, keycloak_root)
     from .vault_master_key import master_key, SECRET_ENV
     if os.getenv(SECRET_ENV):master_key()  # Fail at startup, not on the first saved credential.
     init()

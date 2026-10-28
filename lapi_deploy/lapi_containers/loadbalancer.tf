@@ -47,6 +47,12 @@ resource "oci_load_balancer_listener" "http" {
   default_backend_set_name = oci_load_balancer_backend_set.app[var.https ? "caddy-http" : "web"].name
   port                     = 80
   protocol                 = var.https ? "TCP" : "HTTP"
+  # PROXY protocol v2 tells Caddy each person's address (keycloak.tf, keycloak_hosted).
+  # The idle timeouts are the values these listeners already had.
+  connection_configuration {
+    idle_timeout_in_seconds            = 60
+    backend_tcp_proxy_protocol_version = local.proxy_protocol ? 2 : null
+  }
 }
 
 resource "oci_load_balancer_listener" "https" {
@@ -56,4 +62,8 @@ resource "oci_load_balancer_listener" "https" {
   default_backend_set_name = oci_load_balancer_backend_set.app["caddy-https"].name
   port                     = 443
   protocol                 = "TCP"
+  connection_configuration {
+    idle_timeout_in_seconds            = 300
+    backend_tcp_proxy_protocol_version = local.proxy_protocol ? 2 : null
+  }
 }
