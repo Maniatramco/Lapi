@@ -2,6 +2,7 @@
 import {Activity,Award,BookOpen,CheckCircle2,CloudUpload,Cpu,FileText,Folder,History,MessageSquareText,ScanText,ShieldCheck,User,UserCheck,Users} from 'lucide-react';
 import application from './application-version.json';
 import './about-lapi.css';
+import { Walkthrough } from './walkthrough';
 
 const day=(date:string)=>new Date(date+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
 const MODELS=[['Embedding','indexes knowledge'],['Chat','answers questions'],['Extraction','fills prompt fields'],['OCR','reads scans and images']];
@@ -60,6 +61,7 @@ export function AboutLapi(){
     <div className="about-lapi-principles"><span><BookOpen size={16}/>Documents and saved results</span><span><ShieldCheck size={16}/>Dataset access protected</span><span><History size={16}/>Version history</span></div></header>
    <aside className="about-version-card" aria-label="Current release"><span className="about-version-label">Current version</span><strong className="about-current-version" aria-label={`Current application version v${application.version}`}>v{application.version}</strong><span>{current.title}</span><time dateTime={current.date}>Released {day(current.date)}</time><small>{application.releases.length} releases recorded</small></aside>
   </div>
+  <section className="about-flow about-tour" aria-labelledby="about-tour-title"><span className="about-eyebrow">Product tour</span><h2 id="about-tour-title">Watch the 1-minute tour</h2><p className="about-flow-intro">Connect your sources, unify them into one knowledge base, and ask with sources you can check.</p><Walkthrough mode="inline"/></section>
   <section className="about-flow" aria-labelledby="about-flow-title"><span className="about-eyebrow">Inside an Lapi workspace</span><h2 id="about-flow-title">Predefined prompts turn unstructured documents into trusted data</h2><p className="about-flow-intro">Each dataset keeps its own sources, prompts and knowledge base. Reviewed fields become the golden copy.</p><WorkflowDiagram/></section>
   <section className="about-release-history" aria-labelledby="about-release-title"><h2 id="about-release-title">What's included in each version</h2>
    <ol className="about-timeline">
