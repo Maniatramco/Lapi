@@ -9,6 +9,7 @@ Contributor datasets use the workspace Default models
 - `POST /api/datasets/{id}/migrate-settings` gives a new dataset the workspace Default models (empty mappings) when Chat, Extraction and Embedding Defaults are set. Before, it imported the legacy settings as models owned by the caller; for a Contributor those private copies clashed with the Default embedding model ("Datasets use the workspace Default embedding model…"). Without Defaults, non-administrators get 409 asking an administrator to choose them.
 - `PUT /api/datasets/{id}/models` and `POST /api/datasets/{id}/local-models` are `admin` again: administrators set the Defaults and do all mapping. Datasets report `chat_choices` (enabled mapped chat models plus the workspace Default chat model), which the chat model pickers use.
 - Quick start hides the app-wide "Processing in background" panel while it is open (`quick-start.css`).
+- Quick start between 640 and 900 px wide (tablets): its one grid row may now shrink, so the body scrolls and the footer stays visible; before, content past the dialog's max height was clipped. New Enlarge / Smaller button (remembered in `localStorage` as `lapi:quick-start-enlarged`; hidden on phones, where it is already full screen).
 
 ## v26.1.16.21 - 29 October 2026
 

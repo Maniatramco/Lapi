@@ -1,7 +1,7 @@
 /* Quick start: a guided sheet in Lapi's look (the sign-in page's blended blue → indigo → peach
    band and orange primary button), full screen on phones and a centred dialog on larger screens. */
 .quick-start-backdrop{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:24px;background:rgba(15,23,42,.5);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
-.quick-start{display:grid;width:min(580px,100%);max-height:min(800px,100%);border-radius:24px;background:#fff;color:var(--ink);box-shadow:0 30px 70px rgba(15,23,42,.35);overflow:hidden}
+.quick-start{display:grid;grid-template-rows:minmax(0,1fr);width:min(580px,100%);max-height:min(800px,100%);border-radius:24px;background:#fff;color:var(--ink);box-shadow:0 30px 70px rgba(15,23,42,.35);overflow:hidden}
 .quick-start-main{display:grid;grid-template-rows:auto 1fr auto;min-height:0;min-width:0}
 
 .quick-start-head{position:relative;padding:12px 20px 18px;color:#fff;
@@ -144,3 +144,9 @@
 /* Quick start shows its own reading progress: hide the app-wide progress panel while it is open
    (it comes back when the Quick start closes and anything is still processing). */
 body:has(.quick-start) .operation-popup{display:none}
+
+/* Header buttons: Enlarge and Close. Enlarged, the Quick start fills the window on any screen. */
+.quick-start-icons{display:flex;gap:8px}
+.quick-start-backdrop:has(.is-enlarged){padding:0}
+.quick-start.is-enlarged{width:100%;height:100%;max-height:none;border-radius:0}
+@media(max-width:640px){.quick-start-enlarge{display:none}}

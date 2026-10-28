@@ -8,7 +8,8 @@
       "changes": [
         "New datasets created by contributors (Quick start or New dataset) now use the administrator's Default models instead of failing with an embedding-model error.",
         "Model mapping for datasets is administrator-only again; contributors pick from the mapped models and the workspace Default chat model when they chat.",
-        "Quick start no longer shows a second 'Processing in background' panel on top of its own reading progress."
+        "Quick start no longer shows a second 'Processing in background' panel on top of its own reading progress.",
+        "Quick start scrolls properly on tablets (the Continue button was cut off), and a new Enlarge button next to Close fills the window with it; your choice is remembered on that device."
       ]
     },
     {

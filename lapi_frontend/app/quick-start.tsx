@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useRef,useState} from "react";
-import {ArrowLeft,Camera,Check,CircleAlert,FileSearch,FileUp,Loader2,MessageSquare,Plus,Sparkles,Table2,Trash2,Users,Wand2,X} from "lucide-react";
+import {ArrowLeft,Camera,Check,CircleAlert,FileSearch,FileUp,Loader2,Maximize2,MessageSquare,Minimize2,Plus,Sparkles,Table2,Trash2,Users,Wand2,X} from "lucide-react";
 import "./quick-start.css";
 import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,defaultDatasetName,fieldKey,fieldProblems,fieldsToSchema,fileState,pickFiles,progress,resultRows,sourceName,stepsFor,uploadable,
  type Field,type FieldType,type FileState,type Path,type Step} from "./quick-start-flow";
@@ -21,6 +21,7 @@ const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
 /** A guided sheet that takes a person through one complete workflow: dataset → documents →
  * reading → a first answer with sources, or a first extraction with a prompt the AI drafts
  * from the document. Full screen on phones, a dialog on larger screens. */
+const ENLARGED_KEY='lapi:quick-start-enlarged';
 export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNavigate}:{api:Api;user:Entity;datasets:Entity[];sources?:string[];onClose:()=>void;onChanged:()=>void;onNavigate:(view:string)=>void}){
  // Contributors (Keycloak lapi-contributor) create datasets and are Owner on all of them, like administrators.
  const isAdmin=Boolean(user?.is_admin||user?.is_contributor);
@@ -29,6 +30,9 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
  const [path,setPath]=useState<Path>('ask');
  const steps=stepsFor(datasets,isAdmin,path);
  const [step,setStep]=useState<Step>('dataset');
+ // Enlarged: the Quick start fills the window (remembered on this device).
+ const [enlarged,setEnlarged]=useState(()=>{try{return localStorage.getItem(ENLARGED_KEY)==='1';}catch{return false;}});
+ const toggleEnlarged=()=>setEnlarged(value=>{try{localStorage.setItem(ENLARGED_KEY,value?'0':'1');}catch{}return !value;});
  const [datasetId,setDatasetId]=useState<string>(choices[0]?.id||(isAdmin?'new':''));
  const [newName,setNewName]=useState(defaultDatasetName(user?.username));
  const [files,setFiles]=useState<File[]>([]),[note,setNote]=useState('');
@@ -136,7 +140,7 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
   <input id={id} type="checkbox" checked={checked} onChange={e=>set(e.target.checked)} disabled={busy}/><span>{text}</span></label>;
 
  return <div className="quick-start-backdrop" onClick={event=>{if(event.target===event.currentTarget&&!busy)onClose();}}>
-  <div ref={sheet} className="quick-start" role="dialog" aria-modal="true" aria-labelledby="quick-start-title">
+  <div ref={sheet} className={enlarged?'quick-start is-enlarged':'quick-start'} role="dialog" aria-modal="true" aria-labelledby="quick-start-title">
    <nav className="quick-start-rail" aria-label="Quick start steps">
     <p className="quick-start-rail-brand"><Sparkles size={18}/> Quick start</p>
     <ol>{steps.map((s,i)=><li key={s} className={i<position?'done':i===position?'on':''} aria-current={i===position?'step':undefined}>
@@ -148,7 +152,10 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
     <div className="quick-start-bar-row">
      {position>0&&!['done','processing','extracting'].includes(step)?<button type="button" className="quick-start-icon" aria-label="Back" onClick={back} disabled={busy}><ArrowLeft size={20}/></button>:<span className="quick-start-icon-space"/>}
      <div className="quick-start-progress" aria-label={`Step ${position+1} of ${steps.length}`}>{steps.map((s,i)=><span key={s} className={i<position?'done':i===position?'on':''}/>)}</div>
-     <button type="button" className="quick-start-icon" aria-label="Close quick start" onClick={onClose} disabled={busy}><X size={20}/></button>
+     <span className="quick-start-icons">
+      <button type="button" className="quick-start-icon quick-start-enlarge" aria-label={enlarged?'Make quick start smaller':'Enlarge quick start'} title={enlarged?'Smaller':'Enlarge'} aria-pressed={enlarged} onClick={toggleEnlarged}>{enlarged?<Minimize2 size={18}/>:<Maximize2 size={18}/>}</button>
+      <button type="button" className="quick-start-icon" aria-label="Close quick start" onClick={onClose} disabled={busy}><X size={20}/></button>
+     </span>
     </div>
     <p className="quick-start-eyebrow">Quick start · step {position+1} of {steps.length}</p>
     <h2 id="quick-start-title" tabIndex={-1}>{STEP_TITLE[step]}</h2>
