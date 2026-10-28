@@ -116,8 +116,8 @@ def ref(identifier):
 
 
 def authorize(actor, dataset_id):
-    # Any signed-in user may connect storage to a dataset they can already upload to.
-    dataset = access.get_record(dataset_id, actor, 'knowledge_base')
+    # Connecting storage and importing from it needs Editor access to the dataset.
+    dataset = access.get_record(dataset_id, actor, 'knowledge_base', level='editor')
     if routing.dataset_config(dataset).get('active') is False:
         raise HTTPException(409, 'Activate the dataset before using its source connections.')
     return dataset

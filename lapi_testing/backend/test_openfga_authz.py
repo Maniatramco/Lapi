@@ -18,6 +18,17 @@ class FakeOpenFGA:
     def restart(self):
         self.stores = {}
 
+    @staticmethod
+    def has(tuples, user, relation, obj):
+        """Lapi's model: owner > editor > viewer on datasets, and grants to team#member."""
+        if (user, relation, obj) in tuples:
+            return True
+        teams = {o for u, r, o in tuples if u == user and r == 'member' and o.startswith('team:')}
+        if any((team + '#member', relation, obj) in tuples for team in teams):
+            return True
+        stronger = {'viewer': 'editor', 'editor': 'owner'}.get(relation)
+        return bool(stronger and obj.startswith('dataset:') and FakeOpenFGA.has(tuples, user, stronger, obj))
+
     def tuples(self):
         return set().union(*(store['tuples'] for store in self.stores.values())) if self.stores else set()
 
@@ -62,9 +73,11 @@ class FakeOpenFGA:
             token = str(start + len(page)) if start + len(page) < len(rows) else ''
             return httpx.Response(200, json={'tuples': [{'key': dict(zip(('user', 'relation', 'object'), t))} for t in page], 'continuation_token': token})
         if operation == 'check':
-            return httpx.Response(200, json={'allowed': key(body['tuple_key']) in store['tuples']})
+            k = body['tuple_key']
+            return httpx.Response(200, json={'allowed': self.has(store['tuples'], k['user'], k['relation'], k['object'])})
         if operation == 'list-objects':
-            return httpx.Response(200, json={'objects': [o for u, r, o in store['tuples'] if u == body['user'] and r == body['relation'] and o.startswith(body['type'] + ':')]})
+            objects = {o for _, _, o in store['tuples'] if o.startswith(body['type'] + ':')}
+            return httpx.Response(200, json={'objects': sorted(o for o in objects if self.has(store['tuples'], body['user'], body['relation'], o))})
         return httpx.Response(404, json={'code': 'undefined_endpoint'})
 
 
@@ -160,7 +173,7 @@ def test_access_map_shows_database_grants_beside_openfga_answers(accounts, fga):
     assert {row['id'] for row in result['datasets']} == {d['id'], other['id']}
     users = {row['id']: row for row in result['users']}
     assert users['colleague']['dataset_ids'] == [d['id']] and not users['colleague']['is_admin']
-    assert users['colleague']['openfga'] == {'administrator': False, 'dataset_ids': [d['id']], 'in_step': True}
+    assert users['colleague']['openfga'] == {'administrator': False, 'auditor': False, 'levels': {d['id']: 'viewer'}, 'dataset_ids': [d['id']], 'in_step': True}
     assert users['administrator']['openfga']['administrator'] and users['administrator']['openfga']['in_step']
     assert result['openfga'] == {'enabled': True, 'reachable': True, 'differences': 0}
     # A tuple OpenFGA lost shows as a difference until Lapi rebuilds it.
@@ -168,7 +181,7 @@ def test_access_map_shows_database_grants_beside_openfga_answers(accounts, fga):
         store['tuples'].discard(('user:colleague', 'viewer', 'dataset:' + d['id']))
     result = client.get('/api/access-map').json()
     colleague = next(row for row in result['users'] if row['id'] == 'colleague')
-    assert colleague['openfga'] == {'administrator': False, 'dataset_ids': [], 'in_step': False}
+    assert colleague['openfga'] == {'administrator': False, 'auditor': False, 'levels': {}, 'dataset_ids': [], 'in_step': False}
     assert result['openfga']['differences'] == 1
     with TestClient(main.app) as other_client:
         login(other_client, 'Colleague')

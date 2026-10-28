@@ -43,12 +43,14 @@ class ResetPassword(PasswordInput):
 
 class ChangeRole(BaseModel):
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
-    role: Literal['user','administrator']
+    role: Literal['user','auditor','administrator']
     current_password: SecretStr = Field(min_length=1,max_length=200)
 
 class DatasetAssignments(BaseModel):
     model_config = ConfigDict(extra='forbid')
     dataset_ids: list[str] = Field(max_length=1000)
+    # Level per dataset; datasets not named keep their saved level (new ones: viewer).
+    levels: dict[str, Literal['viewer','editor','owner']] = Field(default_factory=dict, max_length=1000)
 
 
 class DeleteUser(BaseModel):
@@ -69,10 +71,15 @@ def keycloak_owns_password(user):
         raise HTTPException(409, 'This account signs in with Keycloak; change its password in Keycloak.')
 
 
-def public_user(user):
+def public_user(user, auditor=None):
+    if auditor is None:
+        with core.Session() as session:
+            row = session.get(relational.WorkspaceRole, user.id)
+            auditor = bool(row and row.role == 'auditor')
     return {key: getattr(user, key) for key in (
         'id', 'username', 'role', 'created_at', 'updated_at', 'created_by', 'updated_by')
-    } | {'is_admin': user.role == 'administrator',
+    } | {'is_admin': user.role == 'administrator', 'is_auditor': bool(auditor) and user.role != 'administrator',
+         'workspace_role': 'administrator' if user.role == 'administrator' else 'auditor' if auditor else 'user',
          'sign_in': 'keycloak' if user.id.startswith('kc-') else 'password'}
 
 
@@ -174,10 +181,21 @@ def install(app, auth):
         if not core.is_administrator(owner,session):
             raise HTTPException(403,'Administrator access required.')
 
-    @router.get('/api/users')
-    def users(owner=Depends(administrator)):
+    def reader(owner=Depends(auth)):
+        # Auditors read people and access; they change nothing.
+        from .dataset_access import is_auditor
         with core.Session() as session:
-            return [public_user(user) for user in session.scalars(
+            if not session.get(core.User, owner):
+                raise HTTPException(401, 'Sign in required.')
+            if not (core.is_administrator(owner, session) or is_auditor(owner, session)):
+                raise HTTPException(403, 'Administrator or Auditor access is required.')
+        return owner
+
+    @router.get('/api/users')
+    def users(owner=Depends(reader)):
+        with core.Session() as session:
+            auditors = set(session.scalars(select(relational.WorkspaceRole.user_id).where(relational.WorkspaceRole.role == 'auditor')))
+            return [public_user(user, user.id in auditors) for user in session.scalars(
                 select(core.User).order_by(core.User.username))]
 
     @router.post('/api/users')
@@ -233,14 +251,18 @@ def install(app, auth):
                 user=next((user for user in accounts if user.id==user_id),None)
                 if not user:raise HTTPException(404,'User not found.')
                 from . import keycloak_auth
-                if keycloak_auth.managed(user.id):raise HTTPException(409,'Keycloak sets this role: add or remove the Keycloak role '+keycloak_auth._settings()['admin_role']+'. Lapi applies it at the next sign-in.')
-                if user.role==body.role:return {'user':public_user(user),'sessions_revoked':False}
-                if user.role=='administrator' and body.role=='user' and sum(account.role=='administrator' for account in accounts)<=1:
+                if keycloak_auth.managed(user.id):raise HTTPException(409,'Keycloak sets this role: add or remove the Keycloak roles '+keycloak_auth._settings()['admin_role']+' and '+keycloak_auth._settings()['auditor_role']+'. Lapi applies them at the next sign-in.')
+                audit_row=session.get(relational.WorkspaceRole,user.id)
+                current='administrator' if user.role=='administrator' else 'auditor' if audit_row else 'user'
+                if current==body.role:return {'user':public_user(user,bool(audit_row)),'sessions_revoked':False}
+                if user.role=='administrator' and body.role!='administrator' and sum(account.role=='administrator' for account in accounts)<=1:
                     raise HTTPException(409,'Keep at least one administrator. Promote another user before changing this role.')
-                user.role=body.role
+                user.role='administrator' if body.role=='administrator' else 'user'
+                if body.role=='auditor' and not audit_row:session.add(relational.WorkspaceRole(user_id=user.id,role='auditor'))
+                if body.role!='auditor' and audit_row:session.delete(audit_row)
                 session.execute(delete(core.Login).where(core.Login.owner==user.id))
                 session.flush()
-                result=public_user(user)
+                result=public_user(user,body.role=='auditor')
         if user_id==owner:response.delete_cookie('lapi_session',path='/')
         return {'user':result,'sessions_revoked':True}
 
@@ -260,13 +282,14 @@ def install(app, auth):
         return {'ok': True, 'sessions_revoked': True}
 
     @router.get('/api/users/{user_id}/datasets')
-    def assigned_datasets(user_id: str, owner=Depends(administrator)):
+    def assigned_datasets(user_id: str, owner=Depends(reader)):
         with core.Session() as session:
             user=session.get(core.User,user_id)
             if not user:raise HTTPException(404,'User not found.')
             grants=list(session.scalars(select(relational.UserDataset).where(relational.UserDataset.user_id==user_id)))
             return {'user_id':user_id,'all_datasets':core.is_administrator(user_id,session),'dataset_ids':[grant.dataset_id for grant in grants if grant.enabled],
-                    'assignments':[{'dataset_id':grant.dataset_id,'enabled':grant.enabled,'created_at':grant.created_at,'created_by':grant.created_by,'updated_at':grant.updated_at,'updated_by':grant.updated_by} for grant in grants]}
+                    'levels':{grant.dataset_id:grant.access_level or 'viewer' for grant in grants if grant.enabled},
+                    'assignments':[{'dataset_id':grant.dataset_id,'enabled':grant.enabled,'level':grant.access_level,'created_at':grant.created_at,'created_by':grant.created_by,'updated_at':grant.updated_at,'updated_by':grant.updated_by} for grant in grants]}
 
     @router.put('/api/users/{user_id}/datasets')
     def map_datasets(user_id: str, body: DatasetAssignments, owner=Depends(administrator)):
@@ -279,36 +302,53 @@ def install(app, auth):
                 if core.is_administrator(user_id,session):raise HTTPException(400,'Administrators always have access to every dataset.')
                 found=set(session.scalars(select(relational.Dataset.dataset_id).where(relational.Dataset.dataset_id.in_(ids))))
                 if found!=ids:raise HTTPException(404,'One or more datasets no longer exist. No assignments changed.')
+                if set(body.levels)-ids:raise HTTPException(400,'Levels can only be set for datasets in dataset_ids.')
                 existing={grant.dataset_id:grant for grant in session.scalars(select(relational.UserDataset).where(relational.UserDataset.user_id==user_id))}
                 for id,grant in existing.items():
                     if grant.enabled!=(id in ids):grant.enabled=id in ids
-                for id in ids-existing.keys():session.add(relational.UserDataset(user_id=user_id,dataset_id=id))
-        return {'ok':True,'user_id':user_id,'dataset_ids':sorted(ids)}
+                    if id in body.levels and grant.access_level!=body.levels[id]:grant.access_level=body.levels[id]
+                for id in ids-existing.keys():session.add(relational.UserDataset(user_id=user_id,dataset_id=id,access_level=body.levels.get(id,'viewer')))
+                levels={id:grant.access_level for id,grant in existing.items() if id in ids}|{id:body.levels.get(id,'viewer') for id in ids-existing.keys()}
+        return {'ok':True,'user_id':user_id,'dataset_ids':sorted(ids),'levels':levels}
 
     @router.get('/api/access-map')
-    def access_map(owner=Depends(administrator)):
-        """Every person's dataset access as the database records it and, when OpenFGA is on,
-        as OpenFGA answers it, so the Access map can show both and flag any difference."""
-        from . import authz
+    def access_map(owner=Depends(reader)):
+        """Every person's dataset access as the database records it (their own grants, and
+        through teams) and, when OpenFGA is on, as OpenFGA answers it, so the Access map can
+        show both and flag any difference. Auditors see it read-only (can_edit false)."""
+        from . import authz, teams
+        from .dataset_access import _saved_levels
         with core.Session() as session:
             people=list(session.scalars(select(core.User).order_by(core.User.username)))
             datasets=[{'id':row.dataset_id,'name':row.dataset_name,'status':row.status} for row in session.scalars(select(relational.Dataset).order_by(relational.Dataset.dataset_name))]
-            granted={}
+            auditors=set(session.scalars(select(relational.WorkspaceRole.user_id).where(relational.WorkspaceRole.role=='auditor')))
+            direct={}
             for grant in session.scalars(select(relational.UserDataset).where(relational.UserDataset.enabled==True)):
-                granted.setdefault(grant.user_id,set()).add(grant.dataset_id)
+                direct.setdefault(grant.user_id,{})[grant.dataset_id]=grant.access_level or 'viewer'
+            effective={user.id:_saved_levels(user.id,session) for user in people}
+            team_list=teams.team_rows(session)
+            can_edit=core.is_administrator(owner,session)
+        member_of={}
+        for team in team_list:
+            for user_id in team['member_ids']:member_of.setdefault(user_id,[]).append(team['id'])
         openfga={'enabled':authz.enabled(),'reachable':None,'differences':0}
         users=[]
         for user in people:
-            row=public_user(user)|{'dataset_ids':sorted(granted.get(user.id,()))}
+            levels=direct.get(user.id,{})
+            row=public_user(user,user.id in auditors)|{'dataset_ids':sorted(levels),'levels':levels,
+                'effective':effective.get(user.id,{}),'team_ids':sorted(member_of.get(user.id,[]))}
             if openfga['enabled'] and openfga['reachable'] is not False:
                 try:
-                    answer={'administrator':authz.is_administrator(user.id),'dataset_ids':sorted(authz.viewable_datasets(user.id))}
+                    answered={}
+                    for level in ('viewer','editor','owner'):answered.update({id:level for id in authz.datasets_at(user.id,level)})
+                    answer={'administrator':authz.is_administrator(user.id),'auditor':authz.is_auditor(user.id),'levels':answered,'dataset_ids':sorted(answered)}
                     openfga['reachable']=True
-                    row['openfga']=answer|{'in_step':answer['administrator']==row['is_admin'] and answer['dataset_ids']==row['dataset_ids']}
+                    row['openfga']=answer|{'in_step':answer['administrator']==row['is_admin'] and answer['auditor']==(user.id in auditors)
+                                          and answered==row['effective']}
                     openfga['differences']+=not row['openfga']['in_step']
                 except authz.AuthorizationUnavailable:
                     openfga['reachable']=False
             users.append(row)
-        return {'users':users,'datasets':datasets,'openfga':openfga}
+        return {'users':users,'datasets':datasets,'teams':team_list,'openfga':openfga,'can_edit':can_edit}
 
     app.include_router(router)

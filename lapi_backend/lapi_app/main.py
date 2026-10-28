@@ -93,12 +93,15 @@ async def auth(request:Request):
     if paused() and not request.url.path.startswith('/api/workspace/'):
         raise HTTPException(503,'Workspace archive operation is running. Try again when it finishes.')
     access.request_actor.set(owner);relational.actor_override.set(owner)
-    if request.method not in ('GET','HEAD','OPTIONS') and any(request.url.path==prefix or request.url.path.startswith(prefix+'/') for prefix in ('/api/datasets','/api/knowledge-bases','/api/models','/api/model-registrations','/api/settings')):
-        access.require_admin(owner)
+    # Every route's policy (route_policy.py): administrator and auditor routes are enforced
+    # here; dataset levels are enforced by the routes, which know the dataset.
+    from . import route_policy
+    route=request.scope.get('route')
+    await run_in_threadpool(route_policy.check,'GET' if request.method=='HEAD' else request.method,getattr(route,'path',request.url.path),owner)
     return owner
 
-def get_record(id,owner,kind=None):
-    return access.get_record(id,owner,kind)
+def get_record(id,owner,kind=None,level='viewer'):
+    return access.get_record(id,owner,kind,level)
 
 def records(owner,kind):
     return access.rows(owner,kind)
@@ -169,6 +172,8 @@ def logout(request:Request,response:Response,owner=Depends(auth)):
 app.include_router(keycloak_auth.router)
 from .user_management import install as install_user_management
 install_user_management(app, auth)
+from . import teams
+teams.install(app, auth)
 from .storage_config import install as install_storage_config
 install_storage_config(app,auth)
 from .database_control import install as install_database_control
@@ -221,7 +226,7 @@ async def upload(files:list[UploadFile]=File(...),kb_id:str=Form(''),dataset_id:
     upload_snapshot=None
     if dataset_id or kb_id:
         if dataset_id and kb_id and dataset_id!=kb_id:raise HTTPException(400,'Conflicting dataset identifiers')
-        upload_snapshot=routing.execution_snapshot(get_record(dataset_id or kb_id,owner,'knowledge_base'),'embedding')
+        upload_snapshot=routing.execution_snapshot(get_record(dataset_id or kb_id,owner,'knowledge_base',level='editor'),'embedding')
         external_check(allow_external,True,upload_snapshot['settings'])
     if template_id:
         template=get_record(template_id,owner,'template')
@@ -380,7 +385,7 @@ class Consent(BaseModel):allow_external:bool=False
 @app.post('/api/documents/{id}/reindex')
 @lifecycle_guard()
 def reindex(id:str,body:Consent,owner=Depends(auth)):
-    doc=get_record(id,owner,'document');dataset,_=routing.documents_scope(owner,doc.parent_id,[id]);snapshot=routing.execution_snapshot(dataset,'embedding');external_check(body.allow_external,True,snapshot['settings'])
+    doc=get_record(id,owner,'document',level='editor');dataset,_=routing.documents_scope(owner,doc.parent_id,[id]);snapshot=routing.execution_snapshot(dataset,'embedding');external_check(body.allow_external,True,snapshot['settings'])
     from . import knowledge
     knowledge.require_writable(snapshot)
     with document_lock('submit-'+id):
@@ -393,7 +398,7 @@ class ReextractDocument(Consent):confirm_reviewed:bool=False
 @app.post('/api/documents/{id}/reextract')
 @lifecycle_guard()
 def reextract_document(id:str,body:ReextractDocument,owner=Depends(auth)):
-    doc=get_record(id,owner,'document')
+    doc=get_record(id,owner,'document',level='editor')
     reviewed=[r for r in records(owner,'extraction') if id in store.json(r.ref).get('document_ids',[]) and store.json(r.ref).get('review_status')=='reviewed']
     if reviewed and not body.confirm_reviewed:raise HTTPException(409,'Reviewed extraction results exist. Confirm re-extraction; saved structured reviews are retained and can be rerun separately.')
     with document_lock('submit-'+id):
@@ -412,7 +417,7 @@ def reextract_document(id:str,body:ReextractDocument,owner=Depends(auth)):
         return result|{'original_retained':True,'document_version':revision,'reviewed_results_retained':True}
 @app.delete('/api/documents/{id}')
 def delete_document(id:str,owner=Depends(auth)):
-    r=get_record(id,owner,'document')
+    r=get_record(id,owner,'document',level='editor')
     with Session.begin() as s:
         for j in s.scalars(select(Job).where(Job.target_id==id,Job.status.in_(['queued','running']))):j.status='cancelled';j.lease_token=''
         s.get(Record,id).status='deleting'
@@ -567,7 +572,7 @@ def validate_template(body:TemplateInput,owner=Depends(auth)):
     return {'valid':True,'name':body.source_filename or body.name,'schema':body.schema_,'dataset_id':body.dataset_id}|({'existing_template_id':existing.id if existing else None} if body.source_filename else {})
 @app.post('/api/templates')
 def create_template(body:TemplateInput,owner=Depends(auth)):
-    if body.dataset_id:get_record(body.dataset_id,owner,'knowledge_base')
+    if body.dataset_id:get_record(body.dataset_id,owner,'knowledge_base',level='editor')
     check_schema(body.schema_)
     def save():
         existing=uploaded_template(body,owner)
@@ -581,7 +586,7 @@ def create_template(body:TemplateInput,owner=Depends(auth)):
 @app.put('/api/templates/{id}')
 def update_template(id:str,body:TemplateInput,owner=Depends(auth)):
     check_schema(body.schema_)
-    get_record(id,owner,'template')
+    get_record(id,owner,'template',level='editor')
     with document_lock('template-'+id):
         r=get_record(id,owner,'template');version=r.version+1;ref=f'template/{id}/v{version}.json'
         if body.dataset_id and body.dataset_id!=r.parent_id:raise HTTPException(400,'Template dataset association cannot be changed. Import a new template for the destination dataset.')
@@ -680,6 +685,7 @@ def create_extraction(body:ExtractInput,owner=Depends(auth)):
 
 def _create_extraction(body,owner):
     t=get_record(body.template_id,owner,'template');dataset,docs=routing.documents_scope(owner,body.dataset_id,body.document_ids)
+    access.require_level(owner,dataset.id,'editor')
     if t.parent_id and t.parent_id!=dataset.id:raise HTTPException(400,'Choose a prompt template belonging to the selected dataset.')
     snapshot=routing.execution_snapshot(dataset,'extraction',body.model_id)
     pending=[d for d in docs if d.status!='ready']
@@ -737,7 +743,7 @@ class ReviewInput(BaseModel):
 @app.patch('/api/extractions/{id}')
 def review_extraction(id:str,body:ReviewInput,owner=Depends(auth)):
     with document_lock(id):
-        r=get_record(id,owner,'extraction');data=store.json(r.ref)
+        r=get_record(id,owner,'extraction',level='editor');data=store.json(r.ref)
         from . import parquet_results
         try:data=parquet_results.load(data)
         except (ValueError,OSError):raise HTTPException(503,'Saved Parquet could not be read. Your edits are retained; retry loading.')
@@ -771,7 +777,7 @@ class ResumeExtraction(Consent):
 @app.post('/api/extractions/{id}/resume')
 def resume_extraction(id:str,body:ResumeExtraction,owner=Depends(auth)):
     with document_lock('submit-'+id),document_lock(id):
-        r=get_record(id,owner,'extraction')
+        r=get_record(id,owner,'extraction',level='editor')
         if r.status!='failed' or r.version!=body.version:raise HTTPException(409,'Reload the failed extraction before correcting its prompt')
         with Session() as session:
             if session.scalar(select(Job).where(Job.target_id==id,Job.status.in_(['queued','running','blocked']))):raise HTTPException(409,'This extraction already has an active job')
@@ -802,7 +808,7 @@ def resume_extraction(id:str,body:ResumeExtraction,owner=Depends(auth)):
 
 @app.post('/api/extractions/{id}/reextract')
 def reextract_result(id:str,body:ReextractInput,owner=Depends(auth)):
-    if get_record(id,owner,'extraction').status!='ready':raise HTTPException(409,'Wait for extraction to complete.')
+    if get_record(id,owner,'extraction',level='editor').status!='ready':raise HTTPException(409,'Wait for extraction to complete.')
     with document_lock('submit-'+id),document_lock(id):
         r=get_record(id,owner,'extraction');data=store.json(r.ref)
         if r.status!='ready' or r.version!=body.version:raise HTTPException(409,'Reload the completed extraction before re-extracting.')
@@ -872,6 +878,7 @@ def retry_job(id:str,owner=Depends(auth)):
     with Session() as s:initial=s.get(Job,id)
     with Session() as s:
         if not access.job_allowed(initial,owner,s):raise HTTPException(404,'Not found')
+    access.require_job_change(initial,owner)
     with document_lock('submit-'+initial.target_id),document_lock(initial.target_id),Session.begin() as s:
         j=s.get(Job,id)
         if not access.job_allowed(j,owner,s):raise HTTPException(404,'Not found')
@@ -908,6 +915,9 @@ def retry_job(id:str,owner=Depends(auth)):
     return job_repr(j)
 @app.post('/api/jobs/{id}/cancel')
 def cancel_job(id:str,owner=Depends(auth)):
+    with Session() as s:
+        if not access.job_allowed(s.get(Job,id),owner,s):raise HTTPException(404,'Not found')
+        access.require_job_change(s.get(Job,id),owner)
     with Session.begin() as s:
         j=s.get(Job,id)
         if not access.job_allowed(j,owner,s):raise HTTPException(404,'Not found')

@@ -10,9 +10,10 @@ from test_agent_workspace import plan, proposal, planner
 from test_agent_graph import sequence, tool
 
 
-def assign(client,datasets,user='colleague'):
+def assign(client,datasets,user='colleague',level='editor'):
+    # These tests share upload, extraction and review work, which needs Editor.
     login(client)
-    result=client.put('/api/users/'+user+'/datasets',json={'dataset_ids':[d['id'] for d in datasets]})
+    result=client.put('/api/users/'+user+'/datasets',json={'dataset_ids':[d['id'] for d in datasets],'levels':{d['id']:level for d in datasets}})
     assert result.status_code==200,result.text
     return result.json()
 

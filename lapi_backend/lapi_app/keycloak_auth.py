@@ -61,7 +61,8 @@ def _settings():
     return {'issuer': os.environ['LAPI_KEYCLOAK_URL'].strip().rstrip('/') + '/realms/' + os.environ['LAPI_KEYCLOAK_REALM'].strip(),
             'client_id': os.environ['LAPI_KEYCLOAK_CLIENT_ID'].strip(),
             'redirect_uri': os.environ['LAPI_PUBLIC_URL'].strip().rstrip('/') + FLOW_PATH + '/callback',
-            'admin_role': os.getenv('LAPI_KEYCLOAK_ADMIN_ROLE', 'lapi-administrator').strip()}
+            'admin_role': os.getenv('LAPI_KEYCLOAK_ADMIN_ROLE', 'lapi-administrator').strip(),
+            'auditor_role': os.getenv('LAPI_KEYCLOAK_AUDITOR_ROLE', 'lapi-auditor').strip()}
 
 
 def _secure():
@@ -170,6 +171,8 @@ def _exchange(code, flow):
     if not secrets.compare_digest(str(claims.get('nonce', '')), flow['nonce']):
         raise SignInFailed('failed', 'The ID token nonce does not match this sign-in.')
     roles = _roles(claims, settings['client_id'])
+    # Group paths from Keycloak's "Group Membership" mapper (claim "groups") become teams.
+    groups = set(claims.get('groups') or []) if isinstance(claims.get('groups'), list) else set()
     access = tokens.get('access_token') or ''
     if access.count('.') == 2:
         # Keycloak puts roles in the access token unless "Add to ID token" is on.
@@ -177,9 +180,12 @@ def _exchange(code, flow):
             granted = _verified(access, document)
             if granted.get('sub') == claims['sub'] and granted.get('azp') == settings['client_id']:
                 roles |= _roles(granted, settings['client_id'])
+                if isinstance(granted.get('groups'), list):
+                    groups |= set(granted['groups'])
         except jwt.PyJWTError:
             log.warning('Keycloak access token could not be verified; using roles from the ID token only.')
     return {'subject': claims['sub'], 'administrator': settings['admin_role'] in roles,
+            'auditor': settings['auditor_role'] in roles, 'groups': sorted(g for g in groups if isinstance(g, str)),
             'username': (claims.get('preferred_username') or claims.get('email') or claims['sub']).strip()[:120]}
 
 
@@ -198,11 +204,20 @@ def provision(identity):
             user = session.get(core.User, user_id)
             if user is None:
                 session.add(core.User(id=user_id, username=identity['username'], password_hash=UNUSABLE_PASSWORD, role=role))
+                session.flush()
             else:
                 user.username = identity['username']
                 if user.role != role:
                     user.role = role
                     session.execute(delete(core.Login).where(core.Login.owner == user_id))
+            # The Auditor role and team memberships follow Keycloak at every sign-in.
+            from . import relational, teams
+            auditor = session.get(relational.WorkspaceRole, user_id)
+            if identity.get('auditor') and role != 'administrator' and auditor is None:
+                session.add(relational.WorkspaceRole(user_id=user_id, role='auditor'))
+            elif auditor is not None and (not identity.get('auditor') or role == 'administrator'):
+                session.delete(auditor)
+            teams.sync_keycloak_teams(session, user_id, identity.get('groups') or [])
     return user_id
 
 

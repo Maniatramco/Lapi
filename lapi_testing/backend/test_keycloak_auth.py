@@ -145,7 +145,7 @@ def test_keycloak_accounts_manage_passwords_and_roles_in_keycloak(accounts, keyc
         assert person.post('/api/auth/password', json=body(current_password='x')).status_code == 409
     login(client)
     assert client.post('/api/users/' + kc_id + '/password', json=body(current_password=OLD)).status_code == 409
-    assert 'Keycloak role lapi-administrator' in client.patch('/api/users/' + kc_id + '/role', json={'role': 'administrator', 'current_password': OLD}).json()['detail']
+    assert 'Keycloak roles lapi-administrator' in client.patch('/api/users/' + kc_id + '/role', json={'role': 'administrator', 'current_password': OLD}).json()['detail']
     users = {row['id']: row for row in client.get('/api/users').json()}
     assert users[kc_id]['sign_in'] == 'keycloak' and users['colleague']['sign_in'] == 'password'
 

@@ -427,7 +427,10 @@ def install_routes(app,auth,write_profile):
             with core.Session.begin() as s:s.get(core.Record,id).name=body.name
             r.name=body.name;return model_public(r)
     @app.get('/api/datasets')
-    def datasets(owner=Depends(auth)):return [dataset_public(r) for r in rows(owner,'knowledge_base')]
+    def datasets(owner=Depends(auth)):
+        # my_access tells the screens which actions to offer; the API enforces them regardless.
+        with core.Session() as session:levels=access.dataset_levels(owner,session)
+        return [dataset_public(r)|{'my_access':levels.get(r.id,'viewer')} for r in rows(owner,'knowledge_base')]
     @app.post('/api/datasets')
     def add_dataset(body:DatasetInput,owner=Depends(auth)):
         return dataset_public(create('knowledge_base',owner,body.name,body.model_dump()|copy.deepcopy(ROUTING_DEFAULTS)|{'routing_version':1}))
@@ -436,7 +439,7 @@ def install_routes(app,auth,write_profile):
     @app.patch('/api/datasets/{id}')
     def update_dataset(id:str,body:DatasetDetailsInput,owner=Depends(auth)):
         """Rename or describe a dataset; models, documents, prompts and access are unchanged."""
-        access.require_admin(owner)
+        access.require_level(owner,id,'owner')
         name=body.name.strip()
         if not name:raise HTTPException(422,'Enter a dataset name.')
         with core.document_lock('dataset-'+id):
