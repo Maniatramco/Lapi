@@ -233,3 +233,11 @@
   .wt-dialog{width:100%;min-width:0;max-height:100dvh;border-radius:0}
   .wt-dialog>.wt-player{border-radius:0;min-height:100%}
 }
+
+/* Voice-over controls (walkthrough.tsx useNarration). */
+.wt-top-actions{display:flex;align-items:center;gap:8px}
+.wt-voice{min-height:32px;padding:0 10px;font-size:13px;gap:6px}
+.wt-voice-on{background:#fb923c;border-color:#fb923c;color:#14213d;font-weight:800;animation:wt-voice-pulse 1.6s ease-in-out infinite}
+@keyframes wt-voice-pulse{0%,100%{box-shadow:0 0 0 0 rgba(251,146,60,.55)}50%{box-shadow:0 0 0 6px rgba(251,146,60,0)}}
+@media(prefers-reduced-motion:reduce){.wt-voice-on{animation:none}}
+@media(max-width:480px){.wt-voice span{display:none}.wt-voice-on span{display:inline}}

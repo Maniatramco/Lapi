@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Activity, CheckCircle2, ChevronLeft, ChevronRight, Cloud, Database, FileText, FolderOpen, KeyRound, Pause, Play, RotateCcw, ScanText, ShieldCheck, Sparkles, Users, X } from "lucide-react";
-import { SCENES, TOUR_VERSION, clampScene, formatClock, nextScene, previousScene, sceneAt, sceneStart, segmentFill, shouldShowTour, totalSeconds, type SceneId } from "./walkthrough-data";
+import { Activity, CheckCircle2, ChevronLeft, ChevronRight, Cloud, Database, FileText, FolderOpen, KeyRound, Pause, Play, RotateCcw, ScanText, ShieldCheck, Sparkles, Users, Volume2, VolumeX, X } from "lucide-react";
+import { SCENES, TOUR_VERSION, clampScene, formatClock, nextScene, pickVoice, previousScene, sceneAt, sceneStart, segmentFill, shouldShowTour, totalSeconds, type SceneId } from "./walkthrough-data";
 import "./walkthrough.css";
 
 type Api = (path: string, method?: string, body?: unknown, signal?: AbortSignal, quiet?: boolean) => Promise<any>;
@@ -77,7 +77,7 @@ function Unify() {
       </li>)}</ul>
     </div>
     <div className="wt-panel wt-models wt-in-right" {...at(4.5)}>
-      <span className="wt-panel-head"><Sparkles size={15} aria-hidden="true" />Models for this dataset</span>
+      <span className="wt-panel-head"><Sparkles size={15} aria-hidden="true" />Workspace models</span>
       <ul>{MODELS.map(([name, role], i) => <li key={name} className="wt-in-up" {...at(5.4 + i * 0.9)}><strong>{name}</strong><span>{role}</span><CheckCircle2 size={14} aria-hidden="true" className="wt-tick" style={{ ["--d" as string]: `${5.9 + i * 0.9}s` }} /></li>)}</ul>
     </div>
   </div>;
@@ -150,6 +150,47 @@ function useReducedMotion() {
   return reduced;
 }
 
+/** Voice-over with the browser's own speech synthesis: no service, no keys. Each scene's caption is
+ * its line. Browsers only speak after a tap, so an automatic start may come back `blocked`. */
+const VOICE_KEY = "lapi:tour-voice";
+function useNarration() {
+  const supported = typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+  const [enabled, setEnabled] = useState(() => { try { return localStorage.getItem(VOICE_KEY) !== "0"; } catch { return true; } });
+  const [blocked, setBlocked] = useState(false);
+  // True from speak() until the line ends: the timeline waits for it before the next scene.
+  const speaking = useRef(false);
+  const startedAt = useRef(0);
+  const voice = useRef<SpeechSynthesisVoice | undefined>(undefined);
+  useEffect(() => {
+    if (!supported) return;
+    const load = () => { voice.current = pickVoice(window.speechSynthesis.getVoices()); };
+    load();
+    window.speechSynthesis.addEventListener?.("voiceschanged", load);
+    return () => { window.speechSynthesis.removeEventListener?.("voiceschanged", load); window.speechSynthesis.cancel(); };
+  }, [supported]);
+  const stop = useCallback(() => { speaking.current = false; if (supported) window.speechSynthesis.cancel(); }, [supported]);
+  const speak = useCallback((text: string) => {
+    if (!supported) return;
+    window.speechSynthesis.cancel();
+    const line = new SpeechSynthesisUtterance(text);
+    if (voice.current) { line.voice = voice.current; line.lang = voice.current.lang; } else line.lang = "en-US";
+    line.rate = 1; line.pitch = 1;
+    line.onstart = () => setBlocked(false);
+    line.onend = () => { speaking.current = false; };
+    line.onerror = event => { speaking.current = false; if (event.error === "not-allowed") setBlocked(true); };
+    speaking.current = true; startedAt.current = performance.now();
+    window.speechSynthesis.speak(line);
+  }, [supported]);
+  const toggle = useCallback(() => setEnabled(value => {
+    try { localStorage.setItem(VOICE_KEY, value ? "0" : "1"); } catch { /* per-device preference only */ }
+    if (value) stop();
+    return !value;
+  }), [stop]);
+  /** Still speaking (with a safety limit, in case a browser never reports the end). */
+  const busy = useCallback((limitSeconds: number) => speaking.current && performance.now() - startedAt.current < limitSeconds * 1000, []);
+  return { supported, enabled, blocked, setBlocked, speak, stop, toggle, busy };
+}
+
 const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 export type WalkthroughProps = {
@@ -164,6 +205,7 @@ export type WalkthroughProps = {
 /** The animated 1-minute Lapi tour: six auto-advancing scenes with captions and player controls. */
 export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mode === "modal" }: WalkthroughProps) {
   const reduced = useReducedMotion();
+  const voice = useNarration();
   const [elapsed, setElapsed] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [run, setRun] = useState(0);
@@ -183,10 +225,22 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
     const timer = window.setInterval(() => {
       const now = performance.now(), step = (now - last) / 1000;
       last = now;
-      setElapsed(value => Math.min(TOTAL, value + step));
+      setElapsed(value => {
+        const at = sceneAt(value).index;
+        // Wait at the end of a scene while its line is still being spoken.
+        const limit = voice.busy(SCENES[at].seconds + 8) ? (at === SCENES.length - 1 ? TOTAL : sceneStart(at + 1)) - 0.05 : TOTAL;
+        return Math.min(limit, value + step);
+      });
     }, 100);
     return () => window.clearInterval(timer);
-  }, [playing]);
+  }, [playing, voice.busy]);
+  // Narrate each scene as it starts; pausing stops the voice.
+  const narrating = playing && voice.enabled && voice.supported && !reduced;
+  useEffect(() => {
+    if (!narrating) { voice.stop(); return; }
+    voice.speak(SCENES[index].caption);
+  }, [narrating, index, run]);
+  useEffect(() => () => voice.stop(), []);
   useEffect(() => { if (ended) setPlaying(false); }, [ended]);
 
   const goTo = useCallback((target: number) => {
@@ -196,8 +250,18 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
   const replay = useCallback(() => { setElapsed(0); setRun(value => value + 1); if (!reduced) setPlaying(true); }, [reduced]);
   const toggle = useCallback(() => {
     if (reduced) return;
-    if (ended) replay(); else setPlaying(value => !value);
-  }, [ended, reduced, replay]);
+    if (ended) { replay(); return; }
+    // Resuming with the voice on repeats this scene's line from its start, so words and pictures match.
+    if (!playing && voice.enabled && voice.supported) { setElapsed(sceneStart(index)); setRun(value => value + 1); }
+    setPlaying(value => !value);
+  }, [ended, reduced, replay, playing, voice.enabled, voice.supported, index]);
+  // The tap browsers need before they speak: restart this scene with the voice on.
+  const enableVoice = useCallback(() => {
+    if (!voice.enabled) voice.toggle();
+    voice.setBlocked(false);
+    setElapsed(sceneStart(index)); setRun(value => value + 1); setPlaying(true);
+    voice.speak(SCENES[index].caption);
+  }, [voice, index]);
 
   // Modal: remember the opener, start on the play control, lock page scroll, and give focus back on close.
   useEffect(() => {
@@ -242,7 +306,13 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
   const player = <div className="wt-player" data-mode={mode} data-playing={playing || undefined} data-still={still || undefined} data-reduced={reduced || undefined}>
     <header className="wt-top">
       <h2 id={titleId} className="wt-title"><LapiMark size={22} />Lapi in one minute</h2>
-      {mode === "modal" && <button type="button" className="wt-button wt-skip" onClick={onClose}><X size={15} aria-hidden="true" />{ended ? "Close" : "Skip tour"}</button>}
+      <span className="wt-top-actions">
+        {voice.supported && !reduced && (voice.blocked && voice.enabled
+          ? <button type="button" className="wt-button wt-voice wt-voice-on" onClick={enableVoice}><Volume2 size={15} aria-hidden="true" />Turn on voice</button>
+          : <button type="button" className="wt-button wt-voice" onClick={voice.toggle} aria-pressed={voice.enabled} aria-label={voice.enabled ? "Turn voice-over off" : "Turn voice-over on"} title={voice.enabled ? "Voice on" : "Voice off"}>
+              {voice.enabled ? <Volume2 size={15} aria-hidden="true" /> : <VolumeX size={15} aria-hidden="true" />}<span>{voice.enabled ? "Voice on" : "Voice off"}</span></button>)}
+        {mode === "modal" && <button type="button" className="wt-button wt-skip" onClick={onClose}><X size={15} aria-hidden="true" />{ended ? "Close" : "Skip tour"}</button>}
+      </span>
     </header>
     <div className="wt-stage" data-scene={scene.id}>
       <span className="wt-stage-label" aria-hidden="true">{index + 1} / {SCENES.length} · {scene.title}</span>

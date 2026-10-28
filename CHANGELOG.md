@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.24 - 29 October 2026
+
+Voice-over for the product tour
+
+- `walkthrough.tsx` `useNarration`: the browser's speech synthesis speaks each scene's caption when the scene starts (no external service or keys). The timeline holds at the end of a scene until its line has ended (safety limit: scene length + 8 s). Pause cancels speech; resuming with the voice on restarts the scene so words and pictures match.
+- Voice on / off control (`localStorage` `lapi:tour-voice`). A speech `not-allowed` error (no user gesture yet, e.g. the automatic first-login tour) shows "Turn on voice", which restarts the scene with narration.
+- `walkthrough-data.ts`: captions rewritten as voice-over lines (`wordsPerSecond` keeps each within its scene; tested at 2.7 words/s or less), `pickVoice` prefers natural English voices. `TOUR_VERSION` 2 (frontend and `walkthrough.py`), so everyone sees the narrated tour once.
+
 ## v26.1.16.23 - 29 October 2026
 
 Merge files, extraction workflow and Review from Quick start

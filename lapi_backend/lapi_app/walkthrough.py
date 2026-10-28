@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from . import core
 
-TOUR_VERSION = 1
+TOUR_VERSION = 2
 _SAFE_ID = re.compile(r'[A-Za-z0-9_-]{1,128}')
 
 

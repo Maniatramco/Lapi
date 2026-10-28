@@ -2,7 +2,7 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const filename=path.resolve(__dirname,'../../lapi_frontend/app/walkthrough-data.ts'),compiled=new Module(filename,module);compiled.paths=module.paths;
 compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
-const {SCENES,TOUR_VERSION,totalSeconds,clampScene,nextScene,previousScene,sceneStart,sceneAt,segmentFill,formatClock,shouldShowTour}=compiled.exports;
+const {SCENES,TOUR_VERSION,totalSeconds,clampScene,nextScene,previousScene,sceneStart,sceneAt,segmentFill,formatClock,shouldShowTour,wordsPerSecond,pickVoice}=compiled.exports;
 
 test('six scenes tell Connect, Unify, Ask in about one minute, each with a caption',()=>{
  assert.deepEqual(SCENES.map(s=>s.id),['welcome','connect','unify','ask','extract','secure']);
@@ -46,4 +46,17 @@ test('the player renders all controls, a live caption and the first scene as rea
  assert.equal((inline.match(/class="wt-segment"/g)||[]).length,6);assert.ok(!inline.includes('Skip tour'));
  const modal=renderToStaticMarkup(React.createElement(mod.exports.Walkthrough,{mode:'modal',onClose(){}}));
  assert.match(modal,/role="dialog"/);assert.match(modal,/aria-modal="true"/);assert.ok(modal.includes('Skip tour'));
+});
+
+test('every voice-over line can be spoken at a normal pace within its scene',()=>{
+ for(const scene of SCENES)assert.ok(wordsPerSecond(scene)<=2.7,scene.id+' needs '+wordsPerSecond(scene).toFixed(2)+' words per second');
+ assert.match(SCENES[2].caption,/administrator/);assert.match(SCENES[5].caption,/Quick start/);
+});
+
+test('the most natural English voice is chosen, never a non-English one',()=>{
+ const voices=[{name:'Microsoft David',lang:'en-US',localService:true},{name:'Google Deutsch',lang:'de-DE',localService:false},
+  {name:'Microsoft Aria Online (Natural)',lang:'en-US',localService:false},{name:'Google UK English Female',lang:'en-GB',localService:false}];
+ assert.equal(pickVoice(voices).name,'Microsoft Aria Online (Natural)');
+ assert.equal(pickVoice(voices.filter(v=>!/Aria/.test(v.name))).name,'Google UK English Female');
+ assert.equal(pickVoice([{name:'Google Deutsch',lang:'de-DE'}]),undefined);
 });

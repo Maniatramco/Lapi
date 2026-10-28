@@ -4,22 +4,38 @@ export type SceneId = "welcome" | "connect" | "unify" | "ask" | "extract" | "sec
 export type Scene = { id: SceneId; title: string; caption: string; seconds: number };
 
 /** Raise when the tour changes enough to show it again; must match the API's TOUR_VERSION. */
-export const TOUR_VERSION = 1;
+export const TOUR_VERSION = 2;
 
+/** Each caption is also the scene's voice-over line, so subtitles always match the narration.
+ * Keep lines short enough to speak within the scene (see `wordsPerSecond`). */
 export const SCENES: readonly Scene[] = [
   { id: "welcome", title: "Welcome", seconds: 7,
-    caption: "Connect. Unify. Ask. Lapi brings your documents, databases and apps into one knowledge base." },
+    caption: "Welcome to Lapi. Connect your knowledge, unify it in one place, and ask it anything." },
   { id: "connect", title: "Connect", seconds: 10,
-    caption: "Use Add knowledge to upload files or connect cloud storage, Google Drive and SharePoint, with a step-by-step guide for every connector." },
+    caption: "Use Add knowledge to upload files or photos, or connect cloud storage, Google Drive and SharePoint. A guide helps with each one." },
   { id: "unify", title: "Unify", seconds: 12,
-    caption: "Documents land in datasets and are indexed, with OCR for scans and images. Each dataset picks its own Chat, Extraction, Embedding and OCR models." },
+    caption: "Documents go into datasets. Lapi reads them, even scans and photos, and indexes them with the models your administrator chose." },
   { id: "ask", title: "Ask", seconds: 12,
-    caption: "Ask the Lapi Agent in plain language. Every answer shows its sources, so you can check them." },
+    caption: "Ask in plain language. Lapi answers from your documents and shows the sources, so you can check every answer." },
   { id: "extract", title: "Extract & review", seconds: 10,
-    caption: "Prompt templates pull fields out of documents. Review them side by side with the source before the results are trusted." },
+    caption: "Need data out? Lapi suggests the fields, pulls out the values, and you review each one next to its source." },
   { id: "secure", title: "Secure by design", seconds: 9,
-    caption: "Single sign-on, access per dataset and an activity audit keep knowledge safe. You're ready: start on your Dashboard." },
+    caption: "Single sign-on, access per dataset and an activity log keep it safe. You're ready: start with Quick start on your Dashboard." },
 ];
+
+/** Spoken words per second a scene's line needs; narration at a normal pace is about 2.5 to 3. */
+export function wordsPerSecond(scene: Scene): number {
+  return scene.caption.split(/\s+/).filter(Boolean).length / scene.seconds;
+}
+
+type VoiceLike = { name: string; lang: string; localService?: boolean };
+/** The most natural English voice the device offers (names differ per browser and phone). */
+export function pickVoice<T extends VoiceLike>(voices: readonly T[]): T | undefined {
+  const score = (voice: T) => (/natural|neural/i.test(voice.name) ? 8 : 0) + (/google/i.test(voice.name) ? 4 : 0)
+    + (/samantha|aria|jenny|guy|libby|sonia|daniel|karen/i.test(voice.name) ? 3 : 0)
+    + (/^en[-_](us|gb|in|au)/i.test(voice.lang) ? 2 : 0) + (voice.localService === false ? 1 : 0);
+  return voices.filter(voice => /^en/i.test(voice.lang)).sort((a, b) => score(b) - score(a))[0];
+}
 
 export function totalSeconds(scenes: readonly Scene[] = SCENES): number {
   return scenes.reduce((sum, scene) => sum + scene.seconds, 0);
