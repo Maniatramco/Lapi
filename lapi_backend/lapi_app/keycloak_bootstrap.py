@@ -93,7 +93,12 @@ def _write(path, value):
 
 def write_files(root, values):
     root.mkdir(parents=True, exist_ok=True)
-    os.chmod(root, 0o700)
+    # The container platform may create this shared folder itself (owned by root): then only
+    # its owner may change its mode. The secret files below are owner-only either way.
+    try:
+        os.chmod(root, 0o700)
+    except PermissionError:
+        log.info('Keeping the platform-created mode of %s; the secret files are owner-only.', root)
     for name, value in values.items():
         _write(root / name, value)
     (root / READY).write_text('ready', encoding='utf-8')

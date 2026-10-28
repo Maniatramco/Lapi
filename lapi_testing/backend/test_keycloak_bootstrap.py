@@ -120,3 +120,17 @@ def test_unwritable_folder_is_logged_not_raised(monkeypatch, tmp_path, caplog):
     blocker.write_text('x')
     assert not kb.prepare(blocker / 'secrets', engine=Engine(), read_secret=SECRETS.__getitem__)
     assert 'Could not hand Keycloak its secrets' in caplog.text
+
+
+def test_a_platform_created_folder_that_cannot_be_chmodded_still_gets_the_secrets(tmp_path, monkeypatch):
+    from lapi_app import keycloak_bootstrap
+    real_chmod = keycloak_bootstrap.os.chmod
+    def chmod(path, mode):
+        if str(path) == str(tmp_path / 'secrets'):
+            raise PermissionError(1, 'Operation not permitted')
+        return real_chmod(path, mode)
+    monkeypatch.setattr(keycloak_bootstrap.os, 'chmod', chmod)
+    root = tmp_path / 'secrets'
+    root.mkdir()
+    keycloak_bootstrap.write_files(root, {'db-password': 'x', 'admin-password': 'y', 'client-secret': 'z'})
+    assert (root / keycloak_bootstrap.READY).exists() and (root / 'db-password').read_text() == 'x'

@@ -2,6 +2,12 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.19 - 28 October 2026
+
+Hosted Keycloak starts
+
+- Fix (`keycloak_bootstrap.py`): the platform creates the scratch sub-path `keycloak-secrets` as root, so the api may not change its mode; that `PermissionError` stopped the secrets from being written and Keycloak waited. The folder mode is now best-effort; the secret files stay owner-only.
+
 ## v26.1.16.18 - 28 October 2026
 
 Safer sign-in, set-up questions, phones and shortcuts

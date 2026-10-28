@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.18",
+  "version": "26.1.16.19",
   "releases": [
+    {
+      "version": "26.1.16.19",
+      "date": "2026-10-28",
+      "title": "Hosted Keycloak starts",
+      "changes": [
+        "Fix: hosted Keycloak now receives its start-up secrets when the container platform created their shared folder itself."
+      ]
+    },
     {
       "version": "26.1.16.18",
       "date": "2026-10-28",
