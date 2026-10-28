@@ -71,7 +71,8 @@ break-glass administrator form stays below.
   user with the same email already exists (for example one you created by hand), Keycloak asks to
   link the two accounts once.
 - **Contributors**: the realm role `lapi-contributor` makes someone Owner on every dataset and lets
-  them create, delete and restore datasets, without managing the workspace (users, teams, Access
+  them create (with the workspace Default models), delete and restore datasets, and pick a chat
+  model, without mapping models or managing the workspace (users, teams, Access
   map, storage, settings, models, token usage stay with `lapi-administrator`). To give it to
   everyone, add it to the realm's default roles (Realm settings → User registration → Default
   roles → Assign role); remove it there to go back to per-dataset access. Lapi applies a change

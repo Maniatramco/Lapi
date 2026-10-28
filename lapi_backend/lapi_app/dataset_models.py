@@ -136,7 +136,11 @@ def routing_public(r,model_lookup=None,data=None):
     if out['ocr_model_id'] not in (None,'local'):
         complete=complete and (any(m['id']==out['ocr_model_id'] and m.get('ocr_eligible') and m.get('enabled',True) and m.get('mapping_enabled',True) for m in models)
             or out['ocr_model_id']==defaults['ocr'] and workspace_model_ready(defaults['ocr'],'ocr'))
-    return out|{'dataset_id':r.id,'version':r.version,'models':models,'embedding_selection':selection,'models_complete':complete,'migration_required':'mappings' not in data,
+    # Models people may pick in chat: the administrator's mappings, plus the workspace Default.
+    chat_choices=[m for m in models if m.get('enabled',True) and m.get('mapping_enabled',True) and not m.get('archived') and 'chat' in m['capabilities']]
+    if defaults['chat'] and workspace_model_ready(defaults['chat'],'chat') and not any(m['id']==defaults['chat'] for m in chat_choices):
+        chat_choices.append(model_public(model_record(defaults['chat']))|{'workspace_default':True})
+    return out|{'dataset_id':r.id,'version':r.version,'models':models,'chat_choices':chat_choices,'embedding_selection':selection,'models_complete':complete,'migration_required':'mappings' not in data,
         'workspace_defaults':{'chat_model_id':defaults['chat'],'extraction_model_id':defaults['extraction'],'embedding_model_id':defaults['embedding'],'ocr_model_id':defaults['ocr']}}
 
 def dataset_public(r,model_lookup=None):
@@ -460,8 +464,18 @@ def install_routes(app,auth,write_profile):
     def migrate(id:str,owner=Depends(auth)):
         with core.document_lock('dataset-'+id):
             r=owned(id,owner,'knowledge_base')
-            owner=r.owner
+            actor,owner=owner,r.owner
             if dataset_config(r).get('mappings'):raise HTTPException(409,'Dataset already has model mappings; update them explicitly.')
+            # With workspace Defaults chosen in Model Registration, a new dataset uses them as they
+            # are. Importing the legacy settings would create models owned by the caller (for a
+            # Contributor: private copies whose embedding clashes with the workspace Default).
+            from . import workspace_defaults
+            defaults=workspace_defaults.current()
+            if defaults['embedding'] and all(workspace_model_ready(defaults[c],c) for c in ('chat','extraction')):
+                return dataset_public(save_mappings(r,MappingInput()))
+            # Choosing and registering models is the administrator's job.
+            if access.request_actor.get() is not None and not core.is_administrator(actor):
+                raise HTTPException(409,'An administrator needs to choose the Default Chat, Extraction and Embedding models in Model Registration before new datasets can be created.')
             cfg=core.settings()
             generation=cfg.get('oci_model') if cfg['model_provider']=='oci' else cfg['model']
             generation=generation or 'mock-generation'

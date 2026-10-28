@@ -98,7 +98,7 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
   const known=(catalog.datasets||[]).find((d:Entity)=>d.id===datasetId)||dataset;
   const models=eligibleAgentModels(catalog.models||[],known);
   const model=models.find((m:Entity)=>m.id===known?.default_chat_model_id)?.id||models[0]?.id;
-  if(!model)throw new Error('This dataset has no chat model yet. Ask an administrator to set one in Model Mapping.');
+  if(!model)throw new Error('This dataset has no chat model yet. Ask an administrator to choose the Default chat model in Model Registration.');
   const reply=await api('/dataset-chat/messages','POST',{text:value,dataset_ids:[datasetId],...(readyIds.length?{document_ids:readyIds}:{}),model_id:model});
   setAnswer(reply.message||null);
  });

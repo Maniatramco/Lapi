@@ -13,6 +13,8 @@ export function documentMention(text:string,caret:number){
 export function documentOptionLabel(document:Entity,documents:Entity[]){
  return documents.filter(d=>d.name===document.name).length>1?`${document.name} · ${document.id.slice(-6)}`:document.name;
 }
+/** Chat models people may pick: the administrator's mappings for the dataset plus the workspace
+ * Default (`chat_choices`), or, from older servers, the dataset's mapped models. */
 export function eligibleAgentModels(models:Entity[],dataset:Entity|undefined){
- return (dataset?dataset.models||[]:models).filter((m:Entity)=>m.enabled!==false&&m.mapping_enabled!==false&&m.capabilities.includes('chat'));
+ return (dataset?dataset.chat_choices||dataset.models||[]:models).filter((m:Entity)=>m.enabled!==false&&m.mapping_enabled!==false&&m.capabilities.includes('chat'));
 }

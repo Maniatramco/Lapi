@@ -24,4 +24,6 @@ test('one agent model selector only offers enabled dataset mappings for document
  const models=[{id:'a',capabilities:['chat']},{id:'b',capabilities:['chat'],enabled:false},{id:'c',capabilities:['embedding']}];
  assert.deepEqual(eligibleAgentModels(models,undefined).map(m=>m.id),['a']);
  assert.deepEqual(eligibleAgentModels(models,{models:[models[0],{id:'unmapped',capabilities:['chat'],mapping_enabled:false}]}).map(m=>m.id),['a']);
+ // The server's chat_choices (mappings plus the workspace Default) win when present.
+ assert.deepEqual(eligibleAgentModels(models,{models:[],chat_choices:[{id:'default',capabilities:['chat'],workspace_default:true}]}).map(m=>m.id),['default']);
 });

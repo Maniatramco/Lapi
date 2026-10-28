@@ -148,6 +148,65 @@ def test_contributor_owns_every_dataset_but_cannot_manage_the_workspace(accounts
     assert listed['Colleague']['is_contributor'] is True and listed['Admin']['is_contributor'] is False
 
 
+def test_contributor_quick_start_uses_the_workspace_default_models(accounts):
+    """Quick start as a Contributor: new dataset (workspace Defaults, no private model copies),
+    upload, reading, a question and an extraction."""
+    from lapi_app import worker
+    from test_dataset_models import model, make_default
+    admin = accounts
+    login(admin)
+    s = SimpleNamespace(api=admin)
+    profile = dataset(s)['models'][0]['connection_profile_id']
+    # Workspace Defaults that differ from the legacy settings, as in production.
+    emb, gen = model(s, profile, 'Embedding two', ['embedding']), model(s, profile, 'Chat two', ['chat', 'extraction'])
+    assert make_default(s, emb, 'embedding', acknowledge_index_rebuild=True, allow_external=True).status_code == 200
+    assert make_default(s, gen, 'chat').status_code == 200 and make_default(s, gen, 'extraction').status_code == 200
+    models_before = len(admin.get('/api/models').json())
+    with core.Session.begin() as session:
+        session.add(relational.WorkspaceContributor(user_id='colleague'))
+    with TestClient(main.app) as person:
+        login(person, 'Colleague')
+        d = person.post('/api/datasets', json={'name': 'Resume-mk'}).json()
+        migrated = person.post('/api/datasets/' + d['id'] + '/migrate-settings', json={})
+        assert migrated.status_code == 200, migrated.text
+        config = person.get('/api/datasets/' + d['id'] + '/models').json()
+        assert config['embedding_model_id'] == emb['id'] and config['mappings'] == []
+        # Model mapping is the administrator's job; chat offers the workspace Default.
+        assert [m['id'] for m in config['chat_choices']] == [gen['id']]
+        assert person.put('/api/datasets/' + d['id'] + '/models', json={'mappings': []}).status_code == 403
+        assert len(admin.get('/api/models').json()) == models_before  # No private model copies.
+        uploaded = upload(person, d)
+        assert uploaded.status_code == 200, uploaded.text
+        assert worker.run_once()
+        document_id = uploaded.json()['documents'][0]['id']
+        assert person.get('/api/documents/' + document_id).json()['status'] == 'ready'
+        chat = person.post('/api/conversations', json={'dataset_id': d['id'], 'document_ids': [document_id]}).json()
+        answered = person.post('/api/conversations/' + chat['id'] + '/messages', json={'text': 'What are the payment terms?', 'allow_external': True})
+        assert answered.status_code == 200, answered.text
+        template = person.post('/api/templates', json={'name': 'Terms', 'dataset_id': d['id'], 'schema': {'type': 'object', 'additionalProperties': False,
+            'properties': {'terms': {'type': ['string', 'null']}}, 'required': ['terms']}})
+        assert template.status_code == 200, template.text
+        extraction = person.post('/api/extractions', json={'dataset_id': d['id'], 'document_ids': [document_id], 'template_id': template.json()['id'], 'allow_external': True})
+        assert extraction.status_code == 200, extraction.text
+        assert worker.run_once()
+        assert person.get('/api/extractions/' + extraction.json()['id']).json()['status'] == 'ready'
+        chat = person.post('/api/conversations', json={'dataset_id': d['id'], 'document_ids': [document_id]}).json()
+        picked = person.post('/api/conversations/' + chat['id'] + '/messages', json={'text': 'Terms?', 'allow_external': True, 'model_id': gen['id']})
+        assert picked.status_code == 200, picked.text
+
+
+def test_contributor_cannot_create_a_dataset_before_workspace_defaults_exist(accounts):
+    login(accounts)
+    with core.Session.begin() as session:
+        session.add(relational.WorkspaceContributor(user_id='colleague'))
+    with TestClient(main.app) as person:
+        login(person, 'Colleague')
+        d = person.post('/api/datasets', json={'name': 'Too early'}).json()
+        refused = person.post('/api/datasets/' + d['id'] + '/migrate-settings', json={})
+        assert refused.status_code == 409 and 'administrator' in refused.json()['detail']
+        assert person.get('/api/models').json() == []  # Nothing was registered on their behalf.
+
+
 def test_existing_grants_become_editor_and_bootstrap_owners_become_owner(accounts):
     login(accounts)
     d = dataset(SimpleNamespace(api=accounts))

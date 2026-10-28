@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.21",
+  "version": "26.1.16.22",
   "releases": [
+    {
+      "version": "26.1.16.22",
+      "date": "2026-10-29",
+      "title": "Contributor datasets use the workspace Default models",
+      "changes": [
+        "New datasets created by contributors (Quick start or New dataset) now use the administrator's Default models instead of failing with an embedding-model error.",
+        "Model mapping for datasets is administrator-only again; contributors pick from the mapped models and the workspace Default chat model when they chat.",
+        "Quick start no longer shows a second 'Processing in background' panel on top of its own reading progress."
+      ]
+    },
     {
       "version": "26.1.16.21",
       "date": "2026-10-29",

@@ -140,3 +140,7 @@
  .quick-start-paths button{align-items:flex-start;flex-direction:column;min-height:140px}
  .quick-start-options{grid-template-columns:1fr 1fr}
 }
+
+/* Quick start shows its own reading progress: hide the app-wide progress panel while it is open
+   (it comes back when the Quick start closes and anything is still processing). */
+body:has(.quick-start) .operation-popup{display:none}

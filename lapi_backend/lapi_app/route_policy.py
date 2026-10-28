@@ -6,8 +6,9 @@
   viewer    reads dataset content; the route code requires Viewer on that dataset
   editor    changes dataset content; the route code requires Editor on that dataset
   owner     changes a dataset's settings or members; the route code requires Owner
-  contributor Administrators and Contributors (creating, deleting and restoring datasets,
-            dataset models and onboarding; Contributors are Owner on every dataset)
+  contributor Administrators and Contributors (creating, deleting and restoring datasets and
+            onboarding; Contributors are Owner on every dataset). Model mapping stays 'admin':
+            new datasets use the workspace Default models.
   audit     Administrators and Auditors (read-only views of people, access and usage)
   admin     Administrators only: managing the workspace
 
@@ -125,10 +126,10 @@ POLICY = {
     ('PATCH', '/api/datasets/{id}'): 'owner',
     ('PATCH', '/api/datasets/{id}/status'): 'contributor',
     ('GET', '/api/datasets/{id}/models'): 'viewer',
-    ('PUT', '/api/datasets/{id}/models'): 'contributor',
+    ('PUT', '/api/datasets/{id}/models'): 'admin',
     ('POST', '/api/datasets/{id}/migrate-settings'): 'contributor',
     ('POST', '/api/datasets/{id}/assign-documents'): 'contributor',
-    ('POST', '/api/datasets/{id}/local-models'): 'contributor',
+    ('POST', '/api/datasets/{id}/local-models'): 'admin',
     ('DELETE', '/api/datasets/{id}'): 'contributor',
     ('GET', '/api/dataset-trash'): 'contributor',
     ('POST', '/api/dataset-trash/{id}/restore'): 'contributor',
