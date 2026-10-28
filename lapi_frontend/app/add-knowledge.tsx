@@ -29,6 +29,12 @@ export function ConnectorGuidePanel({guide,name,open}:{guide:ConnectorGuide;name
   </div>
  </details>;
 }
+/** `#Add knowledge/<provider>` opens that provider's form and step-by-step guide directly. */
+export function requestedProvider(hash:string){
+ let route='';try{route=decodeURIComponent(hash.replace(/^#/,''));}catch{return '';}
+ const id=/^add knowledge\/([a-z0-9_]+)\/?$/i.exec(route.trim())?.[1].toLowerCase()||'';
+ return STORAGE_PROVIDERS.some(p=>p.id===id)?id:'';
+}
 const STEPS:[Step,string][]=[['choose','Choose storage'],['connect','Connect & test'],['select','Select documents'],['vectorize','Vectorize']];
 export const MAX_SELECTION=20;
 export const blankConnection=(provider:string,datasetId:string):Entity=>({name:'',provider,dataset_id:datasetId,enabled:true,auth_mode:'access_key',bucket:'',region:provider==='oci_object'?'ap-mumbai-1':provider==='s3'?'ap-south-1':'',prefix:'',expected_owner:'',tenant_id:'',client_id:'',site_id:'',drive_id:'',folder_id:'',account:'',container:'',namespace:'',endpoint:'',credentials:{}});
@@ -66,6 +72,11 @@ export function AddKnowledge({api,datasets,documents,selectedDataset,onChanged,o
  const change=(key:string,value:unknown)=>{setForm(current=>current?{...current,[key]:value}:current);setTested(false);setMessage('');};
  const secret=(key:string,value:string)=>{setForm(current=>current?{...current,credentials:{...current.credentials,[key]:value}}:current);setTested(false);setMessage('');};
  const pick=(provider:string)=>{setForm(blankConnection(provider,usable.some(d=>d.id===selectedDataset)?selectedDataset:usable[0]?.id||''));setActive(null);setTested(false);setError('');setMessage('');setStep('connect');};
+ // A deep link (from the set-up guide or a shared URL) chooses the provider once datasets are known.
+ useEffect(()=>{
+  const follow=()=>{const id=requestedProvider(window.location.hash);if(!id||!usable.length)return;pick(id);window.history.replaceState(null,'','#'+encodeURIComponent('Add knowledge'));};
+  follow();window.addEventListener('hashchange',follow);return()=>window.removeEventListener('hashchange',follow);
+ },[usable.length]);
  const browse=async(connection:Entity,path:{id:string;name:string}[]=[],page='')=>{const request=++sequence.current;await run('Reading documents',async()=>{const data=await api(`/source-connections/${encodeURIComponent(connection.id)}/files?folder=${encodeURIComponent(path.at(-1)?.id||'')}${page?'&cursor='+encodeURIComponent(page):''}`);if(request!==sequence.current)return;setItems(previous=>page?[...previous,...data.items]:data.items);setCursor(data.next_cursor);setTrail(path);});};
  const open=(connection:Entity)=>{setActive(connection);setForm(null);setItems([]);setChosen([]);setResults([]);setPublished([]);setPublishFailed('');setShare(false);setExternal(false);setNeedsConsent(false);setStep('select');void browse(connection);};
  const test=()=>form&&run('Testing connection',async()=>{const result=await api('/source-connections/test','POST',connectionPayload(form));setTested(true);setMessage(result.message);});

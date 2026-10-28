@@ -32,6 +32,8 @@ POLICY = {
     ('DELETE', '/api/me/memory'): 'signed_in',
     ('GET', '/api/me/walkthrough'): 'signed_in',
     ('POST', '/api/me/walkthrough'): 'signed_in',
+    ('GET', '/api/me/preferences'): 'signed_in',
+    ('PUT', '/api/me/preferences'): 'signed_in',
 
     # People, roles, teams and access
     ('GET', '/api/users'): 'audit',

@@ -2,6 +2,7 @@
 import {useEffect,useState} from 'react';
 import {BookOpen,ChevronRight,CloudUpload,Database,FileSearch,FileText,FolderPlus,Info,Layers,Settings2,Sparkles,Table2} from 'lucide-react';
 import {AgentLogo} from './agent-logo';
+import {shortcutHint} from './shortcuts';
 
 type Item={name:string;icon:typeof Database};
 export function WorkspaceNavigation({view,isAdmin,onNavigate,adminItems,adminOpen,onAdminToggle}:{view:string;isAdmin:boolean;onNavigate:(name:any)=>void;adminItems:Item[];adminOpen:boolean;onAdminToggle:()=>void}){
@@ -10,7 +11,7 @@ export function WorkspaceNavigation({view,isAdmin,onNavigate,adminItems,adminOpe
  useEffect(()=>{if(onboardViews.includes(view))setOnboardOpen(true);},[view]);
  const link=(name:string,label:string,Icon:typeof Database)=>{
   const selected=view===name||(name==='Extract'&&view==='Review');
-  return <button key={name} className={`nav-item${selected?' selected':''}`} aria-label={label} title={label} aria-current={selected?'page':undefined} onClick={()=>onNavigate(name)}>{name==='Lapi agent V2'?<AgentLogo size={24}/>:<Icon size={18}/>}<span className="nav-item-label">{label}</span></button>;
+  return <button key={name} className={`nav-item${selected?' selected':''}`} aria-label={label} title={label+shortcutHint(name)} aria-current={selected?'page':undefined} onClick={()=>onNavigate(name)}>{name==='Lapi agent V2'?<AgentLogo size={24}/>:<Icon size={18}/>}<span className="nav-item-label">{label}</span></button>;
  };
  return <nav aria-label="Workspace pages">
   {link('Home','Dashboard',Database)}

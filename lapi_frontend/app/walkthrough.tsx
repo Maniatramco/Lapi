@@ -275,6 +275,12 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
   return <section className="wt-inline" aria-labelledby={titleId} onKeyDown={onKeyDown}>{player}</section>;
 }
 
+/** Fires when the tour has closed, or was not needed, for a person; the set-up questions wait for it. */
+export const TOUR_SETTLED_EVENT='lapi:tour-settled';
+let settledFor='';
+export const tourSettledFor=()=>settledFor;
+function settle(userId:string){settledFor=userId;if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent(TOUR_SETTLED_EVENT,{detail:userId}));}
+
 /** Shows the tour once per user on the Dashboard; the server remembers it, so other browsers do not repeat it. */
 export function WalkthroughGate({ api, active, userId }: { api: Api; active: boolean; userId?: string }) {
   const [open, setOpen] = useState(false);
@@ -285,12 +291,13 @@ export function WalkthroughGate({ api, active, userId }: { api: Api; active: boo
     if (!active || !userId || checked.current === userId) return;
     checked.current = userId;
     api("/me/walkthrough", "GET", undefined, undefined, true).then(status => {
-      if (current.current !== userId || !shouldShowTour(status)) return;
+      if (current.current !== userId) return;
+      if (!shouldShowTour(status)) { settle(userId); return; }
       setOpen(true);
       const version = Number(status?.version) || TOUR_VERSION;
       api("/me/walkthrough", "POST", { version }, undefined, true).catch(() => undefined);
     }).catch(() => { checked.current = ""; });
   }, [active, userId, api]);
   useEffect(() => { if (!userId) setOpen(false); }, [userId]);
-  return open ? <Walkthrough mode="modal" onClose={() => setOpen(false)} /> : null;
+  return open ? <Walkthrough mode="modal" onClose={() => { setOpen(false); if (userId) settle(userId); }} /> : null;
 }

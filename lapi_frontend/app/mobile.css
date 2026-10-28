@@ -1,0 +1,90 @@
+/* Phones (up to 640px): compact, one-handed layouts. Desktop and tablet layouts are untouched.
+   Loaded after the screen styles; the button standard in buttons.css uses !important, so the
+   tap-target overrides below repeat its selectors with one more element of specificity. */
+@media (max-width: 640px) {
+  :root { --text-small: .8125rem; --text-caption: .8125rem; }
+
+  /* Readable text: nothing below 13px for body content. */
+  html body .shell main :is(small, .small, .muted.small, dl dt, dl > div > span, .pill, .agent-workflow-tag, .add-knowledge-steps span, .access-picker small, .access-matrix th[scope=row] small, .access-matrix thead th) { font-size: 13px; }
+  html body .connection-status, html body .connection-status-trigger { font-size: 13px; }
+  html body .application-version { font-size: 12px; }
+  html body .agent-v2-footer summary, html body .agent-v2-footer p { font-size: 13px; }
+
+  /* Decorative elements and duplicate hints go; the content stays. */
+  .header-logo, .page-band-eyebrow, .notebook-private, .agent-v2-footer > span, .agent-v2-model-control > span { display: none !important; }
+  body[data-tab-bar=on] .agent-shortcut { display: none; }
+
+  /* Tap targets of at least 44px. */
+  html body :is(.shell, .attention-dialog, .manage-dataset) :is(.btn, .agent-rail-new, .add-knowledge-back, .dashboard-new-knowledge) { min-height: 44px !important; }
+  html body :is(.shell, .attention-dialog, .manage-dataset) :is(.btn.icon, .btn.action-icon):not(:has(>span)) { width: 44px !important; min-width: 44px !important; max-width: 44px !important; height: 44px !important; min-height: 44px !important; flex-basis: 44px !important; }
+  html body .shell :is(.text-button, .access-matrix-name, .dashboard-chip-add, .dashboard-suggestions > button, .agent-v2-suggestions > .btn, .access-modes > button, .knowledge-trail button, .connector-guide > summary, .notebook-source-search input, .agent-v2-footer summary) { min-height: 44px; }
+  html body .shell .access-matrix-name { display: inline-flex; align-items: center; }
+  html body .shell select, html body .shell input:not([type=checkbox]):not([type=radio]) { min-height: 44px; }
+  html body .shell .agent-v2-clear-chat { min-width: 44px !important; }
+  .connection-status-trigger { min-height: 44px; margin: -8px 0; }
+
+  /* Header: room for the title and the actions. */
+  html body .shell > .topbar { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  html body .shell .workspace-title { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Dashboard: the end-to-end workflow diagram stays on desktop and in About; panel text is readable. */
+  .dataset-dashboard .dashboard-guide { display: none; }
+  .notebook-dashboard :is(.notebook-panel, .notebook-heading) :is(span, p, strong, small, label, h2, h3, h4, li) { font-size: 13px; }
+  .notebook-dashboard .notebook-panel :is(button, label) { min-height: 44px; }
+  .next-steps-card header p { display: none; }
+
+  /* Chat (Dashboard knowledge chat and Lapi Agent): composer reachable, nothing wider than the screen. */
+  .agent-v2-thread, .agent-v2-exchange, .agent-v2-message { max-width: 100%; overflow-wrap: anywhere; }
+  .agent-v2-thread :is(pre, table) { max-width: 100%; overflow-x: auto; }
+  .agent-welcome-hero { padding: 16px !important; }
+  .agent-welcome-hero h2 { font-size: 1.25rem !important; }
+  .agent-welcome-hero p { font-size: .875rem !important; }
+  .agent-v2-suggestions { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .agent-v2-suggestions > .btn { flex: none; white-space: nowrap; border-radius: 22px !important; }
+  .agent-v2-composer { padding-bottom: 6px; }
+  .agent-v2-clear-chat > span { display: none; }
+  .agent-v2 :is(.citation, .agent-citation, [class*=citation]) { font-size: 13px; overflow-wrap: anywhere; }
+
+  /* Add knowledge: compact header, readable guide, primary action stays in reach. */
+  .add-knowledge-hero { padding: 14px !important; }
+  .add-knowledge-hero h1 { font-size: 1.25rem; margin: 8px 0; }
+  .add-knowledge-steps { gap: 6px; }
+  .connector-guide-body { font-size: .875rem; line-height: 1.6; }
+  .connector-guide-body li { margin-bottom: 6px; }
+  .connector-guide-body code { font-size: 13px; overflow-wrap: anywhere; }
+  .storage-card { min-height: 64px; }
+  .knowledge-actions { position: sticky; bottom: calc(var(--connection-footer-height, 0px) + env(safe-area-inset-bottom)); z-index: 5; margin: 0 -16px; padding: 10px 16px; background: #fff; border-top: 1px solid #e8eef6; box-shadow: 0 -6px 14px #17376b0d; }
+
+  /* Sticky primary action on screens that have one. */
+  .extraction-focus .panel > .btn.primary, .screen-actions { position: sticky; bottom: calc(var(--connection-footer-height, 0px) + env(safe-area-inset-bottom) + 8px); z-index: 5; }
+  .extraction-focus .panel > .btn.primary { width: 100%; box-shadow: 0 6px 16px #2f5bea33; }
+
+  /* Users & passwords: the account table becomes one card per person. */
+  .account-table table, .account-table tbody, .account-table tr, .account-table td { display: block; width: 100%; }
+  .account-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .account-table tr { padding: 12px 0; border-bottom: 1px solid var(--line, #e1e7f0); }
+  .account-table td { padding: 2px 0 !important; border: 0 !important; text-align: left !important; white-space: normal !important; }
+  .account-table td:last-child .row { margin-top: 8px; gap: 8px; flex-wrap: wrap; }
+  .account-table { overflow: visible !important; }
+  .account-table td:nth-child(2)::before { content: "Access: "; color: #475569; }
+  .account-table td:nth-child(3)::before { content: "Created: "; color: #475569; }
+  .account-table td:nth-child(4)::before { content: "Last updated: "; color: #475569; }
+
+  /* Access map: shorter picker, a matrix that scrolls inside its card, and roomier rows. */
+  .access-picker ul { max-height: 40dvh; }
+  .access-picker li button { min-height: 48px; }
+  .access-matrix { max-height: 60dvh; overscroll-behavior: contain; }
+  .access-matrix th[scope=row], .access-matrix thead th:first-child { min-width: 120px; max-width: 150px; white-space: normal; }
+  .access-modes { display: flex; overflow-x: auto; }
+  .access-matrix td button { min-width: 44px; min-height: 44px; }
+
+  /* Dialogs become sheets from the bottom (or full screen), never wider or taller than the screen. */
+  .modal-bg { padding: 0 !important; align-items: flex-end !important; }
+  .modal-bg > .modal { width: 100% !important; max-width: none !important; max-height: calc(100dvh - env(safe-area-inset-top)) !important; overflow: auto; border-radius: 16px 16px 0 0 !important; padding-bottom: calc(18px + env(safe-area-inset-bottom)) !important; }
+  .manage-backdrop { padding: 0; }
+  .manage-dataset { width: 100%; height: 100dvh !important; border-radius: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+
+  /* Respect notches and rounded corners. */
+  html body .shell > .topbar { padding-top: max(6px, env(safe-area-inset-top)); }
+  .toast { left: 12px; right: 12px; max-width: none; bottom: calc(12px + env(safe-area-inset-bottom)); }
+}

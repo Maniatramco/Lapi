@@ -76,6 +76,8 @@ NOTES = {
     'PUT /api/datasets/{id}/members': 'Dataset Owners and administrators: set (viewer, editor, owner) or remove (null) the level of the named people and teams; others are unchanged. Administrators always have access and cannot be listed.',
     'GET /api/me/walkthrough': 'Whether you have seen the current 1-minute product tour.',
     'POST /api/me/walkthrough': 'Record that you have seen this version of the 1-minute product tour, so it does not open again on any device.',
+    'GET /api/me/preferences': 'Your answers to the "Let\'s set you up" questions (what you want to do and where your knowledge is), and whether you finished them or hid the Dashboard next steps. Empty until you answer.',
+    'PUT /api/me/preferences': 'Save your set-up answers: goals (ask, extract, research, knowledge_base), sources (files, google_drive, sharepoint, s3, azure_blob, gcs, oci_object, not_sure), completed and dismissed_next_steps. Unknown values or fields are refused (422). Cookie authentication requires X-CSRF-Token.',
     'POST /api/auth/recovery/prepare': 'Prepare a loopback-only native SQLite recovery challenge. A private legacy grant token is optional; direct desktop recovery uses the recovery cookie and CSRF challenge. The application API proxy blocks this route. Oracle and network deployments do not enable it.',
     'POST /api/auth/recovery/reset': 'Complete native SQLite desktop recovery with its recovery cookie, X-CSRF-Token, and matching new passwords; supply a token only for the legacy private-grant flow. Loopback and origin checks apply. Oracle and network deployments do not enable this route.',
     'GET /health': 'Basic process liveness check. A running API does not by itself prove that its dependencies are ready.',
