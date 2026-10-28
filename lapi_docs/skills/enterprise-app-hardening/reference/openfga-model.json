@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {"type": "user"},
+    {"type": "team",
+     "relations": {"member": {"this": {}}},
+     "metadata": {"relations": {"member": {"directly_related_user_types": [{"type": "user"}]}}}},
+    {"type": "lapi",
+     "relations": {"administrator": {"this": {}}, "auditor": {"this": {}}},
+     "metadata": {"relations": {
+       "administrator": {"directly_related_user_types": [{"type": "user"}]},
+       "auditor": {"directly_related_user_types": [{"type": "user"}]}}}},
+    {"type": "dataset",
+     "relations": {
+       "owner": {"this": {}},
+       "editor": {"union": {"child": [{"this": {}}, {"computedUserset": {"relation": "owner"}}]}},
+       "viewer": {"union": {"child": [{"this": {}}, {"computedUserset": {"relation": "editor"}}]}}},
+     "metadata": {"relations": {
+       "owner": {"directly_related_user_types": [{"type": "user"}, {"type": "team", "relation": "member"}]},
+       "editor": {"directly_related_user_types": [{"type": "user"}, {"type": "team", "relation": "member"}]},
+       "viewer": {"directly_related_user_types": [{"type": "user"}, {"type": "team", "relation": "member"}]}}}}
+  ],
+  "_notes": [
+    "Tuples Lapi writes (authz.py _desired): user:<id> administrator lapi:workspace; user:<id> auditor lapi:workspace;",
+    "user:<id> <viewer|editor|owner> dataset:<id>; user:<id> member team:<id>; team:<id>#member <level> dataset:<id>.",
+    "Checks: check(user, administrator|auditor, lapi:workspace); list-objects(type=dataset, relation=<level>, user) per level, highest wins.",
+    "Administrators open every dataset by role in code, not by tuples. Store is in-memory: rebuild all tuples from the DB at start and whenever the store is missing (404 / *_not_found).",
+    "Rename 'lapi' to the app's own workspace type (e.g. 'aegis'). Remove this _notes key before posting the model to OpenFGA."
+  ]
+}

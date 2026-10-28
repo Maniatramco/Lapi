@@ -2,6 +2,8 @@
 import {useState} from 'react';
 import {Copy,FileText,Save} from 'lucide-react';
 import './agent-setup.css';
+import './chat-design.css';
+import {answerPhase} from './chat-phase';
 import {attachmentSize} from './agent-attachments';
 import {CitationPanel} from './citation-panel';
 import {extractionCitationId} from './citation-source';
@@ -39,8 +41,18 @@ function InlineText({text,citations=[],onCitation,extractionIds=[],onReview}:{te
   return source?<button title={`Open citation ${source.index}`} className="agent-citation" key={index} aria-label={`Open citation ${source.index}`} onClick={()=>onCitation?.(source)}>{part}</button>:extractionId?<a className="agent-extraction-link" key={index} href={`#${encodeURIComponent(`Review/${extractionId}`)}`} aria-label={`Review extraction ${extractionId}`} onClick={event=>{if(onReview&&!event.button&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){event.preventDefault();onReview(extractionId);}}}>{part}</a>:part.startsWith('**')?<strong key={index}><InlineText text={part.slice(2,-2)} {...links}/></strong>:part.startsWith('`')?<code key={index}><InlineText text={part.slice(1,-1)} {...links}/></code>:part;
  })}</>;
 }
+/** One line of an answer: a heading, a bulleted or numbered list item, a blank line, or plain text. */
+function AnswerLine({line,links}:{line:string;links:AnswerLinks}){
+ if(line.startsWith('#'))return <p><strong><InlineText text={line.replace(/^#+\s*/,'')} {...links}/></strong></p>;
+ const bullet=line.match(/^\s*[-*•]\s+(.*)$/);
+ if(bullet)return <div className="agent-reply-li"><InlineText text={bullet[1]} {...links}/></div>;
+ const numbered=line.match(/^\s*(\d{1,3})[.)]\s+(.*)$/);
+ if(numbered)return <div className="agent-reply-li" data-number={numbered[1]}><InlineText text={numbered[2]} {...links}/></div>;
+ if(!line.trim())return <div className="agent-reply-gap" aria-hidden="true"/>;
+ return <div><InlineText text={line} {...links}/></div>;
+}
 export function AgentAnswerText({text,...links}:{text:string}&AnswerLinks){
- return <div className="agent-v2-reply">{text.split(/```/g).map((part,index)=>index%2?<pre key={index}><code>{part.replace(/^\w*\n/,'')}</code></pre>:<div key={index}>{part.split('\n').map((line,row)=>line.startsWith('#')?<p key={row}><strong><InlineText text={line.replace(/^#+\s*/,'')} {...links}/></strong></p>:<div key={row}><InlineText text={line} {...links}/>{!line&&<br/>}</div>)}</div>)}</div>;
+ return <div className="agent-v2-reply">{text.split(/```/g).map((part,index)=>index%2?<pre key={index}><code>{part.replace(/^\w*\n/,'')}</code></pre>:<div key={index}>{part.split('\n').map((line,row)=><AnswerLine key={row} line={line} links={links}/>)}</div>)}</div>;
 }
 function InstructionProposal({proposal,api,onError}:{proposal:Entity;api:(path:string,method?:string,body?:unknown)=>Promise<any>;onError:(error:string)=>void}){
  const [state,setState]=useState<'open'|'saving'|'saved'>('open');
@@ -76,6 +88,7 @@ export function AgentChatAnswer({message,api,onError,onReview,onRecovery,onFollo
  const route=message.request_route||{};
  return <div className="agent-v2-chat-answer" data-streaming={message.status==='streaming'}>
   {message.plan?.length>0&&<ol className="agent-plan" aria-label="Plan">{message.plan.map((step:Entity,index:number)=><li key={index} data-status={step.status}>{step.status==='done'?'✓':step.status==='skipped'?'–':'○'} {step.text}</li>)}</ol>}
+  {message.status==='streaming'&&!answerText&&<p className="agent-thinking" role="status" aria-live="polite"><span className="agent-thinking-mark" aria-hidden="true"><i/><i/><i/></span><span className="agent-thinking-text">{answerPhase(message)}…</span></p>}
   <AgentAnswerText text={answerText} citations={message.citations||[]} onCitation={openCitation} extractionIds={extractionIds} onReview={onReview}/>
   <AnswerTokenUsage usage={message.token_usage} status={message.status}/>
   {(route.answer_revised||message.skills_used?.length>0)&&<p className="small muted">{route.answer_revised?'Answer revised after the citation check. ':''}{message.skills_used?.length?`Skill: ${message.skills_used.join(', ')}`:''}</p>}

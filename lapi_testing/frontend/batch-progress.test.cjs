@@ -254,3 +254,9 @@ test('document journey uses real reading, knowledge and chat-readiness states',(
  item.ready=true;item.failed=false;item.job.status='completed';
  const ready=render();assert.equal((ready.match(/stage-completed/g)||[]).length,3);assert.match(ready,/All documents are ready/);
 });
+
+test('answers show bulleted and numbered lists as list items, not raw markers',()=>{
+ const html=renderToStaticMarkup(React.createElement(AgentAnswerText,{text:'Terms:\n- Due in 30 days [1]\n2. Late fee applies\n\nDone'}));
+ assert.match(html,/class="agent-reply-li"[^>]*>Due in 30 days/);assert.match(html,/data-number="2"[^>]*>Late fee applies/);
+ assert.match(html,/agent-reply-gap/);assert.doesNotMatch(html,/>- Due/);
+});

@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.25 - 29 October 2026
+
+Roomier, easier-to-read chat
+
+- `chat-design.css` (imported by `agent-v2-chat.tsx`, so it styles Lapi Agent and the Dashboard chat): 768 px centred reading column; question bubbles; answers without cards in a serif reading stack at 17.5 px / 1.72 (16.5 px on phones); citation pills; code styling; rounded composer with focus ring and orange send button (`--text-input` 16 px keeps the command highlight aligned); calm serif welcome instead of the gradient banner; fade-in for new exchanges; reduced-motion fallbacks.
+- Live status line while an answer has no text yet (`chat-phase.ts` `answerPhase`): Thinking → Understanding your question → Searching your knowledge → Writing the answer → Checking the answer against its sources; the empty cursor and token line are hidden meanwhile.
+- `AgentAnswerText` renders `- ` / `* ` / `• ` bullets and `1. ` numbered items as list items and blank lines as small gaps.
+- Lapi Agent's Context panel shows only at 1500 px and wider (was 1200 px). Phones hide the floating Ask shortcut while the Dashboard chat is open.
+- The enterprise-app-hardening skill (all work from v26.1.16.13 on: roles, model Defaults, company sign-in, Quick start, tour voice-over and versions, chat design, deploy routine, pitfalls) is now in the repo at `lapi_docs/skills/`.
+
 ## v26.1.16.24 - 29 October 2026
 
 Voice-over and phone and computer versions of the tour

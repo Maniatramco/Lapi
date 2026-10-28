@@ -1,6 +1,17 @@
 {
-  "version": "26.1.16.24",
+  "version": "26.1.16.25",
   "releases": [
+    {
+      "version": "26.1.16.25",
+      "date": "2026-10-29",
+      "title": "Roomier, easier-to-read chat",
+      "changes": [
+        "Lapi Agent and the Dashboard chat use a roomy, centred reading column: your question in a soft bubble, answers as plain text in a comfortable reading font, with lists, code and source numbers laid out clearly.",
+        "While Lapi works you see what it is doing right now: understanding your question, searching your knowledge, writing the answer, checking it against its sources.",
+        "A larger rounded message box with an orange send button; the Context panel in Lapi Agent shows only on very wide screens so the conversation has room.",
+        "On phones the floating Ask button no longer covers the chat's message box."
+      ]
+    },
     {
       "version": "26.1.16.24",
       "date": "2026-10-29",

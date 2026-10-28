@@ -63,7 +63,7 @@
 .agent-context-note{margin:auto 2px 0;font-size:12px;line-height:1.5;color:#616b85}
 .agent-workspace button:focus-visible,.agent-workspace a:focus-visible{outline:2px solid #2f5bea;outline-offset:2px}
 
-@media(max-width:1200px){.agent-v2.agent-workspace{grid-template-columns:230px minmax(0,1fr)}.agent-context-panel{display:none}.agent-workspace>.agent-main{border-right:0}}
+@media(max-width:1499px){.agent-v2.agent-workspace{grid-template-columns:240px minmax(0,1fr)}.agent-context-panel{display:none}.agent-workspace>.agent-main{border-right:0}}
 @media(max-width:900px){.agent-v2.agent-workspace{grid-template-columns:minmax(0,1fr);height:calc(100dvh - 190px);border-radius:12px}.agent-rail{display:none}.agent-workspace>.agent-main{border-left:0}.agent-workspace .agent-v2-thread{padding:14px}.agent-workspace .agent-v2-welcome{padding:14px}.agent-welcome-hero{padding:18px}.agent-workspace .agent-welcome-hero h2{font-size:24px!important}}
 @media(prefers-reduced-motion:reduce){.agent-workflow-card{transition:none}}
 
