@@ -53,7 +53,9 @@ locals {
     LAPI_KEYCLOAK_ADMIN_ROLE = var.keycloak_admin_role
     LAPI_PUBLIC_URL          = local.public_url
     }, local.keycloak_secret ? { LAPI_KEYCLOAK_CLIENT_SECRET_OCID = local.keycloak_secret_id } : {},
-  var.keycloak_hosted ? { LAPI_KEYCLOAK_AUDITOR_ROLE = "lapi-auditor", LAPI_KEYCLOAK_REQUIRE_ADMIN_MFA = "true" } : {}) : {}
+  # Keycloak alone decides second factors (its realm flow requires an authenticator for
+  # administrators); Lapi does not re-check the AMR claim, which this realm leaves empty.
+  var.keycloak_hosted ? { LAPI_KEYCLOAK_AUDITOR_ROLE = "lapi-auditor", LAPI_KEYCLOAK_REQUIRE_ADMIN_MFA = "false" } : {}) : {}
 
   registry  = "${var.region}.ocir.io/${data.oci_objectstorage_namespace.lapi.namespace}"
   api_image = "${local.registry}/${var.name}/api:${var.image_tag}"
