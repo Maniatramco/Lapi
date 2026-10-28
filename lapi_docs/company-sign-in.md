@@ -79,3 +79,16 @@ break-glass administrator form stays below.
   immediately on sign-out).
 - **Secrets**: the client secrets live only in Keycloak (stored in its database). Renew the Microsoft
   secret before it expires (Entra shows the date).
+
+## Other providers (GitHub, GitLab, Okta, any OpenID Connect or SAML)
+
+Any provider Keycloak supports works the same way: add it in Keycloak under **Identity providers**
+with a short alias (`github`, `gitlab`, `okta` …), its redirect URI is
+`https://sso.92.4.94.96.sslip.io/realms/lapi/broker/<alias>/endpoint`, and add the alias and button
+label to `keycloak_identity_providers`. Microsoft, Google and GitHub get their own logo; others get a key icon.
+
+**Personal accounts (GitHub, GitLab, LinkedIn, Apple …) are not controlled by your company**: anyone
+with such an account could create a Keycloak account. They see nothing in Lapi until you give them
+dataset access, but for an enterprise setup either keep company providers only, or in Keycloak set
+that provider's **First login flow** to one that does not create accounts (link existing accounts
+only), so only people you created first can use it.
