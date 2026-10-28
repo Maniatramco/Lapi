@@ -18,6 +18,7 @@ import { ConnectionSettings } from "./connection-settings";
 import { ConnectionStatus } from "./connection-status";
 import { AboutLapi } from "./about-lapi";
 import { WalkthroughGate } from "./walkthrough";
+import { WorkspaceAssist } from "./workspace-assist";
 import { OperationProgress, extractionProgressJob } from "./operation-progress";
 import "./workspace-flow.css";
 import { DatasetWorkspace, DatasetMappings, ModelPicker, eligibleModels, modelLabel } from "./dataset-workspace";
@@ -579,6 +580,7 @@ export default function App() {
     } else {
       if(["ask lapi","lapi assistant","lapi agent"].includes(route.toLowerCase()))route="Lapi agent V2";
       if(route.toLowerCase()==="document chat")route="Lapi agent V2";
+      if(/^add knowledge\//i.test(route))route="Add knowledge"; // Add knowledge reads the provider from the hash.
       const next = sections.find(s => s.name.toLowerCase() === (route.toLowerCase() === "templates" ? "prompt templates" : route.toLowerCase()))?.name || "Home";
       if(next === "Review")setReviewRouteId("");
       setView(next);
@@ -849,6 +851,7 @@ export default function App() {
               </button>
             </Notice>
           )}
+          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)}/>
           {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
           {view === "About" && <AboutLapi/>}
           <WalkthroughGate api={api} active={view === "Home"} userId={user.id as string | undefined}/>

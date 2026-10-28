@@ -86,6 +86,8 @@ NOTES = {
     'POST /api/auth/totp/confirm': 'Finish authenticator setup with a current 6-digit code. From then on password sign-in also needs a code.',
     'POST /api/auth/totp/disable': 'Turn off your authenticator app with your current password and a current code.',
     'POST /api/users/{user_id}/totp/reset': 'Administrator only, with your password: remove a colleague\'s authenticator (lost phone) and sign them out; they set it up again at their next sign-in.',
+    'GET /api/me/preferences': 'Your answers to the "Let\'s set you up" questions (what you want to do and where your knowledge is), and whether you finished them or hid the Dashboard next steps. Empty until you answer.',
+    'PUT /api/me/preferences': 'Save your set-up answers: goals (ask, extract, research, knowledge_base), sources (files, google_drive, sharepoint, s3, azure_blob, gcs, oci_object, not_sure), completed and dismissed_next_steps. Unknown values or fields are refused (422). Cookie authentication requires X-CSRF-Token.',
     'POST /api/auth/recovery/prepare': 'Prepare a loopback-only native SQLite recovery challenge. A private legacy grant token is optional; direct desktop recovery uses the recovery cookie and CSRF challenge. The application API proxy blocks this route. Oracle and network deployments do not enable it.',
     'POST /api/auth/recovery/reset': 'Complete native SQLite desktop recovery with its recovery cookie, X-CSRF-Token, and matching new passwords; supply a token only for the legacy private-grant flow. Loopback and origin checks apply. Oracle and network deployments do not enable this route.',
     'GET /health': 'Basic process liveness check. A running API does not by itself prove that its dependencies are ready.',
