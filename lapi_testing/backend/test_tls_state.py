@@ -54,3 +54,19 @@ def test_directory_comes_from_the_environment(monkeypatch):
     assert tls_state.directory() is None
     monkeypatch.setenv('LAPI_TLS_STATE_DIR','/data/caddy')
     assert tls_state.directory().as_posix()=='/data/caddy'
+
+
+def test_a_certificate_obtained_before_the_loop_starts_is_still_saved(tmp_path,monkeypatch):
+    store=Store();monkeypatch.setattr(core,'local_store',store)
+    root=tmp_path/'fresh'
+    tls_state.restore(root)  # Nothing saved yet (first HTTPS deployment).
+    cert=root/'caddy'/'certificates'/'site.crt';cert.parent.mkdir(parents=True);cert.write_text('NEW')
+    monkeypatch.setattr(tls_state,'INTERVAL',0)
+    async def run():
+        task=asyncio.create_task(tls_state.keep(root))
+        for _ in range(200):
+            await asyncio.sleep(0.01)
+            if tls_state.KEY in store.objects:break
+        task.cancel()
+    asyncio.run(run())
+    assert tls_state.KEY in store.objects

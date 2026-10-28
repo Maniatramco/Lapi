@@ -2,6 +2,12 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.15 - 28 October 2026
+
+HTTPS certificate kept across updates
+
+- Fix: `tls_state.keep` compared the folder with itself when its loop started, so a certificate Caddy obtained before then (the first one, in practice) was never saved. It now compares with what was restored from the control bucket.
+
 ## v26.1.16.14 - 28 October 2026
 
 Lapi over HTTPS

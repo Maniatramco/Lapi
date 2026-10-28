@@ -22,6 +22,7 @@ KEY = 'tls/caddy-data.tar.gz'
 READY = '.lapi-restored'
 LIMIT = 20 * 1024 * 1024  # Certificates, keys and ACME accounts: a few kilobytes.
 INTERVAL = 300
+_saved = {}  # Folder => fingerprint of what the control store holds, as far as this process knows.
 
 
 def directory():
@@ -71,6 +72,9 @@ def restore(root, attempts=5, wait=3):
             log.warning('Could not restore the HTTPS certificate (attempt %d): %s', attempt + 1, error)
             if attempt + 1 < attempts:
                 time.sleep(wait)
+    # Compare later saves with what was restored, not with the folder when the loop starts:
+    # by then Caddy may already hold a new certificate that was never saved.
+    _saved[str(root)] = fingerprint(root) if restored else ''
     (root / READY).write_text(str(int(time.time())))
     return restored
 
@@ -85,7 +89,7 @@ def save(root, last):
 
 
 async def keep(root):
-    last = await asyncio.to_thread(fingerprint, root)
+    last = _saved.get(str(root), '')
     while True:
         await asyncio.sleep(INTERVAL)
         try:
