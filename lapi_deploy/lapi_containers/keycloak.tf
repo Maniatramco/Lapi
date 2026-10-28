@@ -152,6 +152,6 @@ locals {
     KC_BOOTSTRAP_ADMIN_USERNAME = "kcadmin"
     KC_LOG_LEVEL                = "INFO,oracle.jdbc:warn"
     # Heap at most 60% of the container's memory limit (keycloak_memory_gbs): about 1.2 GB of 2.
-    JAVA_OPTS_KC_HEAP = "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=25 -XX:MaxHeapFreeRatio=30"
+    JAVA_OPTS_KC_HEAP = "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=25"
   }
 }
