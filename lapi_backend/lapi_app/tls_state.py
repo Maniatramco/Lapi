@@ -30,10 +30,20 @@ def directory():
     return Path(value) if value else None
 
 
+def _unreadable(error):
+    log.warning('Cannot read %s to save the HTTPS certificate: %s', error.filename, error.strerror)
+
+
 def _files(root):
-    """Caddy's files worth keeping; locks and our marker change without meaning anything."""
-    return sorted(p for p in root.rglob('*') if p.is_file() and p.name != READY
-                  and 'locks' not in p.relative_to(root).parts and not p.name.endswith('.lock'))
+    """Caddy's files worth keeping; locks and our marker change without meaning anything.
+    A folder this process cannot read is logged, not skipped silently."""
+    found = []
+    for folder, _, names in os.walk(root, onerror=_unreadable):
+        for name in names:
+            path = Path(folder) / name
+            if name != READY and 'locks' not in path.relative_to(root).parts and not name.endswith('.lock'):
+                found.append(path)
+    return sorted(found)
 
 
 def fingerprint(root):

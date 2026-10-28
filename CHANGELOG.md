@@ -2,6 +2,12 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.16 - 28 October 2026
+
+HTTPS certificate saved for updates
+
+- Caddy now runs as uid 10001 (the api's user). It keeps its files owner-only, so while it ran as root the api could not read them and saved nothing; the folder scan also skipped unreadable folders silently. `tls_state` now logs a warning for a folder it cannot read.
+
 ## v26.1.16.15 - 28 October 2026
 
 HTTPS certificate kept across updates

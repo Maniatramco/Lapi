@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.15",
+  "version": "26.1.16.16",
   "releases": [
+    {
+      "version": "26.1.16.16",
+      "date": "2026-10-28",
+      "title": "HTTPS certificate saved for updates",
+      "changes": [
+        "The web server that holds the HTTPS certificate now runs as the same user as Lapi, so Lapi can save the certificate and reuse it after updates."
+      ]
+    },
     {
       "version": "26.1.16.15",
       "date": "2026-10-28",

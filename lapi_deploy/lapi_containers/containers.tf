@@ -213,7 +213,15 @@ resource "oci_container_instances_container_instance" "lapi" {
       image_url    = "docker.io/library/caddy:2.10.2"
       command      = ["/bin/sh", "-c", "until [ -f /data/.lapi-restored ]; do sleep 2; done; exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
       environment_variables = {
-        XDG_DATA_HOME = "/data"
+        XDG_DATA_HOME   = "/data"
+        XDG_CONFIG_HOME = "/tmp/caddy-config"
+      }
+      # The api's user (Dockerfile uid 10001): Caddy keeps its files owner-only, and the
+      # api must read them to save the certificate. The image may bind 80/443 without root.
+      security_context {
+        security_context_type = "LINUX"
+        run_as_user           = 10001
+        run_as_group          = 10001
       }
       volume_mounts {
         volume_name = "scratch"
