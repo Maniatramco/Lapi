@@ -30,7 +30,7 @@ LABELS = {
     'find_extractions': 'Checking saved extractions', 'read_extraction_results': 'Reading saved fields',
     'search_documents': 'Searching documents', 'search_knowledge': 'Searching knowledge',
     'read_document_section': 'Reading document section', 'describe_results': 'Describing saved fields',
-    'aggregate_results': 'Calculating over saved results', 'compare_records': 'Comparing records',
+    'aggregate_results': 'Calculating over saved results', 'query_table': 'Calculating from the spreadsheet', 'compare_records': 'Comparing records',
     'get_workflow_status': 'Checking workflow status', 'get_dataset_onboarding_status': 'Checking dataset onboarding',
     'update_plan': 'Planning', 'load_skill': 'Loading skill', 'list_skills': 'Reading skills', 'read_dataset_instructions': 'Reading dataset instructions', 'search_my_history': 'Searching your history',
     'prepare_workflow': 'Preparing workflow', 'prepare_recovery': 'Preparing recovery',
@@ -382,6 +382,7 @@ def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_pr
                    'context_usage': context_calls, 'token_usage': token_usage.summary(usage_calls)}
         if follow_ups: message['follow_ups'] = follow_ups
         if tools.plan: message['plan'] = tools.plan
+        if tools.charts: message['charts'] = tools.charts
         if tools.loaded_skills: message['skills_used'] = [s['name'] for s in tools.loaded_skills]
         if tools.instruction_proposal: message['instruction_proposal'] = tools.instruction_proposal
         with progress.step('Saving response'):

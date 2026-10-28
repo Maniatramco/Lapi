@@ -326,7 +326,14 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
             try:json_document_text(raw)
             except ValueError as error:raise HTTPException(400,str(error))
         if (problem:=file_formats.problem(name,raw)) and file_formats.plain_text(name,raw) is None:raise HTTPException(400,problem)
+        if file_formats.extension(name) in file_formats.SPREADSHEETS:
+            # Read it now so a broken or oversized sheet is refused before anything is stored.
+            from . import spreadsheet
+            try:spreadsheet.read(name,raw)
+            except spreadsheet.SpreadsheetError as error:raise HTTPException(400,f'"{name}": {error}')
     merged = None; original_parts = []
+    if merge_files is True and len(files)>1 and any(file_formats.extension(f.filename or '') in file_formats.SPREADSHEETS for f in files):
+        raise HTTPException(422,'Spreadsheets are not merged with other files: their rows and columns stay a table. Upload them as separate documents.')
     if merge_files is True and len(files)>1:
         from . import merged_documents
         import io

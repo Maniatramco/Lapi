@@ -1,6 +1,6 @@
 ---
 name: enterprise-app-hardening
-description: Make a FastAPI + Next.js web app enterprise-grade the way Lapi was done - HTTPS with Caddy + sslip.io and certificate persistence, hosted Keycloak SSO (groups to teams, administrator / contributor / auditor roles, company sign-in buttons for Microsoft/Google/GitHub, session re-checks, back-channel logout), OpenFGA authorization with Viewer/Editor/Owner levels and teams, a per-route access policy enforced centrally, admin-only model defaults and mapping, session hardening (idle timeout, My sessions, __Host- cookie), sign-in limits, TOTP for break-glass admins, an Access map screen, a narrated 60-second product tour with phone and computer versions, a guided Quick start (phone and web) with merge-files, AI-drafted extraction prompts and Review hand-off, and a roomy Claude-style chat layout. Use when the user asks to "do the same for Aegis" (or another app), to add Keycloak or OpenFGA, roles and teams, HTTPS on OCI, onboarding/Quick start, the tour, the chat redesign, or asks how Lapi did any of these.
+description: Make a FastAPI + Next.js web app enterprise-grade the way Lapi was done - HTTPS with Caddy + sslip.io and certificate persistence, hosted Keycloak SSO (groups to teams, administrator / contributor / auditor roles, company sign-in buttons for Microsoft/Google/GitHub, session re-checks, back-channel logout), OpenFGA authorization with Viewer/Editor/Owner levels and teams, a per-route access policy enforced centrally, admin-only model defaults and mapping, session hardening (idle timeout, My sessions, __Host- cookie), sign-in limits, TOTP for break-glass admins, an Access map screen, a narrated 60-second product tour with phone and computer versions, a guided Quick start (phone and web) with merge-files, AI-drafted extraction prompts and Review hand-off, a roomy Claude-style chat layout, and Excel/CSV support with row-aware indexing, exact table answers and charts. Use when the user asks to "do the same for Aegis" (or another app), to add Keycloak or OpenFGA, roles and teams, HTTPS on OCI, onboarding/Quick start, the tour, the chat redesign, or asks how Lapi did any of these.
 ---
 
 # Enterprise app hardening (the Lapi playbook)
@@ -25,6 +25,7 @@ Reference files in this folder:
   shortcuts and onboarding.
 - `reference/quick-start.md`: the guided one-workflow Quick start (phone + web), merge files, extraction workflow.
 - `reference/chat-design.md`: the Claude-style chat layout for Lapi Agent and the Dashboard chat.
+- `reference/spreadsheets-and-charts.md`: XLSX/CSV/TSV with row-aware indexing, exact `query_table` answers, charts.
 
 ## How the user works (follow this)
 
@@ -130,7 +131,9 @@ Read `reference/keycloak-realm.md`, `reference/sessions-and-sign-in.md` and `ref
   phone and computer versions).
 - Quick start: `reference/quick-start.md` (one guided workflow, consent before AI, AI-drafted extraction fields,
   merge files, extraction workflow, results + Review in the same popup, tablet scrolling, Enlarge).
-- Chat: `reference/chat-design.md` (centred column, serif answers, question bubbles, rounded composer, live status).
+- Chat: `reference/chat-design.md` (centred column, serif answers, question bubbles, rounded composer, live status;
+  the answer-workflow panel never opens by itself — a slim status line instead).
+- Spreadsheets and charts: `reference/spreadsheets-and-charts.md`.
 - Mobile compact layouts, keyboard shortcuts (`?` lists them) and "ask first, then guide" set-up questions.
 
 ## Production deploy routine (Lapi on an OCI Container Instance)
@@ -174,9 +177,10 @@ Read `reference/keycloak-realm.md`, `reference/sessions-and-sign-in.md` and `ref
 | Account security UI | `lapi_frontend/app/account-security.tsx`, `user-management.tsx`, sign-in form in `page.tsx` |
 | Product tour | `lapi_frontend/app/walkthrough{.tsx,-data.ts,.css}`, `lapi_backend/lapi_app/walkthrough.py` |
 | Quick start | `lapi_frontend/app/quick-start{.tsx,-flow.ts,.css}`, `workspace-assist.tsx`, `lapi_backend/lapi_app/prompt_suggest.py` |
-| Chat design | `lapi_frontend/app/{chat-design.css,chat-phase.ts,agent-v2-chat.tsx}`, `agent-workspace.css` |
+| Chat design | `lapi_frontend/app/{chat-design.css,chat-phase.ts,agent-v2-chat.tsx,agent-answer-workflow.tsx}`, `agent-workspace.css` |
+| Spreadsheets and charts | `lapi_backend/lapi_app/spreadsheet.py`, `worker.py` (`chunk_pages`, `table_chunks`), `lapi_agent/agent_tools_v2.py` (`query_table`), `lapi_frontend/app/answer-chart{.tsx,-data.ts}`, `lapi_testing/backend/test_spreadsheets.py` |
 | Local Keycloak demo | `lapi_local_use/keycloak-demo/` (compose, realm, start script, README) |
-| Release notes | `CHANGELOG.md` entries v26.1.16.13 to v26.1.16.25 |
+| Release notes | `CHANGELOG.md` entries v26.1.16.13 to v26.1.16.26 |
 
 ## Pitfalls we actually hit (avoid them)
 
@@ -204,5 +208,9 @@ Read `reference/keycloak-realm.md`, `reference/sessions-and-sign-in.md` and `ref
 - Browser speech synthesis needs a user gesture; handle `not-allowed` with a visible "Turn on voice" button.
 - A function recreated every render inside an interval's dependency list restarts the timer every render: wrap
   it in `useCallback`.
+- "I see no changes" after a deploy: the page HTML was cached by the browser (Next sends only `s-maxage`). Caddy
+  now sends `Cache-Control: no-cache` for pages (`header @pages >Cache-Control "no-cache"`, not `/_next/static`).
+- When the product tour version changes, the tour opens on the next Dashboard visit — close it before scripting
+  clicks in a browser test.
 - Mock models in the local demo cannot plan, answer or suggest fields: test UI states with a scripted fetch
   stream or manual inputs, and say what was not verified with real models.

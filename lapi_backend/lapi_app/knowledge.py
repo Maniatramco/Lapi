@@ -496,7 +496,7 @@ def retrieve_chunks(query, documents, limit):
         if not chunk: continue
         results.append({'document_id': did, 'document_name': allowed[did].name, 'chunk_id': cid, 'text': chunk['text'], 'excerpt': chunk['text'],
             'page': chunk.get('page'), 'score': score, 'vector_score': similarity.get(entity), 'knowledge_collection': name,
-            **{key: chunk[key] for key in ('text_origin', 'ocr', 'source_key', 'source_filename', 'source_page', 'section', 'coordinates') if key in chunk}})
+            **{key: chunk[key] for key in ('text_origin', 'ocr', 'source_key', 'source_filename', 'source_page', 'section', 'coordinates', 'sheet', 'row_start', 'row_end') if key in chunk}})
     return results
 
 

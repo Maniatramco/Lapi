@@ -184,7 +184,7 @@ def _legacy_retrieve(query,owner,documents,top_k):
     for score,did,cid in found:
         chunks=store.json('documents/'+did+'/chunks.json')['chunks']
         chunk=next((c for c in chunks if c['id']==cid),None)
-        if chunk:results.append({'document_id':did,'document_name':allowed[did].name,'chunk_id':cid,'text':chunk['text'],'excerpt':chunk['text'],'page':chunk.get('page'),'score':score,**{key:chunk[key] for key in ('text_origin','ocr','source_key','source_filename','source_page','section','coordinates') if key in chunk}})
+        if chunk:results.append({'document_id':did,'document_name':allowed[did].name,'chunk_id':cid,'text':chunk['text'],'excerpt':chunk['text'],'page':chunk.get('page'),'score':score,**{key:chunk[key] for key in ('text_origin','ocr','source_key','source_filename','source_page','section','coordinates','sheet','row_start','row_end') if key in chunk}})
     return results
 
 def response_text(data):
@@ -435,5 +435,5 @@ def extract_with_evidence(text,schema,sources):
         key=(item.get('field'),item['chunk_id'],item['quote'])
         if key in seen_evidence:continue
         seen_evidence.add(key)
-        evidence.append(item|{'document_id':chunk['document_id'],'document_name':chunk['document_name'],'page':chunk['page'],**{k:chunk[k] for k in ('source_key','source_filename','source_page') if k in chunk}})
+        evidence.append(item|{'document_id':chunk['document_id'],'document_name':chunk['document_name'],'page':chunk['page'],**{k:chunk[k] for k in ('source_key','source_filename','source_page','section','sheet','row_start','row_end') if k in chunk}})
     return output['data'],evidence

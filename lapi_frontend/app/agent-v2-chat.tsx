@@ -4,6 +4,7 @@ import {Copy,FileText,Save} from 'lucide-react';
 import './agent-setup.css';
 import './chat-design.css';
 import {answerPhase} from './chat-phase';
+import {AnswerChartView} from './answer-chart';
 import {attachmentSize} from './agent-attachments';
 import {CitationPanel} from './citation-panel';
 import {extractionCitationId} from './citation-source';
@@ -90,6 +91,7 @@ export function AgentChatAnswer({message,api,onError,onReview,onRecovery,onFollo
   {message.plan?.length>0&&<ol className="agent-plan" aria-label="Plan">{message.plan.map((step:Entity,index:number)=><li key={index} data-status={step.status}>{step.status==='done'?'✓':step.status==='skipped'?'–':'○'} {step.text}</li>)}</ol>}
   {message.status==='streaming'&&!answerText&&<p className="agent-thinking" role="status" aria-live="polite"><span className="agent-thinking-mark" aria-hidden="true"><i/><i/><i/></span><span className="agent-thinking-text">{answerPhase(message)}…</span></p>}
   <AgentAnswerText text={answerText} citations={message.citations||[]} onCitation={openCitation} extractionIds={extractionIds} onReview={onReview}/>
+  {message.charts?.length>0&&<div className="answer-charts">{message.charts.map((chart:Entity,index:number)=><AnswerChartView key={index} chart={chart as any} onSource={n=>{const source=(message.citations||[]).find((s:Entity)=>s.index===n);if(source)openCitation(source);}}/>)}</div>}
   <AnswerTokenUsage usage={message.token_usage} status={message.status}/>
   {(route.answer_revised||message.skills_used?.length>0)&&<p className="small muted">{route.answer_revised?'Answer revised after the citation check. ':''}{message.skills_used?.length?`Skill: ${message.skills_used.join(', ')}`:''}</p>}
   {message.instruction_proposal&&<InstructionProposal proposal={message.instruction_proposal} api={api} onError={onError}/>}
@@ -99,7 +101,7 @@ export function AgentChatAnswer({message,api,onError,onReview,onRecovery,onFollo
   {message.review_actions?.length>0&&<div className="agent-v2-result-actions">{message.review_actions.map((action:Entity)=><button className="btn" key={action.extraction_id} onClick={()=>onReview?.(action.extraction_id)} title={`${action.name} — version ${action.version}`}>{action.label||'Review result'} <code>{action.extraction_id.slice(0,8)}</code></button>)}</div>}
   {message.status==='aborted'&&<p className="small muted">{message.text?'Stopped · partial answer kept':'Stopped before an answer was generated'}</p>}
   {message.error&&<p role="alert" className="agent-v2-error">{message.error.detail||'The answer could not finish.'}</p>}
-  {message.citations?.length>0&&<details className="agent-v2-sources"><summary>Sources · {message.citations.length}</summary>{message.citations.map((source:Entity,index:number)=><section key={source.knowledge_id||source.chunk_id||index}><button className="text-button" onClick={()=>openCitation(source)}>[{source.index}] {source.document_name||source.title||'Source'}{source.page?` · page ${source.page}`:''}</button><p className="small muted">{source.kind==='extraction'?`Saved extraction · version ${source.version}`:source.source_type||'Document passage'}</p>{source.snippet&&<p className="muted agent-source-snippet">{source.snippet}</p>}</section>)}</details>}
+  {message.citations?.length>0&&<details className="agent-v2-sources"><summary>Sources · {message.citations.length}</summary>{message.citations.map((source:Entity,index:number)=><section key={source.knowledge_id||source.chunk_id||index}><button className="text-button" onClick={()=>openCitation(source)}>[{source.index}] {source.document_name||source.title||'Source'}{source.section?` · ${source.section.replace(/^Sheet: /,'sheet ')}`:source.page?` · page ${source.page}`:''}</button><p className="small muted">{source.kind==='extraction'?`Saved extraction · version ${source.version}`:source.source_type||'Document passage'}</p>{source.snippet&&<p className="muted agent-source-snippet">{source.snippet}</p>}</section>)}</details>}
   {message.follow_ups?.length>0&&message.status!=='streaming'&&onFollowUp&&<div className="agent-follow-ups" aria-label="Suggested follow-up questions">{message.follow_ups.map((question:string)=><button key={question} className="btn" onClick={()=>onFollowUp(question)}>{question}</button>)}</div>}
   {citation&&<CitationPanel source={citation} api={api} onClose={()=>setCitation(null)} onReview={onReview}/>}
   {!!answerText&&message.status!=='streaming'&&<div className="agent-v2-chat-actions"><button title="Copy agent answer" className="btn icon" aria-label="Copy agent answer" onClick={()=>void navigator.clipboard.writeText(answerText).catch(()=>onError('The browser could not copy this answer.'))}><Copy size={14}/></button></div>}

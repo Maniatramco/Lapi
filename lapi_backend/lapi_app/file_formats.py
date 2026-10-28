@@ -10,8 +10,9 @@ import io
 import zipfile
 
 IMAGES = ('png', 'jpg', 'jpeg', 'webp')  # Read with OCR; one image is one page.
-SUPPORTED = ('pdf', 'docx', 'txt', 'json') + IMAGES
-SUPPORTED_LABEL = 'PDF, DOCX, UTF-8 TXT, JSON and image (PNG, JPG, WEBP)'
+SPREADSHEETS = ('csv', 'tsv', 'xlsx')  # Read as tables (spreadsheet.py): rows keep their columns.
+SUPPORTED = ('pdf', 'docx', 'txt', 'json') + IMAGES + SPREADSHEETS
+SUPPORTED_LABEL = 'PDF, DOCX, UTF-8 TXT, JSON, spreadsheet (XLSX, CSV, TSV) and image (PNG, JPG, WEBP)'
 OLE = b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'  # Legacy Office (.doc, .xls) compound file
 
 
@@ -79,8 +80,25 @@ def _actually(raw):
 
 
 def problem(name, raw):
-    """Why a .pdf, .docx or image file is not that format, or None when it looks right."""
+    """Why a .pdf, .docx, spreadsheet or image file is not that format, or None when it looks right."""
     ext = name.rsplit('.', 1)[-1].lower()
+    if ext == 'xlsx':
+        if raw.startswith(OLE):
+            return f'"{name}" is an older Excel (.xls) file renamed to .xlsx. Open it in Excel and save it as .xlsx or CSV.'
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                names = set(archive.namelist())
+        except zipfile.BadZipFile:
+            found = _actually(raw)
+            return f'"{name}" is not a real Excel (.xlsx) workbook' + (f': it is {found}.' if found else '.') + ' Save it from Excel as .xlsx or CSV.'
+        if 'xl/workbook.xml' not in names:
+            return f'"{name}" is not an Excel (.xlsx) workbook: it is a different kind of ZIP archive. Save it from Excel as .xlsx or CSV.'
+        return None
+    if ext in ('csv', 'tsv'):
+        found = _actually(raw)
+        if found in ('a PDF file', 'a ZIP archive', 'an older Microsoft Office file (such as .doc)') or (found and found.endswith('image')):
+            return f'"{name}" is not a {ext.upper()} file: it is {found}. Export the sheet as {ext.upper()} (or upload the .xlsx) instead.'
+        return None
     if ext in IMAGES:
         kind = image_kind(raw)
         if kind == ('jpg' if ext == 'jpeg' else ext):

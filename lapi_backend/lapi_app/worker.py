@@ -64,6 +64,9 @@ def parse_document(name,raw,*,ocr_enabled=True,progress=None,cache_id=None):
     ext=name.rsplit('.',1)[-1].lower()
     if ext=='txt':return [{'page':1,'text':raw.decode('utf-8-sig')}]
     if ext=='json':return [{'page':1,'text':json_document_text(raw)}]
+    if ext in file_formats.SPREADSHEETS:
+        from . import spreadsheet
+        return spreadsheet.pages(spreadsheet.read(name,raw))
     if ext in ('pdf','docx',*file_formats.IMAGES) and (text:=file_formats.plain_text(name,raw)) is not None:
         # The file only holds text (for example a saved link): index that text as it is.
         return [{'page':1,'text':text,'text_origin':'native'}]
@@ -160,19 +163,47 @@ def parse_document(name,raw,*,ocr_enabled=True,progress=None,cache_id=None):
         return [{'page':None,'text':text,**({'text_origin':'native+ocr','ocr':{'model':image_results[0]['model'],'provider':image_results[0].get('provider','ollama'),'images':image_results,'verified':False,'notice':'DOCX image transcription; page location unavailable.'}} if ocr_enabled and image_results else {})}]
     raise ValueError('Unsupported document format')
 
+def _fits(size):
+    """Whether a spreadsheet chunk fits the embedding model as one piece (rows are never cut)."""
+    cfg=settings()
+    if cfg['embedding_provider']=='sentence_transformers' and cfg['search_provider']!='oci':
+        model=providers.local_model('sentence-transformers/all-MiniLM-L6-v2');tokenizer=model.tokenizer;limit=model.max_seq_length-2
+        return lambda text:len(text)<=size*4 and len(tokenizer(text,add_special_tokens=False)['input_ids'])<=limit
+    if cfg['embedding_provider']=='openai' and cfg['search_provider']!='oci':
+        return lambda text:len(text)<=max(size,400) and len(text.encode())<=providers.OPENAI_EMBEDDING_MAX_BYTES
+    return lambda text:len(text)<=max(size,400)
+
+def table_chunks(did,page,fits):
+    """A spreadsheet table page as chunks of whole rows, each starting with the sheet and its columns."""
+    from . import spreadsheet
+    out=[]
+    for content,first,last in spreadsheet.pack(page['table_header'],page['table_rows'],fits):
+        ident=str(uuid.uuid5(uuid.NAMESPACE_URL,f'{did}:{page["page"]}:rows:{first}:{last}:{providers.fingerprint()}:{content}'))
+        rows=f'row {first}' if first==last else f'rows {first}-{last}'
+        out.append({'id':ident,'document_id':did,'page':page['page'],'offset':first,'text':content,'table':True,'sheet':page['sheet'],
+                    'row_start':first,'row_end':last,'section':f'Sheet: {page["sheet"]} · {rows}'})
+    return out
+
 def chunk_pages(did,pages,size,overlap):
     chunks=[]
+    fits=None
     for page in pages:
+        if page.get('table_rows') is not None:
+            fits=fits or _fits(size)
+            chunks.extend(table_chunks(did,page,fits))
+            if len(chunks)>5000:raise ValueError('Document exceeds 5000 chunk limit')
+            continue
         text=page['text']
         if len(chunks)+len(text)//(size-overlap)>5000:raise ValueError('Document exceeds 5000 chunk limit')
         for start in range(0,len(text),size-overlap):
             content=text[start:start+size]
             if not content.strip():continue
             ident=str(uuid.uuid5(uuid.NAMESPACE_URL,f'{did}:{page["page"]}:{start}:{providers.fingerprint()}:{content}'))
-            chunks.append({'id':ident,'document_id':did,'page':page['page'],'offset':start,'text':content,**{k:page[k] for k in ('source_key','source_filename','source_page','text_origin','ocr') if k in page}})
+            chunks.append({'id':ident,'document_id':did,'page':page['page'],'offset':start,'text':content,**{k:page[k] for k in ('source_key','source_filename','source_page','text_origin','ocr','section','sheet','table_summary') if k in page}})
     if settings()['embedding_provider']=='sentence_transformers' and settings()['search_provider']!='oci':
         model=providers.local_model('sentence-transformers/all-MiniLM-L6-v2');tokenizer=model.tokenizer;limit=model.max_seq_length-2;safe=[]
         for chunk in chunks:
+            if chunk.get('table'):safe.append(chunk);continue  # Already sized to the model, whole rows only.
             offsets=tokenizer(chunk['text'],add_special_tokens=False,return_offsets_mapping=True)['offset_mapping']
             for n in range(0,max(1,len(offsets)),limit):
                 part=chunk.copy()
@@ -183,6 +214,7 @@ def chunk_pages(did,pages,size,overlap):
     elif settings()['embedding_provider']=='openai' and settings()['search_provider']!='oci':
         safe=[]
         for chunk in chunks:
+            if chunk.get('table'):safe.append(chunk);continue  # Already sized to the model, whole rows only.
             for offset,text in providers.split_utf8_bounded(chunk['text']):
                 part=chunk.copy();part['text']=text;part['offset']+=offset
                 part['id']=str(uuid.uuid5(uuid.NAMESPACE_URL,chunk['id']+':utf8:'+str(offset)));safe.append(part)
@@ -240,6 +272,11 @@ def _process(jid,token,snapshot):
                 store.put_json('jobs/'+jid+'/workflow.json',state)
             if merged and (merged.get('ocr_pending') or any(p.get('ocr') for p in merged.get('pages',[]))):
                 pages=merged_documents.read_sources(did,merged,progress=ocr_progress)
+            elif not merged and file_formats.extension(name) in file_formats.SPREADSHEETS:
+                from . import spreadsheet
+                sheets=spreadsheet.read(name,store.get(ref))
+                spreadsheet.save(store,did,sheets)
+                pages=spreadsheet.pages(sheets)
             else:pages=merged['pages'] if merged else parse_document(name,store.get(ref),progress=ocr_progress,cache_id=did)
             chunks=chunk_pages(did,pages,cfg['chunk_size'],cfg['chunk_overlap'])
         if not chunks:raise ValueError('Document has no usable text')

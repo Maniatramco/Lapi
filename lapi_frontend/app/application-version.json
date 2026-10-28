@@ -1,6 +1,18 @@
 {
-  "version": "26.1.16.25",
+  "version": "26.1.16.26",
   "releases": [
+    {
+      "version": "26.1.16.26",
+      "date": "2026-10-29",
+      "title": "Spreadsheets, exact answers and charts",
+      "changes": [
+        "Upload Excel (.xlsx), CSV and TSV files. Every sheet is read with its header row, real values and dates; each row is indexed with its column names, so a value never loses its column, and each sheet gets a summary. Sources show the sheet and row numbers.",
+        "Lapi Agent answers totals, averages, counts, rankings and per-month figures by calculating on the stored table, so the numbers are exact rather than estimated from text.",
+        "Ask Lapi Agent for a chart and it draws a bar, line, pie or scatter chart from that calculation, with the numbers underneath and a Download data button.",
+        "While Lapi Agent works you see a slim status line; the detailed workflow opens only when you tap it.",
+        "New releases now show straight away: the app's pages are re-checked on every visit instead of being kept from an older version."
+      ]
+    },
     {
       "version": "26.1.16.25",
       "date": "2026-10-29",

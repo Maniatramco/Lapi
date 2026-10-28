@@ -139,6 +139,47 @@ class AggregateArgs(A):
     dataset: str = DatasetArg
 
 
+class _Strict(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+
+class TableFilter(_Strict):
+    column: str = Field(min_length=1, max_length=200, description='Column name as shown in the sheet.')
+    op: Literal['=', '!=', '>', '>=', '<', '<=', 'contains', 'in', 'between', 'is empty', 'is not empty'] = Field(default='=', description='Comparison.')
+    value: str | float | int | bool | list[str | float | int] | None = Field(default=None, description='Value to compare; a list for "in", [from, to] for "between"; dates as YYYY-MM-DD.')
+
+
+class TableGroup(_Strict):
+    column: str = Field(min_length=1, max_length=200, description='Column to group by.')
+    bucket: Literal['', 'day', 'month', 'quarter', 'year'] = Field(default='', description='For a date column: group by day, month, quarter or year.')
+
+
+class TableMetric(_Strict):
+    op: Literal['count', 'sum', 'avg', 'min', 'max', 'count_distinct'] = Field(description='Calculation.')
+    column: str = Field(default='', max_length=200, description='Column to calculate on; empty only for count of rows.')
+
+
+class ChartSpec(_Strict):
+    type: Literal['bar', 'line', 'pie', 'scatter'] = Field(description='bar for categories, line for time, pie for shares of a whole (up to 8 slices), scatter for two numbers.')
+    title: str = Field(default='', max_length=120, description='Short chart title.')
+    x: str = Field(min_length=1, max_length=200, description='Result column for the x axis or the slices (for example "Region" or "Date (month)").')
+    y: list[str] = Field(min_length=1, max_length=3, description='Result columns with the numbers (for example ["sum of Revenue"]).')
+
+
+class QueryTableArgs(A):
+    document: str = Field(min_length=1, max_length=300, description='Spreadsheet (XLSX, CSV or TSV) name or ID.')
+    sheet: str = Field(default='', max_length=100, description='Sheet name; empty uses the first sheet.')
+    filters: list[TableFilter] = Field(default_factory=list, max_length=10, description='Only rows matching all conditions.')
+    group_by: list[TableGroup] = Field(default_factory=list, max_length=2, description='Group rows by up to two columns.')
+    metrics: list[TableMetric] = Field(default_factory=list, max_length=6, description='Calculations per group (or over all rows).')
+    columns: list[str] = Field(default_factory=list, max_length=20, description='Without metrics: the columns of matching rows to list.')
+    sort_by: str = Field(default='', max_length=200, description='Result column to sort by.')
+    descending: bool = Field(default=False, description='Sort largest first.')
+    limit: int = Field(default=50, ge=1, le=200, description='Result rows to return.')
+    chart: ChartSpec | None = Field(default=None, description='Draw the result as a chart for the person; only when they ask for a chart, graph or visual.')
+    dataset: str = DatasetArg
+
+
 class CompareArgs(A):
     items: list[str] = Field(min_length=2, max_length=10, description='2-10 extraction names/IDs or document names/IDs to compare.')
     fields: list[str] = Field(default_factory=list, max_length=30, description='Fields to align; empty uses the common fields.')
@@ -217,6 +258,9 @@ CONTRACTS = {
         {}),
     'aggregate_results': (AggregateArgs, 'Exact count, sum, avg, min, max or distinct values over saved fields, optionally grouped and filtered. Use for any number or count.',
         {'operation': 'count', 'group_by': 'city', 'filters': [{'field': 'years_python', 'operator': 'gt', 'value': 5}]}),
+    'query_table': (QueryTableArgs, 'Exact calculations on an uploaded spreadsheet (XLSX, CSV, TSV): filter rows, group (dates by month/quarter/year), count, sum, avg, min, max, or list rows; optionally draw a bar, line, pie or scatter chart from the result. Use for every number, total, ranking or chart from spreadsheet data; never compute these from search text. An error lists the sheets and columns.',
+        {'document': 'sales.xlsx', 'sheet': 'Sales', 'group_by': [{'column': 'Date', 'bucket': 'month'}], 'metrics': [{'op': 'sum', 'column': 'Revenue'}],
+         'chart': {'type': 'line', 'title': 'Revenue by month', 'x': 'Date (month)', 'y': ['sum of Revenue']}}),
     'compare_records': (CompareArgs, 'Aligned field table for 2-10 extractions or documents.',
         {'items': ['invoice_a.pdf', 'invoice_b.pdf'], 'fields': ['total', 'due_date']}),
     'get_workflow_status': (WorkflowStatusArgs, 'Progress and failures of a workflow in this conversation.',
@@ -275,6 +319,7 @@ class AgentTools(Tools):
         self._cache = {}; self.plan = []; self.on_plan = on_plan; self.lock = threading.RLock()
         self.skills = skills  # WS5 library, optional
         self.loaded_skills = []; self.instruction_proposal = None
+        self.charts = []  # Charts drawn from query_table results, shown with the answer.
         self._selected_dataset = body.dataset_id; self._selected_documents = list(body.document_ids)
 
     # ------------------------------------------------------------ helpers
@@ -563,6 +608,43 @@ class AgentTools(Tools):
         n = self.cite('Saved field summary', json.dumps(data, ensure_ascii=False), key=f'describe:{self.body.dataset_id}:{extraction}')
         return envelope(data, [n])
 
+    def v2_query_table(self, document, sheet='', filters=None, group_by=None, metrics=None, columns=None, sort_by='', descending=False,
+                       limit=50, chart=None, extraction=''):
+        """One validated calculation on a stored spreadsheet; numbers and charts come from the data."""
+        from .. import core, spreadsheet
+        self.dataset(); did = self.resolve_documents([document])[0]
+        name = next((d.name for d in self.documents() if d.id == did), document)
+        sheets = spreadsheet.tables(core.store, did)
+        if not sheets:
+            raise HTTPException(422, repr(name) + ' is not a spreadsheet, or it has not been read yet. query_table works on XLSX, CSV and TSV documents.')
+        spec = {'sheet': sheet, 'filters': filters or [], 'group_by': [g if g.get('bucket') else g['column'] for g in group_by or []],
+                'metrics': metrics or [], 'columns': columns or [], 'limit': limit,
+                'sort': {'by': sort_by, 'desc': descending} if sort_by else {}}
+        try: result = spreadsheet.query(core.store, did, spec)
+        except spreadsheet.SpreadsheetError as error: raise HTTPException(422, str(error))
+        entry = next(s for s in sheets if s['name'] == result['sheet'])
+        data = {'document': name, **{k: result[k] for k in ('sheet', 'columns', 'rows', 'matched_rows', 'truncated')},
+                'sheet_columns': [c['name'] + ' (' + c['type'] + ')' for c in entry['columns']],
+                'other_sheets': [s['name'] for s in sheets if s['name'] != result['sheet']]}
+        if result['row_numbers']: data['spreadsheet_rows'] = result['row_numbers']
+        label = 'Calculated from ' + name + ' · sheet ' + result['sheet']
+        n = self.cite(label, json.dumps({k: data[k] for k in ('sheet', 'columns', 'rows', 'matched_rows')}, ensure_ascii=False, default=str),
+                      key='table:' + did + ':' + json.dumps(spec, sort_keys=True, default=str), kind='knowledge', document_id=did, section='Sheet: ' + result['sheet'])
+        note = 'Exact values calculated from the stored spreadsheet (' + str(result['matched_rows']) + ' matching rows).'
+        if chart:
+            for column in [chart['x'], *chart['y']]:
+                if column not in result['columns']:
+                    raise HTTPException(422, 'Chart column ' + repr(column) + ' is not in the result. Result columns: ' + ', '.join(result['columns']))
+            if chart['type'] == 'pie' and len(result['rows']) > 8:
+                raise HTTPException(422, 'A pie chart shows up to 8 slices; group differently, limit the rows, or use a bar chart.')
+            with self.lock:
+                if len(self.charts) < 4:
+                    self.charts.append({'type': chart['type'], 'title': chart.get('title') or label, 'x': chart['x'], 'y': chart['y'],
+                                        'columns': result['columns'], 'rows': result['rows'], 'source_index': n, 'source': label,
+                                        'truncated': result['truncated']})
+            note += ' The chart is shown to the person under your answer; describe what it shows, do not repeat every number.'
+        return envelope(data, [n], truncated=result['truncated'], note=note)
+
     def v2_aggregate_results(self, operation, field='', group_by='', filters=None, extraction=''):
         self.dataset(); rows = [r for r in self.latest_records(extraction)
                                 if all(matches_result_filter(r['fields'], c) for c in filters or [])]
@@ -641,6 +723,7 @@ class AgentTools(Tools):
         kind = 'document' if r['source_type'] == 'document_chunk' else 'extraction' if r['source_type'] == 'extraction' else 'knowledge'
         src = {'kind': kind, 'index': len(self.sources) + 1, 'knowledge_id': r['knowledge_id'], 'chunk_id': r.get('chunk_id') or r['knowledge_id'],
                'document_name': r['title'], 'text': r['text'], 'source_type': r['source_type'], 'page': r.get('page'),
+               **{k: r[k] for k in ('section', 'sheet', 'row_start', 'row_end') if r.get(k) is not None},
                'version': r.get('source_version'), 'knowledge_collection': view.snapshot['knowledge_collection'],
                'source_url': '/api/knowledge/published-sources/' + r['knowledge_id'] + '?collection=' + view.snapshot['knowledge_collection'] + '&dataset_id=' + view.dataset_id}
         if len(r.get('document_ids', [])) == 1: src['document_id'] = r['document_ids'][0]

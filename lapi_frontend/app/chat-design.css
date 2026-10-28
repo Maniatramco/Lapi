@@ -108,3 +108,27 @@ body .shell .agent-v2 .agent-v2-suggestions .btn{border-radius:999px;border-colo
 
 /* Phones: the floating Ask button is not needed while the chat itself is open. */
 @media(max-width:700px){body:has(.dataset-knowledge-chat) .agent-shortcut{display:none}}
+
+/* Charts from exact spreadsheet calculations (answer-chart.tsx). */
+.answer-charts{display:grid;gap:14px;margin:14px 0 4px}
+.answer-chart{margin:0;padding:14px 16px 10px;border:1px solid #e3e7ef;border-radius:16px;background:#fff;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.answer-chart-title{font-size:15px;font-weight:700;color:#1f2430;margin-bottom:6px}
+.answer-chart-key{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 4px;padding:0;list-style:none;font-size:12.5px;color:#475569}
+.answer-chart-key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.answer-chart-svg{display:block;width:100%;height:auto;max-height:340px;overflow:visible}
+.answer-chart-svg text{font-size:11.5px;fill:#64748b}
+.answer-chart-legend text{font-size:13px;fill:#334155}
+.answer-chart-grid{stroke:#eef1f6}.answer-chart-zero{stroke:#cbd5e1}
+.answer-chart-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;font-size:12.5px;color:#64748b}
+.answer-chart-foot .text-button{display:inline-flex;align-items:center;gap:5px}
+.answer-chart-data{margin-top:6px;font-size:13px}.answer-chart-data summary{cursor:pointer;color:#334155;font-weight:600}
+.answer-chart-table{max-height:240px;overflow:auto;margin-top:6px;border:1px solid #eef1f6;border-radius:10px}
+.answer-chart-table table{width:100%;border-collapse:collapse}.answer-chart-table th,.answer-chart-table td{padding:6px 10px;border-bottom:1px solid #eef1f6;text-align:left;white-space:nowrap}
+.answer-chart-table th{position:sticky;top:0;background:#f8fafc;font-weight:650;color:#334155}
+
+/* Answer workflow: a slim status line beside the speaker; the phase panel opens only on request. */
+body .shell .agent-v2 .agent-answer-workflow{font-size:13px;color:#64748b}
+body .shell .agent-v2 .answer-workflow-summary{min-height:22px;padding:2px 8px;border:0;border-radius:8px;background:transparent;color:#64748b;font-size:12.5px}
+body .shell .agent-v2 .answer-workflow-summary:hover{background:#f1f4f9;color:#334155}
+body .shell .agent-v2 .agent-answer-workflow[data-status=running] .answer-workflow-label{color:#475569;font-weight:600}
+body .shell .agent-v2 .answer-workflow-expanded{border-color:var(--chat-line);background:#fafbfd;border-radius:12px}

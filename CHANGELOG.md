@@ -2,6 +2,19 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.26 - 29 October 2026
+
+Spreadsheets, exact answers and charts
+
+- `spreadsheet.py` (new; `openpyxl` 3.1.5 + `et-xmlfile` 2.0.0): reads CSV/TSV (encoding fallback, delimiter sniffing) and XLSX (saved formula values, merged cells filled from their first cell, hidden sheets noted, `.xls` refused with advice). Header detection, blank/duplicate column names, per-column types (number incl. "1,234.50" and "(10)", ISO dates, booleans, text). Limits: 50,000 rows, 200 columns, 20 sheets, 2,000 characters per cell.
+- Indexing: per sheet a summary chunk (columns, types, counts, ranges, examples) and row chunks packed **only at row boundaries**, each starting with the sheet and its columns and each row written as `Row n · Column: value · …`; rows wider than a chunk are split between column/value pairs. Packing measures with the embedding model's own limit (MiniLM tokens, OpenAI bytes) and those chunks skip the generic re-splitting. Chunks carry `section` ("Sheet: X · rows a-b"), `sheet`, `row_start`, `row_end`, passed through to citations.
+- The typed table is stored as Parquet per sheet (`documents/<id>/tables/<n>.parquet` + `tables.json`).
+- Upload: XLSX/CSV/TSV accepted, validated fully at upload (renamed files, old `.xls`, empty sheets, limits) with plain messages; spreadsheets are never merged with other files (422).
+- Lapi Agent tool `query_table`: validated filters, group by (dates by day/month/quarter/year), count/sum/avg/min/max/count_distinct, row listing, sorting, limits; results cited as "Calculated from <file> · sheet <name>"; optional chart (bar/line/pie/scatter) built from the computed rows and saved on the message as `charts`.
+- Frontend: `answer-chart.tsx` / `answer-chart-data.ts` draw the charts in SVG (no new libraries) with a spoken summary, the numbers table and a CSV download (formula-safe). Sources show sheet and rows. File pickers accept spreadsheets.
+- Lapi Agent's answer workflow no longer opens its phase panel by itself; a slim status line shows while working.
+- Caddy sends `Cache-Control: no-cache` for pages (not `/_next/static` or `/api`), so browsers pick up a new release on the next visit instead of an older cached page.
+
 ## v26.1.16.25 - 29 October 2026
 
 Roomier, easier-to-read chat

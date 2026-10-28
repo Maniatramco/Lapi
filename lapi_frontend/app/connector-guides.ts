@@ -6,7 +6,7 @@ export type ConnectorGuide={time:string;need:string[];parts:GuidePart[];fields:[
 const AFTER:GuidePart={title:'Finish in Lapi',steps:[
  'Fill in the form below with the values you copied (see "What goes where"), then click `Test connection`. You should see "Read access verified" with the number of files and folders found.',
  'Click `Save and browse documents`.',
- 'Open folders and tick the files you want, up to 20 at a time. Files marked "Unsupported file type" cannot be imported; PDF, DOCX, TXT, JSON and images (PNG, JPG, WEBP) can.',
+ 'Open folders and tick the files you want, up to 20 at a time. Files marked "Unsupported file type" cannot be imported; PDF, DOCX, TXT, JSON, spreadsheets (XLSX, CSV, TSV) and images (PNG, JPG, WEBP) can.',
  'Tick `Everyone who can access … may read these copies`, then click `Vectorize`.',
  'Wait until each file shows `Ready to ask`, then click `Ask about these documents`. You can leave the page meanwhile; it keeps going.',
  'Images and scanned pages are read with OCR. Their dataset needs an OCR model: register `gpt-4o-mini` (OpenAI) or a Gemini model for Extraction and select it as the dataset\'s OCR model in Dataset Model Mapping.',

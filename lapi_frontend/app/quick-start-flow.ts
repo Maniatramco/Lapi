@@ -10,8 +10,8 @@ export type FileState='working'|'ready'|'failed';
 export type FieldType='text'|'number'|'date'|'yes_no'|'list';
 export type Field={key:string;label:string;type:FieldType;description:string};
 
-/** Files people can add from a phone or computer (Lapi reads PDF, Word, text, JSON and images). */
-export const ACCEPT='.pdf,.docx,.txt,.json,.png,.jpg,.jpeg,.webp,application/pdf,image/*';
+/** Files people can add from a phone or computer (Lapi reads PDF, Word, text, JSON, spreadsheets and images). */
+export const ACCEPT='.pdf,.docx,.txt,.json,.xlsx,.csv,.tsv,.png,.jpg,.jpeg,.webp,application/pdf,image/*';
 export const MAX_FILES=10;
 
 /** Opens an extraction on the Review page (handled in page.tsx). */
@@ -20,7 +20,9 @@ export function openReviewPage(id:string){if(typeof window!=='undefined')window.
 
 /** Several files can be stitched into one document before reading (pages of one paper
  * document, photos of one invoice). Photos only: merging is the likely intent. */
-export const canMerge=(files:{name:string}[])=>files.length>=2&&files.length<=20;
+/** Spreadsheets stay tables: rows and columns are never stitched into another document. */
+export const isSpreadsheet=(name:string)=>/\.(xlsx|csv|tsv)$/i.test(name);
+export const canMerge=(files:{name:string}[])=>files.length>=2&&files.length<=20&&!files.some(file=>isSpreadsheet(file.name));
 export const mergeByDefault=(files:{name:string;type?:string}[])=>canMerge(files)&&files.every(file=>file.type?.startsWith('image/')||/\.(png|jpe?g|webp)$/i.test(file.name));
 export function mergedName(files:{name:string}[]){
  const first=(files[0]?.name||'Document').replace(/\.[^.]+$/,'');
@@ -83,15 +85,16 @@ export function progress(states:FileState[]){
 
 /** Files picked on the device, limited to what Lapi can read; returns kept files and a note about the rest. */
 export function pickFiles(files:File[]):{files:File[];note:string}{
- const ok=/\.(pdf|docx|txt|json|png|jpe?g|webp)$/i;
+ const ok=/\.(pdf|docx|txt|json|xlsx|csv|tsv|png|jpe?g|webp)$/i;
  const kept=files.filter(file=>ok.test(file.name)||file.type.startsWith('image/')).slice(0,MAX_FILES);
  const skipped=files.length-kept.length;
- return {files:kept,note:skipped?`${skipped} file${skipped===1?' was':'s were'} skipped: Lapi reads PDF, Word, text, JSON and images, up to ${MAX_FILES} at a time.`:''};
+ return {files:kept,note:skipped?`${skipped} file${skipped===1?' was':'s were'} skipped: Lapi reads PDF, Word, text, JSON, spreadsheets (XLSX, CSV) and images, up to ${MAX_FILES} at a time.`:''};
 }
 
 /** A readable name for a cited source. */
 export function sourceName(citation:Entity){
- return String(citation.title||citation.name||citation.filename||citation.document_name||'Source')+(citation.page?` · page ${citation.page}`:'');
+ const where=citation.section?` · ${String(citation.section).replace(/^Sheet: /,'sheet ')}`:citation.page?` · page ${citation.page}`:'';
+ return String(citation.title||citation.name||citation.filename||citation.document_name||'Source')+where;
 }
 
 /** A short default name for a first dataset. */

@@ -39,6 +39,10 @@ locals {
     ${local.caddy_global}}
     ${local.https_hostname} {
     	encode zstd gzip
+    	# Pages are re-checked on every visit so a new release shows at once; the versioned
+    	# /_next/static files keep their long cache. ">" applies it after the web server's own header.
+    	@pages not path /_next/static/* /api/*
+    	header @pages >Cache-Control "no-cache"
     	reverse_proxy 127.0.0.1:3000
     }
     http:// {
