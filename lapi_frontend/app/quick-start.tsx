@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import {ArrowLeft,Camera,Check,CircleAlert,FileSearch,FileUp,Loader2,Maximize2,MessageSquare,Minimize2,Plus,Sparkles,Table2,Trash2,Users,Wand2,X} from "lucide-react";
 import "./quick-start.css";
-import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,defaultDatasetName,fieldKey,fieldProblems,fieldsToSchema,fileState,pickFiles,progress,resultRows,sourceName,stepsFor,uploadable,
+import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,defaultDatasetName,extractionStages,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,resultRows,sourceName,stepsFor,uploadable,
  type Field,type FieldType,type FileState,type Path,type Step} from "./quick-start-flow";
 import {eligibleAgentModels} from "./agent-document-selection";
 import {openDatasetEditor} from "./manage-dataset";
@@ -34,8 +34,10 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
  const [enlarged,setEnlarged]=useState(()=>{try{return localStorage.getItem(ENLARGED_KEY)==='1';}catch{return false;}});
  const toggleEnlarged=()=>setEnlarged(value=>{try{localStorage.setItem(ENLARGED_KEY,value?'0':'1');}catch{}return !value;});
  const [datasetId,setDatasetId]=useState<string>(choices[0]?.id||(isAdmin?'new':''));
- const [newName,setNewName]=useState(defaultDatasetName(user?.username));
+ const [newName,setNewName]=useState(defaultDatasetName(user?.username)),[newDescription,setNewDescription]=useState('');
  const [files,setFiles]=useState<File[]>([]),[note,setNote]=useState('');
+ // Two or more files: stitch them into one document first, or keep them separate.
+ const [merge,setMerge]=useState(false),[mergeTouched,setMergeTouched]=useState(false);
  // Consent, asked where data first goes to an AI model: reading documents, then answering or extracting.
  const [uploadConsent,setUploadConsent]=useState(false),[aiConsent,setAiConsent]=useState(false);
  const [uploaded,setUploaded]=useState<Uploaded[]>([]);
@@ -78,21 +80,24 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
  const chooseDataset=()=>run('Creating the dataset…',async()=>{
   if(datasetId==='new'){
    const name=newName.trim();if(!name)throw new Error('Give the dataset a name.');
-   const created=await api('/datasets','POST',{name});
+   const created=await api('/datasets','POST',{name,description:newDescription.trim()});
    await api(`/datasets/${encodeURIComponent(created.id)}/migrate-settings`,'POST',{});  // Workspace Default models.
    setDatasetId(created.id);onChanged();
   }else if(!datasetId)throw new Error('Choose a dataset.');
   next();
  });
- const addFiles=(list:FileList|null)=>{if(!list)return;const picked=pickFiles([...files,...Array.from(list)]);setFiles(picked.files);setNote(picked.note);};
- const upload=()=>run('Uploading…',async()=>{
+ const chooseFiles=(next:File[])=>{setFiles(next);if(!mergeTouched)setMerge(mergeByDefault(next));};
+ const addFiles=(list:FileList|null)=>{if(!list)return;const picked=pickFiles([...files,...Array.from(list)]);chooseFiles(picked.files);setNote(picked.note);};
+ const merging=merge&&canMerge(files);
+ const upload=()=>run(merging?'Merging your files into one document, then uploading…':'Uploading…',async()=>{
   if(!files.length)throw new Error('Add at least one document or photo.');
   if(!uploadConsent)throw new Error('Tick the box to let Lapi read these documents.');
   const form=new FormData();files.forEach(file=>form.append('files',file,file.name));
   form.append('dataset_id',datasetId);form.append('allow_external','true');
+  if(merging)form.append('merge_files','true');
   const result=await api('/documents/upload','POST',form);
   setUploaded((result.documents||[]).map((doc:Entity)=>({id:doc.id,name:doc.name||doc.filename||'Document',state:fileState(doc.status),error:''})));
-  setFiles([]);onChanged();go('processing');
+  setFiles([]);setMergeTouched(false);onChanged();go('processing');
  });
  const ask=(text:string)=>run('Lapi is reading your documents to answer…',async()=>{
   const value=text.trim();if(!value)throw new Error('Type a question, or tap one of the suggestions.');
@@ -125,9 +130,9 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
   go('extracting');setWorking('Pulling out your data…');
   const created=await api('/extractions','POST',{document_ids:readyIds.slice(0,20),template_id:template.id,dataset_id:datasetId,allow_external:true});
   const id=created.id||created.extraction_id;const started=Date.now();
-  let current:Entity=created;
+  let current:Entity=created;setExtraction(created);
   while(!['ready','failed','cancelled'].includes(current.status)&&Date.now()-started<POLL_LIMIT_MS){
-   await wait(POLL_MS);current=await api(`/extractions/${encodeURIComponent(id)}`,'GET',undefined,undefined,true);
+   await wait(POLL_MS);current=await api(`/extractions/${encodeURIComponent(id)}`,'GET',undefined,undefined,true);setExtraction(current);
   }
   setExtraction(current);onChanged();
   if(current.status!=='ready')throw new Error(current.error||'The extraction did not finish. Open Review to see it, or try again.');
@@ -171,7 +176,11 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
       {canCreateDataset(isAdmin)&&<label className={datasetId==='new'?'selected':''}><input type="radio" name="qs-dataset" checked={datasetId==='new'} onChange={()=>setDatasetId('new')}/>
        <span><strong><Plus size={15}/> New dataset</strong><small>Uses the workspace's default models</small></span></label>}
      </div>}
-     {datasetId==='new'&&<label className="quick-start-field">Dataset name<input value={newName} maxLength={200} onChange={e=>setNewName(e.target.value)} disabled={busy}/></label>}
+     {datasetId==='new'&&<fieldset className="quick-start-new">
+      <legend>New dataset</legend>
+      <label className="quick-start-field">Name<input value={newName} maxLength={200} onChange={e=>setNewName(e.target.value)} disabled={busy}/></label>
+      <label className="quick-start-field">Description <small>(optional)</small><textarea rows={2} value={newDescription} maxLength={1000} placeholder="What goes in here, for example: supplier invoices for 2026" onChange={e=>setNewDescription(e.target.value)} disabled={busy}/></label>
+     </fieldset>}
      {!editor&&choices.length>0&&consentBox('qs-consent-ask-viewer',aiConsent,setAiConsent,'Let Lapi send my questions and the matching document text to the AI model set up for this dataset.')}
     </>}
 
@@ -185,7 +194,17 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
      </div>
      {note&&<p className="quick-start-note">{note}</p>}
      {files.length>0&&<ul className="quick-start-files">{files.map((file,i)=><li key={file.name+i}><span>{file.name}</span><small>{Math.max(1,Math.round(file.size/1024))} KB</small>
-      <button type="button" aria-label={`Remove ${file.name}`} onClick={()=>setFiles(files.filter((_,j)=>j!==i))} disabled={busy}><X size={16}/></button></li>)}</ul>}
+      <button type="button" aria-label={`Remove ${file.name}`} onClick={()=>chooseFiles(files.filter((_,j)=>j!==i))} disabled={busy}><X size={16}/></button></li>)}</ul>}
+     {canMerge(files)&&<fieldset className="quick-start-merge">
+      <legend>{files.length} files: one document or separate?</legend>
+      <div className="quick-start-options">
+       <label className={merge?'selected':''}><input type="radio" name="qs-merge" checked={merge} onChange={()=>{setMerge(true);setMergeTouched(true);}} disabled={busy}/>
+        <span><strong>Merge into one document</strong><small>Pages or photos of one paper document. Lapi stitches them in this order, then reads them as one.</small></span></label>
+       <label className={!merge?'selected':''}><input type="radio" name="qs-merge" checked={!merge} onChange={()=>{setMerge(false);setMergeTouched(true);}} disabled={busy}/>
+        <span><strong>Keep as separate documents</strong><small>Different documents. Each is read and extracted on its own.</small></span></label>
+      </div>
+      {merge&&<p className="quick-start-note">It is saved as "merged-{files[0].name.replace(/\.[^.]+$/,'')}-{files.length}-files", and keeps each original file and page.</p>}
+     </fieldset>}
      {consentBox('qs-consent-upload',uploadConsent,setUploadConsent,'Let Lapi read and index these documents with the AI services set up for this dataset.')}
      {cloud.length>0&&<p className="quick-start-alt">Your files are in cloud storage? <a href={'#'+encodeURIComponent('Add knowledge')+'/'+encodeURIComponent(cloud[0])} onClick={onClose}>Connect it with the step-by-step guide</a> instead.</p>}
     </>}
@@ -241,21 +260,27 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
         <button type="submit" className="quick-start-secondary" disabled={busy||!change.trim()}><Wand2 size={16}/> Rewrite</button></div>
       </form>
      </>}
-     {!fields.length&&!busy&&<button type="button" className="quick-start-secondary" onClick={()=>void suggest()}><Wand2 size={16}/> Suggest fields</button>}
+     {!fields.length&&!busy&&<div className="quick-start-foot-actions quick-start-start-fields">
+      <button type="button" className="quick-start-secondary" onClick={()=>void suggest()}><Wand2 size={16}/> Suggest fields</button>
+      <button type="button" className="quick-start-secondary" onClick={()=>{setError('');setPromptName(name=>name||'Extraction');addField();}}><Plus size={16}/> Add fields yourself</button>
+     </div>}
     </>}
 
     {step==='extracting'&&<>
-     {!extraction&&!error&&<p className="quick-start-lead">Lapi is reading your documents with the prompt. This usually takes under a minute.</p>}
+     {!rows.length&&<p className="quick-start-lead">{error?'The extraction stopped.':'Lapi is reading your documents with the prompt. This usually takes under a minute.'}</p>}
+     {!rows.length&&<ol className="quick-start-stages" aria-live="polite">{extractionStages(extraction?.status||'saved',Math.max(1,Math.min(readyIds.length,20))).map(stage=><li key={stage.label} data-state={stage.state}>
+      <span className="quick-start-stage-dot">{stage.state==='done'?<Check size={14}/>:stage.state==='on'?<Loader2 size={14} className="animate-spin"/>:stage.state==='failed'?<X size={14}/>:null}</span>{stage.label}</li>)}</ol>}
      {error&&!busy&&<button type="button" className="quick-start-secondary" onClick={()=>{setExtraction(null);go('prompt');}}>Back to the fields</button>}
-     {rows.length>0&&<article className="quick-start-answer"><h3>{promptName||'Extracted values'}</h3>
-      <dl className="quick-start-values">{rows.map(row=><div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></article>}
+     {rows.length>0&&<article className="quick-start-answer" aria-live="polite"><h3><Check size={16}/> {promptName||'Extracted values'}</h3>
+      <dl className="quick-start-values">{rows.map(row=><div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
+      <p className="quick-start-note">Check each value against its source on the Review page, correct anything, then approve.</p></article>}
     </>}
 
     {step==='done'&&<>
      <div className="quick-start-celebrate"><Sparkles size={34}/></div>
      <p className="quick-start-lead">{path==='extract'?'You added documents, let Lapi write an extraction prompt and pulled out your first data.':'You added documents and got your first answer with sources.'} Everything is in <strong>{dataset?.name||'your dataset'}</strong>.</p>
      <div className="quick-start-next">
-      {path==='extract'?<button type="button" onClick={()=>{onClose();onNavigate('Extract');}}><FileSearch size={18}/><span>Check the results in Review</span></button>
+      {path==='extract'?<button type="button" onClick={()=>{if(extraction)openReviewPage(extraction.extraction_id||extraction.id);else onNavigate('Extract');onClose();}}><FileSearch size={18}/><span>Check the results in Review</span></button>
        :<button type="button" onClick={()=>{onClose();onNavigate('Home');}}><MessageSquare size={18}/><span>Keep asking on the Dashboard</span></button>}
       {editor&&<button type="button" onClick={()=>{setAnswer(null);setQuestion('');setUploaded([]);setExtraction(null);go('documents');}}><FileUp size={18}/><span>Add more documents</span></button>}
       {canShare&&dataset&&<button type="button" onClick={()=>{onClose();openDatasetEditor(dataset.id,'members');}}><Users size={18}/><span>Share with your team</span></button>}
@@ -268,12 +293,15 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
 
    <footer className="quick-start-foot">
     {step==='dataset'&&<button type="button" className="quick-start-primary" disabled={busy||(!choices.length&&!canCreateDataset(isAdmin))||(!editor&&!aiConsent)} onClick={()=>void chooseDataset()}>{busy?'Creating…':'Continue'}</button>}
-    {step==='documents'&&<button type="button" className="quick-start-primary" disabled={busy||!files.length||!uploadConsent} onClick={()=>void upload()}>{busy?'Uploading…':`Upload ${files.length||''} and read`.replace('  ',' ')}</button>}
+    {step==='documents'&&<button type="button" className="quick-start-primary" disabled={busy||!files.length||!uploadConsent} onClick={()=>void upload()}>{busy?(merging?'Merging and uploading…':'Uploading…'):merging?`Merge ${files.length} into one and read`:`Upload ${files.length||''} and read`.replace('  ',' ')}</button>}
     {step==='processing'&&<button type="button" className="quick-start-primary" disabled={!state.ready} onClick={next}>{state.ready?'Continue':'Reading…'}</button>}
     {step==='choose'&&<p className="quick-start-foot-note">{aiConsent?'Choose one above.':'Tick the box above to continue.'}</p>}
     {step==='ask'&&<button type="button" className="quick-start-primary" disabled={!answer||busy} onClick={next}>{answer?'Finish':'Ask to continue'}</button>}
     {step==='prompt'&&<button type="button" className="quick-start-primary" disabled={busy||!fields.length} onClick={()=>void extract()}>Save prompt and extract</button>}
-    {step==='extracting'&&<button type="button" className="quick-start-primary" disabled={busy||!rows.length} onClick={next}>{rows.length?'Finish':'Extracting…'}</button>}
+    {step==='extracting'&&(rows.length&&extraction?<div className="quick-start-foot-actions">
+     <button type="button" className="quick-start-secondary" onClick={next}>Finish</button>
+     <button type="button" className="quick-start-primary" onClick={()=>{openReviewPage(extraction.extraction_id||extraction.id);onClose();}}><FileSearch size={18}/> Review</button>
+    </div>:<button type="button" className="quick-start-primary" disabled>{error?'Stopped':'Extracting…'}</button>)}
     {step==='done'&&<button type="button" className="quick-start-primary" onClick={onClose}>Close</button>}
    </footer>
    </div>

@@ -150,3 +150,24 @@ body:has(.quick-start) .operation-popup{display:none}
 .quick-start-backdrop:has(.is-enlarged){padding:0}
 .quick-start.is-enlarged{width:100%;height:100%;max-height:none;border-radius:0}
 @media(max-width:640px){.quick-start-enlarge{display:none}}
+
+/* New dataset fields, the merge choice and the extraction workflow. */
+.quick-start-new,.quick-start-merge{display:grid;gap:12px;margin:0;padding:14px;border:1px solid var(--blue-line);border-radius:16px;background:#f5f8ff;min-width:0}
+.quick-start-new legend,.quick-start-merge legend{padding:0 6px;font-size:13.5px;font-weight:800;color:#1e3a8a}
+.quick-start-field small{color:var(--muted);font-weight:500}
+.quick-start-field textarea{width:100%;min-height:64px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font:inherit;resize:vertical;box-sizing:border-box}
+.quick-start-stages{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.quick-start-stages li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:#fff;color:var(--muted);font-size:14.5px;font-weight:700}
+.quick-start-stages li[data-state=on]{border-color:var(--blue-line);background:#eef4ff;color:#1e3a8a}
+.quick-start-stages li[data-state=done]{color:var(--ink)}
+.quick-start-stages li[data-state=failed]{border-color:#fecaca;background:#fef2f2;color:#b91c1c}
+.quick-start-stage-dot{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);flex:none}
+.quick-start-stages li[data-state=on] .quick-start-stage-dot{border-color:#2563eb;color:#2563eb}
+.quick-start-stages li[data-state=done] .quick-start-stage-dot{background:#16a34a;border-color:#16a34a;color:#fff}
+.quick-start-stages li[data-state=failed] .quick-start-stage-dot{background:#dc2626;border-color:#dc2626;color:#fff}
+.quick-start-answer h3{display:flex;align-items:center;gap:6px}
+.quick-start-foot-actions{display:flex;gap:10px;justify-content:flex-end;width:100%}
+.quick-start-foot-actions .quick-start-secondary{justify-self:auto;min-height:52px}
+.quick-start-foot-actions .quick-start-primary{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+@media(min-width:900px){.quick-start-foot-actions .quick-start-primary{flex:none}}
+.quick-start-start-fields{justify-content:flex-start;flex-wrap:wrap}

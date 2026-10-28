@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.23 - 29 October 2026
+
+Merge files, extraction workflow and Review from Quick start
+
+- Quick start New dataset: name and optional description (`POST /api/datasets` `description`).
+- Merge before reading: with 2–20 files, Quick start offers "Merge into one document" or "Keep as separate documents" (photos merge by default; `merge_files=true` on `/api/documents/upload`). Lapi Agent `/Upload` without an extraction step offers the same choice (`extraction_mode=merge` on the plan upload call, which already stitched files). Merged documents are named `merged-<first file>-<n>-files`.
+- Extracting: a workflow list from the extraction's real status (`extractionStages` in `quick-start-flow.ts`). Results stay in the popup with Finish and Review; Review dispatches `lapi:open-review` (`OPEN_REVIEW_EVENT`), which `page.tsx` handles with `openReview(id)`.
+- Fields step: "Add fields yourself" next to "Suggest fields", for when the model cannot draft them.
+
 ## v26.1.16.22 - 29 October 2026
 
 Contributor datasets use the workspace Default models

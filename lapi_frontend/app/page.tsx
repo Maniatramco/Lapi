@@ -19,6 +19,7 @@ import { ConnectionStatus } from "./connection-status";
 import { AboutLapi } from "./about-lapi";
 import { WalkthroughGate } from "./walkthrough";
 import { WorkspaceAssist } from "./workspace-assist";
+import { OPEN_REVIEW_EVENT } from "./quick-start-flow";
 import { OperationProgress, extractionProgressJob } from "./operation-progress";
 import "./workspace-flow.css";
 import { DatasetWorkspace, DatasetMappings, ModelPicker, eligibleModels, modelLabel } from "./dataset-workspace";
@@ -556,6 +557,13 @@ export default function App() {
     setReviewOpenRequest(n=>n+1);
     return true;
   };
+  // Other screens (Quick start) open an extraction's Review with an event.
+  const openReviewRef = useRef(openReview);
+  openReviewRef.current = openReview;
+  useEffect(()=>{
+    const open=(event:Event)=>{const id=(event as CustomEvent<{id?:string}>).detail?.id;if(id)openReviewRef.current(id);};
+    window.addEventListener(OPEN_REVIEW_EVENT,open);return()=>window.removeEventListener(OPEN_REVIEW_EVENT,open);
+  },[]);
   useEffect(()=>{
     if(!user || view!=='Review' || !reviewRouteId || extraction?.id===reviewRouteId)return;
     let active=true;

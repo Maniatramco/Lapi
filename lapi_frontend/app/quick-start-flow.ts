@@ -14,6 +14,28 @@ export type Field={key:string;label:string;type:FieldType;description:string};
 export const ACCEPT='.pdf,.docx,.txt,.json,.png,.jpg,.jpeg,.webp,application/pdf,image/*';
 export const MAX_FILES=10;
 
+/** Opens an extraction on the Review page (handled in page.tsx). */
+export const OPEN_REVIEW_EVENT='lapi:open-review';
+export function openReviewPage(id:string){if(typeof window!=='undefined')window.dispatchEvent(new CustomEvent(OPEN_REVIEW_EVENT,{detail:{id}}));}
+
+/** Several files can be stitched into one document before reading (pages of one paper
+ * document, photos of one invoice). Photos only: merging is the likely intent. */
+export const canMerge=(files:{name:string}[])=>files.length>=2&&files.length<=20;
+export const mergeByDefault=(files:{name:string;type?:string}[])=>canMerge(files)&&files.every(file=>file.type?.startsWith('image/')||/\.(png|jpe?g|webp)$/i.test(file.name));
+export function mergedName(files:{name:string}[]){
+ const first=(files[0]?.name||'Document').replace(/\.[^.]+$/,'');
+ return `${first} + ${files.length-1} more`.slice(0,120);
+}
+
+export type StageState='done'|'on'|'todo'|'failed';
+/** The extraction workflow shown while Lapi pulls out data, from the extraction's real status. */
+export function extractionStages(status:string|undefined,documents:number):{label:string;state:StageState}[]{
+ const labels=['Prompt saved','Waiting for a worker',`Reading ${documents} document${documents===1?'':'s'} with the AI model`,'Checking the values against your fields','Ready to review'];
+ if(status==='failed'||status==='cancelled')return labels.map((label,i)=>({label,state:i===0?'done':i===1?'failed':'todo'}));
+ const at=status==='ready'?5:status==='running'||status==='processing'?2:status==='queued'?1:0;
+ return labels.map((label,i)=>({label,state:i<at?'done':i===at?'on':'todo'}));
+}
+
 export const SUGGESTED_QUESTIONS=[
  'Summarize this in five bullet points',
  'What are the key dates, amounts and names?',

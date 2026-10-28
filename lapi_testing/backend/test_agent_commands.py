@@ -120,3 +120,14 @@ def test_direct_onboard_confirms_existing_full_processing_workflow(system,monkey
     assert workflow['status']=='completed' and workflow['vector_publication']['verified_vectors']>0
     assert len(workflow['vector_publication']['parquet_files'])==2
     assert all(s.api.get('/api/extractions/'+id).json()['result'] for id in workflow['extraction_ids'])
+
+
+def test_agent_upload_can_merge_several_files_into_one_document(system):
+    """/Upload with several files: merge stitches them into one document before reading."""
+    s=system;d=dataset(s)
+    p=plan(s,d,text='@Upload')
+    files=[('files',('page1.txt',b'Invoice 7 page one','text/plain')),('files',('page2.txt',b'Invoice 7 page two','text/plain'))]
+    r=s.api.post(f'/api/agent-v2/plans/{p["id"]}/calls/0/upload',data={'dataset_id':d['id'],'confirmed':'true','extraction_mode':'merge'},files=files)
+    assert r.status_code==200,r.text
+    documents=r.json()['calls'][0]['result']['documents']
+    assert len(documents)==1 and documents[0]['name'].startswith('merged-page1-2-files')

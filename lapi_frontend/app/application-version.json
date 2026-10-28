@@ -1,6 +1,18 @@
 {
-  "version": "26.1.16.22",
+  "version": "26.1.16.23",
   "releases": [
+    {
+      "version": "26.1.16.23",
+      "date": "2026-10-29",
+      "title": "Merge files, extraction workflow and Review from Quick start",
+      "changes": [
+        "New dataset in Quick start asks for a name and an optional description.",
+        "Uploading several files, in Quick start or with /Upload in Lapi Agent, now asks whether to merge them into one document (pages or photos of one paper document) or keep them separate. Merged files are stitched in order before reading, keeping every original file and page. Photos merge by default in Quick start.",
+        "While extracting, Quick start shows the workflow: prompt saved, waiting for a worker, reading the documents, checking the values, ready.",
+        "Extracted values show in the same popup with a Review button that opens that extraction on the Review page.",
+        "If the AI cannot suggest extraction fields, add them yourself."
+      ]
+    },
     {
       "version": "26.1.16.22",
       "date": "2026-10-29",
