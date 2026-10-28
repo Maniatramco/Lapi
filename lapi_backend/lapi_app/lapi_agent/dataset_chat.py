@@ -227,7 +227,10 @@ def install(app,auth,main):
         return {'id':record.id,**data}
 
     @app.post('/api/dataset-chat/messages')
-    def message(body:ChatInput,owner=Depends(auth)):return run(body,owner,main)
+    def message(body:ChatInput,owner=Depends(auth)):
+        # Like the streamed reply: a provider failure is a readable 502, not a server error.
+        try:return run(body,owner,main)
+        except providers.ProviderError as exc:raise HTTPException(502,f'The chat model could not answer: {exc}')
 
     @app.post('/api/dataset-chat/reply')
     def reply(body:ChatInput,owner=Depends(auth)):

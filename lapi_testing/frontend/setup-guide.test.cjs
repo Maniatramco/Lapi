@@ -39,29 +39,30 @@ test('the sheet asks until answered or skipped; the card shows until hidden',()=
  assert.equal(showNextSteps(cleanPreferences({})),false);
 });
 
-test('people who can add knowledge get the connector guide for their first source as the primary step',()=>{
+test('people who can add knowledge start with the quick start, then their source and goal',()=>{
  const drive=recommendNextSteps({goals:['ask'],sources:['google_drive','s3']},editor);
- assert.deepEqual(drive.primary,{kind:'connect',provider:'google_drive',label:'Connect Google Drive',detail:drive.primary.detail});
- assert.match(drive.primary.detail,/step-by-step Google Drive guide/);
- assert.deepEqual(drive.steps.map(s=>s.kind+(s.provider?':'+s.provider:'')),['connect:google_drive','ask','connect:s3']);
+ assert.equal(drive.primary.kind,'quick-start');assert.equal(drive.primary.label,'Add documents and ask');
+ assert.deepEqual(drive.steps.map(s=>s.kind+(s.provider?':'+s.provider:'')),['quick-start','connect:google_drive','ask']);
+ assert.match(drive.steps[1].detail,/step-by-step Google Drive guide/);
  assert.deepEqual(drive.notes,[]);
  const files=recommendNextSteps({goals:['extract'],sources:['files']},editor);
- assert.equal(files.primary.kind,'upload');assert.deepEqual(files.steps.map(s=>s.kind),['upload','extract','ask']);
+ assert.deepEqual(files.steps.map(s=>s.kind),['quick-start','extract','agent']);
  const unsure=recommendNextSteps({goals:[],sources:['not_sure']},admin);
- assert.equal(unsure.primary.kind,'add-knowledge');assert.ok(unsure.steps.length>=2&&unsure.steps.length<=3);
+ assert.equal(unsure.primary.kind,'quick-start');assert.ok(unsure.steps.length>=2&&unsure.steps.length<=3);
  const research=recommendNextSteps({goals:['research'],sources:['sharepoint']},admin);
- assert.equal(research.primary.label,'Connect SharePoint');assert.equal(research.steps[1].kind,'research');
+ assert.equal(research.steps[1].label,'Connect SharePoint');assert.equal(research.steps[2].kind,'research');
 });
 
-test('an administrator with no datasets is offered "Create your first dataset" first',()=>{
+test('an administrator with no datasets creates one inside the quick start',()=>{
  const first=recommendNextSteps({goals:['knowledge_base'],sources:['oci_object']},{isAdmin:true,canAddKnowledge:true,datasetCount:0});
- assert.equal(first.primary.kind,'create-dataset');assert.equal(first.primary.label,'Create your first dataset');
- assert.deepEqual(first.steps.map(s=>s.kind),['create-dataset','connect','ask']);assert.equal(first.steps[1].provider,'oci_object');
+ assert.equal(first.primary.kind,'quick-start');assert.equal(first.primary.label,'Create a dataset and add documents');
+ assert.deepEqual(first.steps.map(s=>s.kind),['quick-start','connect','ask']);assert.equal(first.steps[1].provider,'oci_object');
+ assert.match(first.notes[0],/creates your first dataset/);
 });
 
 test('Viewers are guided to ask in shared datasets and to ask an owner to connect their sources',()=>{
  const guide=recommendNextSteps({goals:['ask','extract'],sources:['google_drive','files','not_sure']},viewer);
- assert.equal(guide.primary.kind,'ask');
+ assert.equal(guide.primary.kind,'quick-start');assert.equal(guide.primary.label,'Ask your first question');
  assert.ok(guide.steps.every(s=>!['connect','upload','add-knowledge','extract','create-dataset'].includes(s.kind)));
  assert.ok(guide.steps.some(s=>s.kind==='agent'));
  assert.ok(guide.notes.includes('Ask a dataset owner or administrator to connect Google Drive.'));
@@ -69,7 +70,7 @@ test('Viewers are guided to ask in shared datasets and to ask an owner to connec
  assert.ok(guide.notes.some(n=>/Editor access/.test(n)));
  const none=recommendNextSteps({goals:[],sources:[]},{isAdmin:false,canAddKnowledge:false,datasetCount:0});
  assert.equal(none.primary.kind,'agent');assert.match(none.notes[0],/No datasets are shared with you/);
- assert.equal(recommendNextSteps({goals:['research'],sources:[]},viewer).primary.kind,'research');
+ assert.equal(recommendNextSteps({goals:['research'],sources:[]},viewer).steps[1].kind,'research');
 });
 
 test('every recommendation has a primary step and at most three steps, without duplicates',()=>{

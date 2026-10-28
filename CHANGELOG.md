@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.20 - 28 October 2026
+
+Quick start and company sign-in
+
+- **Quick start** (`quick-start.tsx`, `quick-start-flow.ts`): one guided workflow, full screen on phones: choose a dataset (administrators can create one with the workspace Default models), add documents (camera or files, up to 10; PDF, Word, text, JSON, images) with consent to process them, live reading progress per file, a first question with suggested questions, the answer and its sources, then next actions (keep asking, add more, share with the team). Viewers choose a dataset and ask. It is the primary next step for everyone (`setup-guide.ts`) and the phone tab bar's Add button.
+- **Company sign-in providers**: `keycloak_identity_providers` (Terraform) lists Keycloak identity providers (alias → label); Lapi shows one button per provider that passes `kc_idp_hint`, plus "Use a Keycloak account instead". Microsoft, Google and GitHub have their logos. Guide: `lapi_docs/company-sign-in.md`.
+- `POST /api/dataset-chat/messages` returns 502 with the reason when the chat model fails, instead of 500.
+
 ## v26.1.16.19 - 28 October 2026
 
 Hosted Keycloak starts

@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.19",
+  "version": "26.1.16.20",
   "releases": [
+    {
+      "version": "26.1.16.20",
+      "date": "2026-10-28",
+      "title": "Quick start and company sign-in",
+      "changes": [
+        "New Quick start: a short guided sheet that takes you through one complete workflow: choose or create a dataset, add a photo or files, watch them being read, and ask your first question with sources. It is the first suggested step after the set-up questions, and the Add button on phones.",
+        "Sign in with Microsoft or Google (and other providers) through Keycloak: one button each on the sign-in page, shown once they are set up in Keycloak.",
+        "When the chat model cannot answer, Lapi now says so instead of showing a server error."
+      ]
+    },
     {
       "version": "26.1.16.19",
       "date": "2026-10-28",

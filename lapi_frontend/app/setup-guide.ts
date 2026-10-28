@@ -52,7 +52,7 @@ export function accessFor(user:{is_admin?:boolean}|null|undefined,datasets:Datas
 export const shouldAskSetup=(preferences:Preferences|null)=>Boolean(preferences&&!preferences.completed);
 export const showNextSteps=(preferences:Preferences|null)=>Boolean(preferences&&preferences.completed&&!preferences.dismissed_next_steps);
 
-export type StepKind='create-dataset'|'connect'|'add-knowledge'|'upload'|'ask'|'research'|'agent'|'extract';
+export type StepKind='quick-start'|'create-dataset'|'connect'|'add-knowledge'|'upload'|'ask'|'research'|'agent'|'extract';
 export type NextStep={kind:StepKind;label:string;detail:string;provider?:string};
 export type Guidance={primary:NextStep;steps:NextStep[];notes:string[]};
 
@@ -66,31 +66,34 @@ const AGENT:NextStep={kind:'agent',label:'Open Lapi Agent',detail:'Chat with the
 const EXTRACT:NextStep={kind:'extract',label:'Run an extraction',detail:'Pull fields out of documents, then review them side by side.'};
 const CREATE:NextStep={kind:'create-dataset',label:'Create your first dataset',detail:'A dataset holds documents, models and who can see them.'};
 const ADD:NextStep={kind:'add-knowledge',label:'Add knowledge',detail:'Choose a storage provider and follow its guide.'};
+// One guided workflow end to end (quick-start.tsx): dataset → documents → reading → a first answer.
+const QUICK:NextStep={kind:'quick-start',label:'Add documents and ask',detail:'2 minutes: add a photo or files, then ask your first question with sources.'};
+const QUICK_FIRST:NextStep={kind:'quick-start',label:'Create a dataset and add documents',detail:'2 minutes: name it, add a photo or files, then ask your first question.'};
+const QUICK_ASK:NextStep={kind:'quick-start',label:'Ask your first question',detail:'Pick a dataset shared with you and get an answer with its sources.'};
 
-/** One primary action plus up to three one-tap steps, chosen from the answers and what the person may do. */
+/** One primary action plus up to three one-tap steps, chosen from the answers and what the person may do.
+ * The primary action is always the Quick start, so everyone completes one workflow end to end. */
 export function recommendNextSteps(preferences:Pick<Preferences,'goals'|'sources'>,access:Access):Guidance{
  const goals=preferences.goals,sources=named(preferences.sources);
+ const cloud=sources.filter(s=>s!=='files');
  const goalStep=(canExtract:boolean)=>goals.includes('extract')&&canExtract?EXTRACT:goals.includes('research')?RESEARCH:ASK;
  const steps:NextStep[]=[],notes:string[]=[];
  const add=(step:NextStep)=>{if(steps.length<3&&!steps.some(s=>s.kind===step.kind&&s.provider===step.provider))steps.push(step);};
  if(access.canAddKnowledge){
-  const first=sources.length?sourceStep(sources[0]):ADD;
   if(access.isAdmin&&access.datasetCount===0){
-   add(CREATE);add(first);add(goalStep(true));
-   notes.push('Create a dataset first: knowledge is always added into a dataset.');
-  }else{
-   add(first);add(goalStep(true));
-   if(sources[1])add(sourceStep(sources[1]));
-   if(goals.includes('extract'))add(ASK);
-   add(AGENT);
-  }
+   add(QUICK_FIRST);
+   notes.push('The quick start creates your first dataset: knowledge is always added into a dataset.');
+  }else add(QUICK);
+  if(cloud[0])add(sourceStep(cloud[0]));
+  add(goalStep(true));
+  if(cloud[1])add(sourceStep(cloud[1]));
+  add(AGENT);
  }else{
   if(access.datasetCount===0){
    add(AGENT);
    notes.push('No datasets are shared with you yet. Ask an administrator to give you access to one.');
   }else{
-   add(goals.includes('research')?RESEARCH:ASK);add(AGENT);
-   if(goals.includes('research'))add(ASK);
+   add(QUICK_ASK);add(goals.includes('research')?RESEARCH:ASK);add(AGENT);
   }
   for(const source of sources)notes.push(source==='files'?'Ask a dataset owner or administrator to add your files.':`Ask a dataset owner or administrator to connect ${CONNECTOR_NAMES[source]}.`);
   if(goals.includes('extract'))notes.push('Extracting fields needs Editor access to a dataset. You can ask for it from a dataset owner.');

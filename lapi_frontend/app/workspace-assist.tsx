@@ -8,6 +8,7 @@ import {GOALS,SOURCES,accessFor,addKnowledgeRoute,cleanPreferences,recommendNext
 import {INITIAL_STATE,SHORTCUT_LIST,resolveShortcut,type ShortcutState} from './shortcuts';
 import './workspace-assist.css';
 import './mobile.css';
+import {QuickStart} from './quick-start';
 
 type Api=(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;
 type Entity=Record<string,any>;
@@ -49,7 +50,7 @@ function trapTab(event:ReactKeyboardEvent<HTMLElement>,root:HTMLElement|null){
  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
 }
 
-const STEP_ICON:Record<string,typeof Database>={'create-dataset':Database,connect:CloudUpload,'add-knowledge':CloudUpload,upload:CloudUpload,ask:MessageSquare,research:Search,agent:Sparkles,extract:Table2};
+const STEP_ICON:Record<string,typeof Database>={'quick-start':Sparkles,'create-dataset':Database,connect:CloudUpload,'add-knowledge':CloudUpload,upload:CloudUpload,ask:MessageSquare,research:Search,agent:Sparkles,extract:Table2};
 const GOAL_ICON:Record<Goal,typeof Database>={ask:MessageSquare,extract:Table2,research:FileSearch,knowledge_base:Users};
 
 function Choice({selected,onToggle,title,detail,icon:Icon}:{selected:boolean;onToggle:()=>void;title:string;detail?:string;icon?:typeof Database}){
@@ -112,11 +113,11 @@ function ShortcutsDialog({onClose}:{onClose:()=>void}){
  </div>;
 }
 
-export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigation}:{api:Api;user:Entity;view:string;datasets:Entity[];onNavigate:(view:string)=>unknown;onOpenNavigation:()=>void}){
+export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigation,onChanged=()=>undefined}:{api:Api;user:Entity;view:string;datasets:Entity[];onNavigate:(view:string)=>unknown;onOpenNavigation:()=>void;onChanged?:()=>void}){
  const userId=String(user?.id||user?.username||'');
  const access=accessFor(user,datasets);
  const [preferences,setPreferences]=useState<Preferences|null>(null);
- const [sheetOpen,setSheetOpen]=useState(false),[helpOpen,setHelpOpen]=useState(false);
+ const [sheetOpen,setSheetOpen]=useState(false),[helpOpen,setHelpOpen]=useState(false),[quickOpen,setQuickOpen]=useState(false);
  const [tourDone,setTourDone]=useState(()=>tourSettledFor()===String(user?.id||''));
  const [announcement,setAnnouncement]=useState(''),[mounted,setMounted]=useState(false);
  const sequence=useRef<ShortcutState>(INITIAL_STATE),own=useRef<HTMLDivElement>(null);
@@ -168,6 +169,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
  const act=useCallback(async(step:NextStep)=>{
   setSheetOpen(false);
   switch(step.kind){
+   case 'quick-start':setQuickOpen(true);break;
    case 'create-dataset':go('Datasets');say('Datasets opened. Create your first dataset here.');break;
    case 'connect':window.location.hash=addKnowledgeRoute(step.provider);say(`${step.label}: the step-by-step guide is open.`);break;
    case 'add-knowledge':go('Add knowledge');break;
@@ -232,12 +234,13 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   <nav className="mobile-tab-bar" aria-label="Quick navigation">
    {tab('Home','Dashboard',LayoutDashboard)}
    {tab('Lapi agent V2','Ask',null)}
-   {access.canAddKnowledge&&tab('Add knowledge','Add',CloudUpload)}
+   {access.canAddKnowledge&&<button type="button" className="tab-bar-item" aria-label="Add documents" onClick={()=>setQuickOpen(true)}><CloudUpload size={22} aria-hidden="true"/><span>Add</span></button>}
    <button type="button" className="tab-bar-item" aria-label="More pages" aria-haspopup="dialog" aria-controls="workspace-navigation" onClick={onOpenNavigation}><Menu size={22} aria-hidden="true"/><span>More</span></button>
   </nav>
   {view==='Home'&&!sheetOpen&&<button type="button" className="mobile-ask-fab" aria-label="Ask a question" onClick={()=>void ask()}><MessageSquare size={20} aria-hidden="true"/><span>Ask</span></button>}
   {sheetOpen&&preferences&&<SetupSheet initial={preferences} access={access} onSave={async answers=>{await save(answers);}} onSkip={skip} onAct={step=>void act(step)} onClose={()=>setSheetOpen(false)}/>}
   {helpOpen&&<ShortcutsDialog onClose={()=>setHelpOpen(false)}/>}
+  {quickOpen&&<QuickStart api={api} user={user} datasets={datasets} sources={preferences?.sources||[]} onClose={()=>setQuickOpen(false)} onChanged={onChanged} onNavigate={target=>go(target)}/>}
   <p className="sr-only" aria-live="polite" role="status">{announcement}</p>
  </div>;
  return <>{card}{mounted&&createPortal(layer,document.body)}</>;
