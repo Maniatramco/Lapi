@@ -70,13 +70,16 @@ resource "oci_core_security_list" "public" {
   vcn_id         = oci_core_vcn.lapi.id
   display_name   = "${var.name}-public-sl"
 
-  egress_security_rules {
-    description = "Load balancer to the web container"
-    destination = local.private_cidr
-    protocol    = "6"
-    tcp_options {
-      min = 3000
-      max = 3000
+  dynamic "egress_security_rules" {
+    for_each = toset(values(local.lb_ports))
+    content {
+      description = "Load balancer to the container instance (Caddy, or web when https is off)"
+      destination = local.private_cidr
+      protocol    = "6"
+      tcp_options {
+        min = egress_security_rules.value
+        max = egress_security_rules.value
+      }
     }
   }
   dynamic "ingress_security_rules" {
@@ -102,13 +105,16 @@ resource "oci_core_security_list" "private" {
     destination = "0.0.0.0/0"
     protocol    = "all"
   }
-  ingress_security_rules {
-    description = "Web container, from the load balancer only"
-    source      = local.public_cidr
-    protocol    = "6"
-    tcp_options {
-      min = 3000
-      max = 3000
+  dynamic "ingress_security_rules" {
+    for_each = toset(values(local.lb_ports))
+    content {
+      description = "Caddy (or web when https is off), from the load balancer only"
+      source      = local.public_cidr
+      protocol    = "6"
+      tcp_options {
+        min = ingress_security_rules.value
+        max = ingress_security_rules.value
+      }
     }
   }
 }

@@ -22,7 +22,23 @@ resource "oci_artifacts_container_repository" "web" {
 locals {
   keycloak        = var.keycloak_url != ""
   keycloak_secret = local.keycloak && var.keycloak_confidential_client
-  public_url      = trimsuffix(var.public_url != "" ? var.public_url : "http://${oci_load_balancer_load_balancer.lapi.ip_address_details[0].ip_address}", "/")
+  lb_ip           = oci_load_balancer_load_balancer.lapi.ip_address_details[0].ip_address
+  https_hostname  = var.https_hostname != "" ? var.https_hostname : "lapi.${local.lb_ip}.sslip.io"
+  public_url      = trimsuffix(var.public_url != "" ? var.public_url : var.https ? "https://${local.https_hostname}" : "http://${local.lb_ip}", "/")
+  # Caddy terminates HTTPS on 443, redirects port 80 (except Let's Encrypt's checks) and
+  # forwards to web on 3000. Its certificate is saved and restored by the api (tls_state.py).
+  caddyfile = <<-EOT
+    {
+    	admin off
+    }
+    ${local.https_hostname} {
+    	encode zstd gzip
+    	reverse_proxy 127.0.0.1:3000
+    }
+    http:// {
+    	redir https://${local.https_hostname}{uri} permanent
+    }
+  EOT
   # Sign-in through Keycloak (keycloak_auth.py); empty keeps Lapi's password sign-in.
   keycloak_env = local.keycloak ? merge({
     LAPI_KEYCLOAK_URL        = var.keycloak_url
@@ -64,10 +80,10 @@ locals {
     LAPI_AGENT_ENGINE                     = "langgraph"
     LAPI_CHAT_MODE                        = "auto"
     LAPI_RERANKER                         = "local" # Model files are baked into the API image at /opt/lapi-reranker.
-    LAPI_OCR_ENABLED                      = "true" # Images and scanned pages use the dataset's cloud OCR model (OpenAI gpt-4o/gpt-4o-mini or Gemini); nothing runs locally.
+    LAPI_OCR_ENABLED                      = "true"  # Images and scanned pages use the dataset's cloud OCR model (OpenAI gpt-4o/gpt-4o-mini or Gemini); nothing runs locally.
     LANGSMITH_TRACING                     = "false"
     LAPI_ALLOW_MOCK                       = "false"
-    COOKIE_SECURE                         = "false" # Set "true" once the load balancer serves HTTPS.
+    COOKIE_SECURE                         = var.https ? "true" : "false"
     LAPI_OPENFGA_URL                      = "http://127.0.0.1:8080"
   }
 }
@@ -97,10 +113,22 @@ resource "oci_container_instances_container_instance" "lapi" {
     backing_store = "EPHEMERAL_STORAGE"
   }
 
+  dynamic "volumes" {
+    for_each = var.https ? [1] : []
+    content {
+      name        = "caddy-config"
+      volume_type = "CONFIGFILE"
+      configs {
+        file_name = "Caddyfile"
+        data      = base64encode(local.caddyfile)
+      }
+    }
+  }
+
   containers {
     display_name          = "api"
     image_url             = local.api_image
-    environment_variables = merge(local.backend_env, local.keycloak_env)
+    environment_variables = merge(local.backend_env, local.keycloak_env, var.https ? { LAPI_TLS_STATE_DIR = "/data/caddy" } : {})
     volume_mounts {
       volume_name = "scratch"
       mount_path  = "/data"
@@ -173,6 +201,29 @@ resource "oci_container_instances_container_instance" "lapi" {
       LAPI_API_LOCATION      = "oci"
       LAPI_WORKER_LOCATION   = "oci"
       LAPI_MODEL_LOCATION    = "cloud"
+    }
+  }
+
+  # HTTPS: waits until the api has put back the saved certificate (tls_state.py), so a
+  # deployment does not ask Let's Encrypt again (it allows five per week for one name).
+  dynamic "containers" {
+    for_each = var.https ? [1] : []
+    content {
+      display_name = "caddy"
+      image_url    = "docker.io/library/caddy:2.10.2"
+      command      = ["/bin/sh", "-c", "until [ -f /data/.lapi-restored ]; do sleep 2; done; exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
+      environment_variables = {
+        XDG_DATA_HOME = "/data"
+      }
+      volume_mounts {
+        volume_name = "scratch"
+        mount_path  = "/data"
+        sub_path    = "caddy"
+      }
+      volume_mounts {
+        volume_name = "caddy-config"
+        mount_path  = "/etc/caddy"
+      }
     }
   }
 

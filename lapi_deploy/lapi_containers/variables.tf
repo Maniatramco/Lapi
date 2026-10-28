@@ -125,7 +125,21 @@ variable "keycloak_admin_role" {
 }
 
 variable "public_url" {
-  description = "Address people open Lapi at; Keycloak redirects back to <public_url>/api/auth/keycloak/callback. Empty uses http://<load balancer IP>."
+  description = "Address people open Lapi at; Keycloak redirects back to <public_url>/api/auth/keycloak/callback. Empty uses https://<https_hostname> (or http://<load balancer IP> when https is off)."
+  type        = string
+  default     = ""
+}
+
+# --- HTTPS (Caddy in the container instance, certificate from Let's Encrypt) ---
+
+variable "https" {
+  description = "Serve Lapi over HTTPS: Caddy gets and renews a Let's Encrypt certificate; plain HTTP redirects to it."
+  type        = bool
+  default     = true
+}
+
+variable "https_hostname" {
+  description = "Name the certificate is for. Empty uses lapi.<load balancer IP>.sslip.io, which needs no domain or DNS setup."
   type        = string
   default     = ""
 }

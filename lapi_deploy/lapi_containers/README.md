@@ -87,8 +87,12 @@ Lapi account to end access at once. Keycloak should be served over HTTPS.
 
 - **One container instance.** The api and worker share file locks through the
   instance's `scratch` volume, so do not run two instances against the same bucket.
-- **HTTPS** is not configured yet: add a certificate and a port-443 listener to the
-  load balancer, then set `COOKIE_SECURE` to `true`.
+- **HTTPS** (on by default): Caddy in the container instance serves
+  `https://lapi.<load balancer IP>.sslip.io` with a Let's Encrypt certificate and
+  redirects port 80 to it. The api keeps the certificate in the control bucket
+  (`tls/caddy-data.tar.gz`) so deployments reuse it; Let's Encrypt allows five new
+  certificates a week for one name. Use `https_hostname` for your own domain (point
+  its DNS A record at the load balancer first), or `https = false` for plain HTTP.
 - **Database user.** The app connects as `ADMIN`. Create a dedicated schema user for
   production and change `ORACLE_USER` and the password secret.
 - **Cost.** lapidb and a 10 Mbps load balancer are Always Free; Container Instances

@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.14 - 28 October 2026
+
+Lapi over HTTPS
+
+- On OCI, a Caddy container in the container instance serves Lapi at `https://lapi.<load balancer IP>.sslip.io` (sslip.io turns the IP into a name, so no domain or DNS is needed) with a Let's Encrypt certificate it renews itself. The load balancer passes ports 80 and 443 straight through; port 80 redirects to HTTPS. Set `https = false` in Terraform to go back to plain HTTP, or `https_hostname` to use your own domain.
+- The certificate survives deployments: the api saves Caddy's data folder to the control bucket every five minutes when it changes (`tls_state.py`) and restores it before Caddy starts, because Let's Encrypt issues only five certificates a week for one name.
+- `COOKIE_SECURE` is on with HTTPS, and `public_url` (and the Keycloak redirect URI) default to the HTTPS address.
+
 ## v26.1.16.13 - 28 October 2026
 
 Redesigned sign-in page

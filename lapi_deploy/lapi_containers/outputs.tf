@@ -11,8 +11,13 @@ output "image_repositories" {
 }
 
 output "public_ip" {
-  description = "Load balancer address: open http://<ip>, or point a DNS record here."
+  description = "Load balancer address: point a DNS record here when using your own https_hostname."
   value       = oci_load_balancer_load_balancer.lapi.ip_address_details[0].ip_address
+}
+
+output "url" {
+  description = "Where people open Lapi."
+  value       = local.public_url
 }
 
 output "database" {

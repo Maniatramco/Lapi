@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.13",
+  "version": "26.1.16.14",
   "releases": [
+    {
+      "version": "26.1.16.14",
+      "date": "2026-10-28",
+      "title": "Lapi over HTTPS",
+      "changes": [
+        "Lapi is served over HTTPS at https://lapi.92.4.94.96.sslip.io with a free Let's Encrypt certificate that renews itself. The old http://92.4.94.96 address redirects there, and sign-in cookies are now sent only over HTTPS.",
+        "The certificate is kept across deployments, so updating Lapi does not request a new one each time."
+      ]
+    },
     {
       "version": "26.1.16.13",
       "date": "2026-10-28",

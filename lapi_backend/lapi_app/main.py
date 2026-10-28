@@ -20,6 +20,11 @@ from .admin_documents import lifecycle_guard
 async def lifespan(app):
     from . import runtime_config
     runtime_config.validate()
+    from . import tls_state
+    if tls_root := tls_state.directory():
+        # First, so Caddy (which waits for this) starts with the saved certificate.
+        import asyncio
+        await asyncio.to_thread(tls_state.restore, tls_root)
     from .vault_master_key import master_key, SECRET_ENV
     if os.getenv(SECRET_ENV):master_key()  # Fail at startup, not on the first saved credential.
     init()
@@ -37,13 +42,16 @@ async def lifespan(app):
         await asyncio.to_thread(reranker.load)
     import asyncio
     from contextlib import suppress
-    cleanup = asyncio.create_task(temporary_chat.expiry_loop())
+    tasks = [asyncio.create_task(temporary_chat.expiry_loop())]
+    if tls_root := tls_state.directory():
+        tasks.append(asyncio.create_task(tls_state.keep(tls_root)))
     try:
         yield
     finally:
-        cleanup.cancel()
-        with suppress(asyncio.CancelledError):
-            await cleanup
+        for task in tasks:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 app=FastAPI(title='Lapi AI Data Platform',version='0.1.0',lifespan=lifespan)
 @app.exception_handler(RequestValidationError)
 async def safe_validation_errors(request, error):
