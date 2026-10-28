@@ -26,7 +26,8 @@ password, so keep state private (for example in an OCI Object Storage backend).
 - `vault.tf`: Vault and key (or reuse existing ones) plus the two secrets.
 - `iam.tf`: dynamic group for Lapi's container instances and its policy.
 - `containers.tf`: OCIR repositories and the container instance.
-- `push-images.ps1`: build and push the two images.
+- `keycloak.tf`: the optional hosted Keycloak (`keycloak_hosted`, see below).
+- `push-images.ps1`: build and push the images (api, web, Keycloak).
 
 ## Deploy
 
@@ -83,6 +84,75 @@ mapper (claim `groups`, full path) to the client so Keycloak groups become Lapi 
 administrators such as `admin` (break-glass). Lapi sessions last 12 hours, so
 disabling someone in Keycloak takes effect at their next sign-in: delete their
 Lapi account to end access at once. Keycloak should be served over HTTPS.
+
+## Hosted Keycloak
+
+Instead of bringing your own Keycloak, Terraform can run one next to Lapi
+(`keycloak.tf`, image `lapi_deploy/keycloak`). Turn it on with `keycloak_hosted = true`
+in `terraform.tfvars` (needs `https = true`); it overrides `keycloak_url`,
+`keycloak_realm` and `keycloak_client_id`.
+
+```powershell
+.\push-images.ps1 -Tag 26.1.16.18                         # also builds and pushes lapi/keycloak
+terraform apply -var image_tag=26.1.16.18 -var keycloak_hosted=true
+terraform output keycloak_console
+```
+
+What it creates:
+
+- A `keycloak` container in the same container instance, serving
+  `https://sso.<load balancer IP>.sslip.io` through Caddy (its own Let's Encrypt
+  certificate, saved with Lapi's). Only Caddy reaches it, on localhost.
+- Its data in `lapidb` as the database user `KEYCLOAK` (no DBA rights, 2 GB quota on
+  `DATA`). The api creates the user at start-up and resets its password to the Vault
+  value on every start, so nothing is set up by hand.
+- Three generated Vault secrets: `lapi-keycloak-db-password`,
+  `lapi-keycloak-admin-password` (the console administrator `kcadmin`) and
+  `lapi-keycloak-lapi-client-secret` (shared by Lapi and Keycloak).
+- The realm `lapi`, imported on the first start only: roles `lapi-administrator` and
+  `lapi-auditor`; the client `lapi` (confidential, PKCE, back-channel logout); the
+  `groups` and `amr` claims; brute-force detection (5 failures); passwords of at least
+  12 characters, not the username or email, not one of the last 5; sessions end after
+  30 idle minutes or 12 hours.
+- PROXY protocol v2 on the load balancer's listeners, so Lapi and Keycloak see each
+  person's real address instead of the load balancer's.
+
+**Signing in to the Keycloak console.** Open `terraform output keycloak_console`
+and sign in as `kcadmin`. The password is in the Console: Identity & Security >
+Vault > lapi-vault > Secrets > `lapi-keycloak-admin-password` > Versions > View secret
+contents. Use the console only to manage people; Lapi itself is managed in Lapi.
+
+**People, roles and teams** (realm `lapi`, top-left realm selector):
+
+1. *Users > Add user*: username, email, first and last name, *Create*. Then
+   *Credentials > Set password* (temporary on, so they choose their own).
+2. *Role mapping > Assign role*: `lapi-administrator` makes a Lapi administrator,
+   `lapi-auditor` an Auditor. Everyone else is a regular user.
+3. *Groups*: create a group (e.g. `Finance`) and add people under *Members*. Groups
+   arrive in Lapi as teams (`/Finance`) at each sign-in.
+
+**Administrators use an authenticator app.** The realm's browser sign-in asks anyone
+with `lapi-administrator` for a one-time code after their password. On their first
+sign-in Keycloak shows a QR code to scan with an authenticator app (Google
+Authenticator, Microsoft Authenticator, 1Password, ...). If they lose the phone,
+remove *OTP* under the user's *Credentials* and they set it up again.
+
+**Changing the realm later.** The import runs only when the realm does not exist yet,
+so changes to `realm-lapi.json` do not reach a running Keycloak; make them in the
+console instead. Sessions are stored in the database, so people stay signed in
+across deployments.
+
+**Cost and memory.** Keycloak gets a 2 GB memory limit (`keycloak_memory_gbs`; Java
+heap about 1.2 GB) taken from the instance's `container_memory_gbs`, and up to 10
+database sessions. No extra OCI cost beyond that memory; the image repository and
+secrets are free.
+
+**Turning it off.** Set `keycloak_hosted = false` and apply: the container, its
+secrets and the PROXY protocol setting go away and Lapi returns to its own password
+sign-in (or to `keycloak_url`). Accounts created through Keycloak stay in Lapi.
+The `KEYCLOAK` user and its tables stay in lapidb; drop them as ADMIN
+(`DROP USER KEYCLOAK CASCADE`) if you do not plan to turn it on again. The
+`lapi/keycloak` image repository is always created, so the image can be pushed first.
 
 ## Limits
 

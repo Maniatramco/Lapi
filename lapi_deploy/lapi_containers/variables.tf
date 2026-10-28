@@ -143,3 +143,23 @@ variable "https_hostname" {
   type        = string
   default     = ""
 }
+
+# --- Hosted Keycloak (keycloak.tf) ---------------------------------------------
+
+variable "keycloak_hosted" {
+  description = "Run Keycloak in Lapi's container instance (https://sso.<load balancer IP>.sslip.io), with its data in lapidb, and sign in to Lapi with it. Overrides keycloak_url, keycloak_realm and keycloak_client_id. Needs https = true."
+  type        = bool
+  default     = false
+}
+
+variable "keycloak_hostname" {
+  description = "Name of the hosted Keycloak. Empty uses sso.<load balancer IP>.sslip.io."
+  type        = string
+  default     = ""
+}
+
+variable "keycloak_memory_gbs" {
+  description = "Memory limit of the hosted Keycloak container (the Java heap is 60% of it). Taken from container_memory_gbs, not added to it."
+  type        = number
+  default     = 2
+}

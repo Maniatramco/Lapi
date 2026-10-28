@@ -1,4 +1,4 @@
-# Build Lapi's two images for x86 and push them to OCIR.
+# Build Lapi's images (api, web and Keycloak) for x86 and push them to OCIR.
 #   .\push-images.ps1 -Tag 26.1.16.0
 # Needs Docker and an OCI auth token (Console: Profile > Auth tokens). Docker asks
 # for the token once; it is not stored by this script.
@@ -37,7 +37,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Web image build failed.' }
     docker push $api; if ($LASTEXITCODE -ne 0) { throw 'API image push failed.' }
     docker push $web; if ($LASTEXITCODE -ne 0) { throw 'Web image push failed.' }
-    Write-Host "Pushed $api and $web. Now run: terraform apply -var image_tag=$Tag"
+    $pushed = "$api and $web"
+    # Hosted Keycloak (keycloak_hosted): same tag. Older state without the repository skips it.
+    if ($repositories.keycloak) {
+        $keycloak = "$($repositories.keycloak):$Tag"
+        docker build --platform linux/amd64 -t $keycloak (Join-Path $root 'lapi_deploy\keycloak')
+        if ($LASTEXITCODE -ne 0) { throw 'Keycloak image build failed.' }
+        docker push $keycloak; if ($LASTEXITCODE -ne 0) { throw 'Keycloak image push failed.' }
+        $pushed = "$api, $web and $keycloak"
+    }
+    Write-Host "Pushed $pushed. Now run: terraform apply -var image_tag=$Tag"
 } finally {
     Pop-Location
 }
