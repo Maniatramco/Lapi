@@ -27,6 +27,7 @@ Reference files in this folder:
 - `reference/chat-design.md`: the Claude-style chat layout for Lapi Agent and the Dashboard chat.
 - `reference/spreadsheets-and-charts.md`: XLSX/CSV/TSV with row-aware indexing, exact `query_table` answers, charts.
 - `reference/mobile-agent-first.md`: the agent-first phone version, screen control through OpenFGA, agent training.
+- `reference/deploy-pitfalls.md`: all three images (api, web, keycloak) must carry the release tag; failed-create recovery.
 
 ## How the user works (follow this)
 
