@@ -9,6 +9,7 @@ The agent guides plain requests end to end
 - `agent-guide.ts` (pure): `guideIntent(text)` reads plain words into upload / extract / dataset / prompt / start (commands, `#document` and knowledge questions are left alone); `guideFor(intent, state)` returns the step to show when something is missing (no files → Add documents; no dataset → Choose a dataset / Guided start; no prompt → Guided start / Write a prompt; contributor dataset creation → Guided start) or null; `guidedOperation` maps a ready intent to the deterministic server operation (`agent_operation`), bypassing the model's routing.
 - `agent-v2.tsx`: `send()` runs the guide before anything reaches the server; a guided step renders as a Lapi Agent exchange with chips (`runGuide`), the request text stays in the composer; "start" opens the Quick start with the attached documents.
 - `openQuickStart(files?)` carries attached documents into the Quick start (`initialFiles`).
+- Sign-in artwork (`lapi-banner.tsx`): the "1 CONNECT · 2 UNIFY · 3 ASK" row is gone (the title already says it); the viewBox is cropped to the remaining drawing.
 
 ## v26.1.16.29 - 29 October 2026
 
