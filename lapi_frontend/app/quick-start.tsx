@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import {ArrowLeft,Camera,Check,CircleAlert,FileSearch,FileUp,Loader2,Maximize2,MessageSquare,Minimize2,Plus,Sparkles,Table2,Trash2,Users,Wand2,X} from "lucide-react";
 import "./quick-start.css";
-import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,defaultDatasetName,extractionStages,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,resultRows,sourceName,stepsFor,uploadable,
+import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,defaultDatasetName,extractionStages,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,recordCount,resultRows,sourceName,stepsFor,uploadable,
  type Field,type FieldType,type FileState,type Path,type Step} from "./quick-start-flow";
 import {eligibleAgentModels} from "./agent-document-selection";
 import {openDatasetEditor} from "./manage-dataset";
@@ -276,7 +276,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
      {error&&!busy&&<button type="button" className="quick-start-secondary" onClick={()=>{setExtraction(null);go('prompt');}}>Back to the fields</button>}
      {rows.length>0&&<article className="quick-start-answer" aria-live="polite"><h3><Check size={16}/> {promptName||'Extracted values'}</h3>
       <dl className="quick-start-values">{rows.map(row=><div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
-      <p className="quick-start-note">Check each value against its source on the Review page, correct anything, then approve.</p></article>}
+      <p className="quick-start-note">{recordCount(extraction?.result)>1?`This is record 1 of ${recordCount(extraction?.result).toLocaleString()} (one per row or file). See all of them on the Review page, correct anything, then approve.`:'Check each value against its source on the Review page, correct anything, then approve.'}</p></article>}
     </>}
 
     {step==='done'&&<>

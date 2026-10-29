@@ -143,10 +143,15 @@ export function fieldProblems(fields:Field[]){
 }
 
 /** Extracted values as label/value rows for a small results card (first record when there are several). */
+/** How many records an extraction returned (several for spreadsheet rows or merged files). */
+export const recordCount=(result:unknown)=>{const records=(result as {records?:unknown})?.records;return Array.isArray(records)?records.length:result?1:0;};
+
 export function resultRows(result:unknown,fields:Field[]):{label:string;value:string}[]{
  let record:any=result;
  if(Array.isArray(record))record=record[0];
  if(record&&typeof record==='object'&&!Array.isArray(record)&&record.records&&Array.isArray(record.records))record=record.records[0];
+ // A record list (one per spreadsheet row or per merged file) shows the first record's own fields.
+ if(record&&typeof record==='object'&&record.fields&&typeof record.fields==='object'&&!Array.isArray(record.fields)&&'source_key' in record)record=record.fields;
  if(!record||typeof record!=='object')return [];
  const label=(key:string)=>fields.find(f=>f.key===key)?.label||key.replace(/_/g,' ');
  const show=(value:unknown):string=>value===null||value===undefined||value===''?'Not found':Array.isArray(value)?value.map(show).join(', '):typeof value==='boolean'?(value?'Yes':'No'):typeof value==='object'?JSON.stringify(value):String(value);

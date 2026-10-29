@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.33",
+  "version": "26.1.16.34",
   "releases": [
+    {
+      "version": "26.1.16.34",
+      "date": "2026-10-29",
+      "title": "Spreadsheets are extracted row by row",
+      "changes": [
+        "When the fields you ask for are columns of a spreadsheet (Transaction ID, Date, Amount...), Lapi now reads every row straight from the table: one record per row, exact values, no AI model call and no size limit.",
+        "This fixes extractions on large spreadsheets that stopped with \"Selected content exceeds this model's context budget\".",
+        "Fields that match no column are left empty and named in the review note. Quick start shows the first record and how many there are; Review opens on the first row."
+      ]
+    },
     {
       "version": "26.1.16.33",
       "date": "2026-10-29",

@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.34 - 29 October 2026
+
+Spreadsheets are extracted row by row
+
+- `lapi_agent/table_extraction.py`: `plan(schema, documents)` uses the stored tables when every document is a spreadsheet, the prompt is one object of plain values, and at least half of the fields match a column (by key or the label before ':' in the description; exact name first, then a column whose words are inside the field's, longer names first; each column once). `extract` returns `{"records": [{source_filename: "<file> · <sheet> row N", source_key, fields}]}` with values converted to the field type (dates `YYYY-MM-DD`), one evidence quote per row ("Row N") from its search chunk, and a notice listing the mapping and unmatched fields. `schema_for` is the matching records schema.
+- `extractor_agent.run`: takes that path before the model graph (stages still reported); sets `table_rows` and `table_notice`; `worker` appends the notice to `evidence_notice`.
+- Quick start: `resultRows` unwraps a record's `fields`; `recordCount` shows "record 1 of N". Review groups `table_rows` like merged records and opens on the first row.
+- Live cause: a 2,000-row sheet with row fields was sent whole to a cloud model registered with a 32,768-token context and was refused (needed ~69,000).
+
 ## v26.1.16.33 - 29 October 2026
 
 Clearer extraction failures in Quick start

@@ -123,3 +123,68 @@ def test_agent_answers_from_the_table_and_draws_a_chart(system, monkeypatch):
     message = thread_message(s, result)
     chart = (message.get('charts') or [None])[0]
     assert chart and chart['type'] == 'line' and chart['rows'] == [['2026-01', 180.0], ['2026-02', 190.0]] and chart['x'] == 'Month (month)'
+
+
+# --- Extraction from spreadsheet rows ---------------------------------------------------------------
+
+def ledger(rows=1200):
+    book = Workbook(); sheet = book.active; sheet.title = 'Transactions'
+    sheet.append(['Transaction ID', 'Date', 'Type', 'Counterparty', 'Amount', 'Amount (USD)', 'Status', 'Due Date'])
+    for i in range(rows):
+        sheet.append([f'TXN-{100001 + i}', dt.date(2025, 1, 1) + dt.timedelta(days=i % 365), 'Income' if i % 2 else 'Expense',
+                      f'Vendor {i % 7}', round(10 + i * 1.25, 2), round((10 + i * 1.25) * 1.1, 2), 'Paid', dt.date(2025, 3, 1)])
+    out = io.BytesIO(); book.save(out); return out.getvalue()
+
+
+ROW_FIELDS = {'type': 'object', 'additionalProperties': False, 'required': ['transaction_id', 'transaction_date', 'transaction_type', 'amount', 'status', 'due_date', 'tax'],
+              'properties': {'transaction_id': {'type': ['string', 'null'], 'description': 'Transaction ID: Extract the identifier exactly as written.'},
+                             'transaction_date': {'type': ['string', 'null'], 'format': 'date', 'description': 'Transaction date: YYYY-MM-DD.'},
+                             'transaction_type': {'type': ['string', 'null'], 'description': 'Transaction type: Income or Expense.'},
+                             'amount': {'type': ['number', 'null'], 'description': 'Amount: plain number.'},
+                             'status': {'type': ['string', 'null'], 'description': 'Payment status: as written.'},
+                             'due_date': {'type': ['string', 'null'], 'format': 'date', 'description': 'Due date: YYYY-MM-DD.'},
+                             'tax': {'type': ['number', 'null'], 'description': 'Tax: plain number.'}}}
+
+
+def test_fields_match_columns_by_key_or_label():
+    from lapi_app.lapi_agent import table_extraction
+    columns = ['Transaction ID', 'Date', 'Type', 'Counterparty', 'Amount', 'Amount (USD)', 'Status', 'Due Date']
+    assert table_extraction.match(ROW_FIELDS['properties'], columns) == {
+        'transaction_id': 'Transaction ID', 'transaction_date': 'Date', 'transaction_type': 'Type',
+        'amount': 'Amount', 'status': 'Status', 'due_date': 'Due Date'}
+    nested = dict(ROW_FIELDS, properties={'items': {'type': 'array', 'items': {'type': 'string'}}})
+    assert table_extraction.flat_fields(nested) is None
+
+
+def test_large_spreadsheet_is_extracted_row_by_row_without_the_model(system, monkeypatch):
+    s = system; d = dataset(s)
+    doc = upload_sheet(s, d, 'ledger.xlsx', ledger()).json()['documents'][0]
+    assert worker.run_once()
+    from lapi_app import providers
+    monkeypatch.setattr(providers, 'extract_with_evidence', lambda *a, **k: pytest.fail('the model must not be called for spreadsheet rows'))
+    t = s.api.post('/api/templates', json={'name': 'Rows', 'schema': ROW_FIELDS, 'instructions': '', 'dataset_id': d['id']}).json()
+    e = s.api.post('/api/extractions', json={'document_ids': [doc['id']], 'template_id': t['id'], 'dataset_id': d['id'], 'allow_external': True}).json()
+    assert worker.run_once()
+    x = s.api.get('/api/extractions/' + e['id']).json()
+    assert x['status'] == 'ready', x.get('error')
+    records = x['result']['records']
+    assert len(records) == 1200 and x['table_rows'] is True
+    assert records[0]['fields'] == {'transaction_id': 'TXN-100001', 'transaction_date': '2025-01-01', 'transaction_type': 'Expense',
+                                    'amount': 10.0, 'status': 'Paid', 'due_date': '2025-03-01', 'tax': None}
+    assert records[1199]['fields']['amount'] == round(10 + 1199 * 1.25, 2)
+    assert records[4]['source_filename'] == 'ledger.xlsx · Transactions row 6'
+    assert 'No column matched tax' in x['evidence_notice'] and '1,200 rows' in x['evidence_notice']
+    assert any(q['field'] == '/records/4/fields' and q['quote'] == 'Row 6' for q in x['evidence'])
+
+
+def test_prompt_without_matching_columns_still_uses_the_model(system, monkeypatch):
+    s = system; d = dataset(s)
+    doc = upload_sheet(s, d, 'ledger.xlsx', ledger(20)).json()['documents'][0]
+    assert worker.run_once()
+    schema = {'type': 'object', 'additionalProperties': False, 'required': ['total_income', 'largest_vendor'],
+              'properties': {'total_income': {'type': ['number', 'null']}, 'largest_vendor': {'type': ['string', 'null']}}}
+    t = s.api.post('/api/templates', json={'name': 'Totals', 'schema': schema, 'instructions': '', 'dataset_id': d['id']}).json()
+    e = s.api.post('/api/extractions', json={'document_ids': [doc['id']], 'template_id': t['id'], 'dataset_id': d['id'], 'allow_external': True}).json()
+    assert worker.run_once()
+    x = s.api.get('/api/extractions/' + e['id']).json()
+    assert x['status'] == 'ready' and not x.get('table_rows') and 'records' not in x['result']

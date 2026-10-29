@@ -2,7 +2,7 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const filename=path.resolve(__dirname,'../../lapi_frontend/app/quick-start-flow.ts'),compiled=new Module(filename,module);compiled.paths=module.paths;
 compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
-const {stepsFor,uploadable,askable,fileState,progress,pickFiles,sourceName,defaultDatasetName,fieldKey,fieldsToSchema,fieldProblems,resultRows,MAX_FILES,canMerge,mergeByDefault,mergedName,extractionStages}=compiled.exports;
+const {stepsFor,uploadable,askable,fileState,progress,pickFiles,sourceName,defaultDatasetName,fieldKey,fieldsToSchema,fieldProblems,resultRows,MAX_FILES,canMerge,mergeByDefault,mergedName,extractionStages,recordCount}=compiled.exports;
 const datasets=[{id:'v',name:'Policies',my_access:'viewer'},{id:'e',name:'Contracts',my_access:'editor'},{id:'o',name:'Old',my_access:'owner',active:false}];
 
 test('people who can add documents choose to ask or extract; Viewers choose a dataset and ask',()=>{
@@ -80,4 +80,11 @@ test('the extraction workflow follows the real extraction status',()=>{
  assert.deepEqual(extractionStages('failed',2,'blocked','Source indexing failed. Correct/retry the source job').map(x=>x.state),['done','failed','todo','todo','todo']);
  assert.deepEqual(extractionStages('failed',2,'queued','Worker recovery attempts exhausted').map(x=>x.state),['done','failed','todo','todo','todo']);
  assert.match(extractionStages('running',1)[2].label,/Reading 1 document with/);
+});
+
+test('a record list shows the first record\'s own fields and counts every record',()=>{
+ const result={records:[{source_filename:'ledger.xlsx · Transactions row 2',source_key:'d#1:2',fields:{transaction_id:'TXN-100001',amount:10}},{source_filename:'ledger.xlsx · Transactions row 3',source_key:'d#1:3',fields:{transaction_id:'TXN-100002',amount:11.25}}]};
+ const rows=resultRows(result,[{key:'transaction_id',label:'Transaction ID',type:'text',description:''},{key:'amount',label:'Amount',type:'number',description:''}]);
+ assert.deepEqual(rows,[{label:'Transaction ID',value:'TXN-100001'},{label:'Amount',value:'10'}]);
+ assert.equal(recordCount(result),2);assert.equal(recordCount({total:1}),1);assert.equal(recordCount(null),0);
 });

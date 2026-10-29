@@ -45,3 +45,23 @@ embedding**, and let the agent draw charts when asked.
 `test_spreadsheets.py` (reading, packing, queries, upload + index, refusals, agent tool + chart with a scripted
 model), `answer-chart.test.cjs`. In the demo: upload a CSV through the API, inspect chunks in the api container,
 feed a scripted chat answer with `charts` to see the rendering.
+
+## Extraction from spreadsheet rows (v26.1.16.34)
+
+Failure seen live: Quick start drafted row fields (Transaction ID, Date, Amount, ...) for a 2,000-row
+sheet and sent the whole sheet to a cloud model with a 32K context: "Selected content exceeds this
+model's context budget". Raising the limit is not the fix - the output (2,000 records) would not fit
+either, and the values are already structured.
+
+- When every document is a spreadsheet and >= half of a flat prompt's fields match columns, read each
+  row from the stored Parquet table: one record per row (`{"records": [{source_filename, source_key,
+  fields}]}`), values converted to the field type, no model call. Unmatched fields are null and named
+  in the evidence notice. Keep the model path for anything else (totals, judgments, nested fields).
+- Match by key and by the label before ':' in the field description; exact first, then column words
+  inside the field words ("Date" for "Transaction date"), longer column names first, each column once.
+- Evidence: one quote per row ("Row N") from the row's search chunk, not one per field (20,000 quotes
+  would bloat every poll of the extraction).
+- UI: result helpers must unwrap `records[0].fields`; show "record 1 of N"; Review opens on the first
+  record instead of rendering every field of every row.
+- Diagnose such failures by reading the extraction's `error` (GET /api/extractions/{id} when signed in);
+  the worker does not log it.
