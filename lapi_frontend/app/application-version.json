@@ -6,7 +6,8 @@
       "date": "2026-10-29",
       "title": "Dense pages are read in parts",
       "changes": [
-        "When a scanned page has more text than the OCR model can return in one answer, Lapi now splits the page into strips and reads it in parts (up to four), instead of failing with a request to change server limits.",
+        "A scanned page with more text than the OCR model can return in one answer is read in parts, decided before the model is asked. Cuts fall in gaps between sections, never through a line or a table, and each part knows how the one above ended so tables keep their columns.",
+        "While this happens the progress line says why it is taking longer (\"Page 3 has a lot of text: reading it in parts…\").",
         "The remaining OCR message is in plain words and says what to do."
       ]
     },

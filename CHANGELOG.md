@@ -6,7 +6,7 @@ The application version and in-app feature history are maintained in `lapi_front
 
 Dense pages are read in parts
 
-- `ocr.transcribe`: when the model answer is cut off (`done` false or `done_reason == 'length'`), the page image is split at the whitest row near the middle (`split_rows`) and each strip is transcribed, recursively up to 4 strips (`SPLIT_DEPTH`); blank strips are skipped; metadata carries `split_parts`. The final error no longer asks people to change `LAPI_OCR_*` settings.
+- `ocr.transcribe`: a page is read in parts (up to 8 strips) when its estimated answer would not fit the output budget (`estimate_tokens`, decided before the model is asked) or when the answer still comes back cut off. Cuts land in section gaps (`choose_cut`: a white gap clearly wider than the usual line spacing, nearest the middle), never inside a line or between a table's header and its rows; each lower strip gets the last lines of the strip above (`continuation`) so tables keep their columns. Progress shows why it takes longer ("Page 3 has a lot of text: reading it in parts…", "reading part 2 of 4"). The final error no longer asks people to change `LAPI_OCR_*` settings.
 - Deploy: `terraform.tfvars` holds `keycloak_identity_providers`; all three images carry the release tag.
 
 ## v26.1.16.28 - 29 October 2026

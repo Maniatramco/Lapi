@@ -198,3 +198,42 @@ def test_cut_off_answer_gives_up_after_four_strips(monkeypatch):
     for y in range(20,1800,60):draw.text((30,y),'Dense line',fill='black')
     out=io.BytesIO();page.save(out,format='PNG')
     with pytest.raises(ocr.OcrError,match='incomplete.*even after splitting'):ocr.transcribe(out.getvalue(),ocr.config()|{'digest':'a'})
+
+
+def dense_page(width,height,lines):
+    from PIL import ImageDraw
+    page=Image.new('RGB',(width,height),'white');draw=ImageDraw.Draw(page)
+    for y in lines:draw.text((30,y),'Row 17 | Alice Example | 42.50 | paid',fill='black')
+    out=io.BytesIO();page.save(out,format='PNG');return out.getvalue()
+
+
+def test_dense_page_is_split_before_the_model_is_asked(monkeypatch):
+    """A page that clearly will not fit the answer budget is read in parts from the start; each lower
+    strip is told how the strip above ended so a table keeps its columns across the cut."""
+    import base64
+    calls=[]
+    def call(cfg,path,payload=None,timeout=None):
+        image=Image.open(io.BytesIO(base64.b64decode(payload['messages'][1]['images'][0])))
+        calls.append((image.height,payload['messages'][1]['content']))
+        return {'done':True,'message':{'content':json.dumps({'text':'strip ending at %d\nlast line %d'%(image.height,len(calls)),'unreadable':False})}}
+    monkeypatch.setattr(ocr,'call',call)
+    notes=[]
+    cfg=ocr.config()|{'digest':'a','_progress':lambda page,note=None:notes.append(note),'_page':3}
+    text,meta=ocr.transcribe(dense_page(600,1400,range(10,1400,13)),cfg)
+    assert calls and all(h<1400 for h,_ in calls) and sum(h for h,_ in calls)==1400
+    assert 'ended with these lines' not in calls[0][1] and 'ended with these lines' in calls[1][1] and 'last line 1' in calls[1][1]
+    assert meta['split_parts']==len(calls) and text.count('strip ending')==len(calls)
+    assert any('Page 3 has a lot of text' in (n or '') for n in notes) and any('reading part 1 of' in (n or '') for n in notes)
+
+
+def test_cut_lands_in_a_section_gap_not_inside_a_table(monkeypatch):
+    import base64
+    heights=[]
+    def call(cfg,path,payload=None,timeout=None):
+        image=Image.open(io.BytesIO(base64.b64decode(payload['messages'][1]['images'][0])));heights.append(image.height)
+        if image.height>800:return {'done':True,'done_reason':'length'}
+        return {'done':True,'message':{'content':json.dumps({'text':'part','unreadable':False})}}
+    monkeypatch.setattr(ocr,'call',call)
+    # A tight table at the top (rows 20..400), a wide gap, then a tight table at the bottom (700..1000).
+    ocr.transcribe(dense_page(600,1000,[*range(20,400,20),*range(700,1000,20)]),ocr.config()|{'digest':'a'})
+    assert heights[0]==1000 and 420<=heights[1]<=700, heights

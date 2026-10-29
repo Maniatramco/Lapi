@@ -265,10 +265,10 @@ def _process(jid,token,snapshot):
             workflow.transition(jid,'extract','running')
             from . import merged_documents
             merged=merged_documents.manifest(did)
-            def ocr_progress(page):
+            def ocr_progress(page,note=None):  # note: why a page is taking longer (read in parts)
                 checkpoint(jid,token,15)
                 state=workflow.read(jid)
-                state['stages']['extract'].update(detail='Reading/OCR page '+str(page),ocr_page=page)
+                state['stages']['extract'].update(detail=note or 'Reading/OCR page '+str(page),ocr_page=page)
                 store.put_json('jobs/'+jid+'/workflow.json',state)
             if merged and (merged.get('ocr_pending') or any(p.get('ocr') for p in merged.get('pages',[]))):
                 pages=merged_documents.read_sources(did,merged,progress=ocr_progress)

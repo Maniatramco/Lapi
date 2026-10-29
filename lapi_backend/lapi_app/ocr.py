@@ -124,23 +124,99 @@ def render_pdf(raw, index, dpi):
             doc.close()
 
 
-SPLIT_DEPTH = 2  # A page is split into at most 4 strips before OCR gives up.
-SPLIT_MIN_HEIGHT = 400  # Strips shorter than this are not split further.
+SPLIT_DEPTH = 3  # A page is split into at most 8 strips; a strip that still overflows is practically impossible.
+SPLIT_MIN_HEIGHT = 300  # Strips shorter than this are not split further.
+OUTPUT_FILL = 0.7  # Split before asking the model when the estimated answer would use more than this share of its budget.
+
+
+def row_profile(image):
+    """Mean brightness per row (0 dark .. 255 white) plus the image size."""
+    from PIL import Image
+    with Image.open(io.BytesIO(image)) as source:
+        width, height = source.size
+        return list(source.convert('L').resize((1, height), Image.BOX).tobytes()), width, height
+
+
+def text_bands(rows, dark=250):
+    """(start, end) runs of rows that hold ink: text lines, table rows, rules, pictures."""
+    bands, start = [], None
+    for y, value in enumerate(rows + [255]):
+        if value < dark and start is None: start = y
+        elif value >= dark and start is not None: bands.append((start, y)); start = None
+    return bands
+
+
+def estimate_tokens(rows, width):
+    """Rough size of the JSON answer for a page: ink lines x characters per line. Deliberately generous,
+    so a dense page is split before the model is asked rather than after its answer is cut off."""
+    bands = text_bands(rows)
+    if not bands: return 0
+    heights = sorted(end - start for start, end in bands)
+    line = max(heights[len(heights) // 2], 8)
+    return int(len(bands) * (width / (line * 0.5)) / 3.2) + 32
+
+
+def choose_cut(rows, height):
+    """Row to cut at: the middle of a white gap near the page's middle, preferring section gaps (clearly
+    wider than the usual line spacing) so a cut never lands inside a line or between a table's header and
+    its rows. Falls back to the whitest row when the page has no gaps there."""
+    low, high = int(height * 0.25), int(height * 0.75)
+    bands = text_bands(rows)
+    gaps = [(bands[i][1], bands[i + 1][0]) for i in range(len(bands) - 1)]
+    gaps = [(a, b) for a, b in gaps if low <= (a + b) // 2 <= high and b - a >= 2]
+    if gaps:
+        usual = sorted(b - a for a, b in gaps)[len(gaps) // 2]
+        section = [(a, b) for a, b in gaps if b - a >= max(2 * usual, 6)]
+        if section: a, b = min(section, key=lambda g: abs((g[0] + g[1]) // 2 - height // 2))
+        else: a, b = max(gaps, key=lambda g: (g[1] - g[0], -abs((g[0] + g[1]) // 2 - height // 2)))
+        return (a + b) // 2
+    band = range(int(height * 0.35), max(int(height * 0.65), int(height * 0.35) + 1))
+    return max(band, key=lambda y: (rows[y], -abs(y - height // 2)))
 
 
 def split_rows(image):
-    """Cut a page image into a top and a bottom strip at the whitest row near the middle, so a
-    dense page can be transcribed in parts. Every pixel stays in exactly one strip."""
+    """Cut a page image into a top and a bottom strip at a section gap (see choose_cut). Every pixel
+    stays in exactly one strip; nothing is dropped or duplicated."""
     from PIL import Image
+    rows, width, height = row_profile(image)
+    cut = choose_cut(rows, height)
+    parts = []
     with Image.open(io.BytesIO(image)) as source:
-        source = source.convert('RGB'); width, height = source.size
-        rows = list(source.convert("L").resize((1, height), Image.BOX).tobytes())  # mean brightness per row
-        low, high = int(height * 0.35), max(int(height * 0.65), int(height * 0.35) + 1)
-        cut = max(range(low, high), key=lambda y: (rows[y], -abs(y - height // 2)))
-        parts = []
+        source = source.convert('RGB')
         for box in ((0, 0, width, cut), (0, cut, width, height)):
             out = io.BytesIO(); source.crop(box).save(out, format='PNG'); parts.append(out.getvalue())
     return parts
+
+
+def _report(cfg, note):
+    """Tell the person what is taking time, through the job's progress line."""
+    progress = cfg.get('_progress')
+    if progress:
+        try: progress(cfg.get('_page') or 1, note)
+        except TypeError: pass
+
+
+def _in_parts(image, cfg, depth, prior, started, why):
+    page = 'Page %s' % (cfg.get('_page') or 1)
+    _report(cfg, page + ' ' + why + ': reading it in parts so nothing is cut off. This takes longer.')
+    texts, parts = [], 0
+    strips = [strip for strip in split_rows(image) if not _blank(strip)]
+    for i, strip in enumerate(strips):
+        _report(cfg, '%s: reading part %d of %d.' % (page, i + 1, len(strips)))
+        tail = '\n'.join(('\n'.join(texts) or prior).splitlines()[-3:])  # the lines just above this strip
+        text, meta = transcribe(strip, cfg, depth + 1, prior=tail)
+        texts.append(text); parts += meta.get('split_parts', 1)
+    return '\n'.join(texts), {'model': cfg['model'], 'digest': cfg['digest'], 'seconds': round(time.monotonic() - started, 3),
+        'provider': cfg.get('provider', 'ollama'), 'digest_type': cfg.get('digest_type', 'weights'), 'split_parts': parts,
+        'verified': False, 'confidence': None, 'coordinates': None,
+        'notice': 'AI OCR transcription read in %d parts; check names, numbers and tables against the unchanged original.' % parts}
+
+
+def continuation(prior):
+    """Extra instruction for a strip below another: keeps a table's columns and order across the cut."""
+    if not prior: return ''
+    return ('\nThis image is the next part of the same page. The part above it ended with these lines:\n' + prior +
+            '\nContinue in the same reading order. If a table continues, keep the same columns, order and separators. Do not repeat the lines above.')
 
 
 def _blank(image):
@@ -149,10 +225,10 @@ def _blank(image):
         return all(low == high and low >= 245 for low, high in source.convert('RGB').getextrema())
 
 
-def transcribe(image, cfg, _depth=0):
-    """Transcribe one page image. When the model's answer is cut off (the page has more text than
-    it may return at once), the page is split into strips and read in parts, without anyone having
-    to change OCR limits; partial text is never indexed."""
+def transcribe(image, cfg, _depth=0, prior=''):
+    """Transcribe one page image. A page with more text than the model may return at once is split
+    at section gaps and read in parts, before asking when the estimate says so and after if the
+    answer still comes back cut off; nobody has to change OCR limits and partial text is never indexed."""
     from PIL import Image
     try:
         with Image.open(io.BytesIO(image)) as source:
@@ -174,6 +250,8 @@ def transcribe(image, cfg, _depth=0):
     if visual_tokens+cfg['output']+1024>cfg['context']:
         raise OcrError('Page exceeds the OCR visual context budget. Increase LAPI_OCR_CONTEXT, reduce LAPI_OCR_DPI or split the page, then retry.')
     started = time.monotonic()
+    if _depth < SPLIT_DEPTH and height >= SPLIT_MIN_HEIGHT and estimate_tokens(row_profile(image)[0], width) > cfg['output'] * OUTPUT_FILL:
+        return _in_parts(image, cfg, _depth, prior, started, 'has a lot of text')
     # Qwen2.5-VL on Ollama 0.35.1 can repeat tokens indefinitely under the
     # nested schema grammar. JSON mode plus an explicit shape is compatible;
     # the same strict schema is still validated before any text is indexed.
@@ -181,7 +259,7 @@ def transcribe(image, cfg, _depth=0):
         label = 'OpenAI' if cfg['provider'] == 'openai' else 'Gemini'
         try:
             from .lapi_models import cloud_ocr
-            result = cloud_ocr.adapter(cfg['provider']).transcribe(image, cfg, INSTRUCTION, SCHEMA)
+            result = cloud_ocr.adapter(cfg['provider']).transcribe(image, cfg, INSTRUCTION + continuation(prior), SCHEMA)
         except Exception:
             raise OcrError(label + ' OCR request failed. Check model access, saved API credentials, quota and service availability. No partial page was indexed.') from None
     else:
@@ -189,23 +267,14 @@ def transcribe(image, cfg, _depth=0):
         usage_call = token_usage.attempt(protocol='ollama', provider_model=cfg['model'], parameters={'num_predict': cfg['output'], 'num_ctx': cfg['context']})
         result = call(cfg, '/api/chat', {'model': cfg['model'], 'stream': False, 'format': 'json',
         'messages': [{'role': 'system', 'content': INSTRUCTION}, {'role': 'user',
-        'content': 'Transcribe every visible line, in reading order. Your JSON MUST have exactly these two keys: {"text":"full transcription as one string with newline characters", "unreadable":false}. Do not use document fields as keys. Set unreadable true if any text is unclear.',
+        'content': 'Transcribe every visible line, in reading order. Your JSON MUST have exactly these two keys: {"text":"full transcription as one string with newline characters", "unreadable":false}. Do not use document fields as keys. Set unreadable true if any text is unclear.' + continuation(prior),
         'images': [base64.b64encode(image).decode('ascii')]}],
         'options': {**OLLAMA_OCR_OPTIONS, 'num_ctx': cfg['context'], 'num_predict': cfg['output'], 'num_batch':cfg['batch'],
                     **({'num_gpu':0} if runtime_config.get('LAPI_OCR_FORCE_CPU') else {})}, 'keep_alive': runtime_config.get('LAPI_OCR_KEEP_ALIVE')})
         token_usage.record(result, 'ollama', usage_call)
     if not result.get('done') or result.get('done_reason') == 'length':
         if _depth < SPLIT_DEPTH and height >= SPLIT_MIN_HEIGHT:
-            texts, parts = [], 0
-            for strip in split_rows(image):
-                if _blank(strip):
-                    continue
-                text, meta = transcribe(strip, cfg, _depth + 1)
-                texts.append(text); parts += meta.get('split_parts', 1)
-            return '\n'.join(texts), {'model': cfg['model'], 'digest': cfg['digest'], 'seconds': round(time.monotonic() - started, 3),
-                'provider': cfg.get('provider', 'ollama'), 'digest_type': cfg.get('digest_type', 'weights'), 'split_parts': parts,
-                'verified': False, 'confidence': None, 'coordinates': None,
-                'notice': 'AI OCR transcription read in %d parts; check names, numbers and tables against the unchanged original.' % parts}
+            return _in_parts(image, cfg, _depth, prior, started, 'came back cut off')
         raise OcrError('OCR output was incomplete: this page has more text than the OCR model can return at once, even after splitting it into parts. '
                        'Upload the page at a lower resolution or as a searchable PDF, or ask an administrator to raise the OCR output limit (LAPI_OCR_MAX_TOKENS). Partial text was not indexed.')
     try:
@@ -225,7 +294,7 @@ def transcribe(image, cfg, _depth=0):
 
 
 def read_page(raw, index, native_text, *, cfg=None, progress=None, cache_id=None):
-    cfg = cfg or config()
+    cfg = (cfg or config()) | {'_progress': progress, '_page': index + 1}
     if progress: progress(index + 1)
     try:
         image, dimensions, blank = render_pdf(raw, index, cfg['dpi'])
@@ -263,7 +332,7 @@ IMAGE_MAX_SIDE = 2000  # About a letter page at the OCR render DPI; keeps the vi
 def read_image(raw, *, cfg=None, progress=None, cache_id=None):
     """Transcribe an uploaded image as one page. The original file is unchanged."""
     from PIL import Image, ImageOps
-    cfg = cfg or config()
+    cfg = (cfg or config()) | {'_progress': progress, '_page': 1}
     if not cfg['enabled']:
         raise OcrError('Images are read with OCR, which is turned off on this Lapi server. Ask an administrator to set LAPI_OCR_ENABLED=true, or upload the text as PDF, DOCX or TXT.')
     if progress: progress(1)
