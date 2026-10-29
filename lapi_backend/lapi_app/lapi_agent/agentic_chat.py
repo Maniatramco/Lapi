@@ -30,7 +30,7 @@ LABELS = {
     'find_extractions': 'Checking saved extractions', 'read_extraction_results': 'Reading saved fields',
     'search_documents': 'Searching documents', 'search_knowledge': 'Searching knowledge',
     'read_document_section': 'Reading document section', 'describe_results': 'Describing saved fields',
-    'aggregate_results': 'Calculating over saved results', 'query_table': 'Calculating from the spreadsheet', 'compare_records': 'Comparing records',
+    'aggregate_results': 'Calculating over saved results', 'query_table': 'Calculating from the spreadsheet', 'workbook_map': 'Understanding the workbook', 'row_context': 'Reading everything connected to the row', 'compare_records': 'Comparing records',
     'get_workflow_status': 'Checking workflow status', 'get_dataset_onboarding_status': 'Checking dataset onboarding',
     'update_plan': 'Planning', 'load_skill': 'Loading skill', 'list_skills': 'Reading skills', 'read_dataset_instructions': 'Reading dataset instructions', 'search_my_history': 'Searching your history',
     'prepare_workflow': 'Preparing workflow', 'prepare_recovery': 'Preparing recovery',

@@ -242,7 +242,7 @@ def read_cells(raw, report):
                 if fill is not None and getattr(fill, 'fill_type', None) == 'solid' and (name := colour_name(fill.fgColor)):
                     cell_notes.append(f'{{column}} highlighted {name}')
                 font = getattr(fcell, 'font', None)
-                if font is not None and font.color is not None and (name := colour_name(font.color)) not in ('', 'black'):
+                if font is not None and getattr(font.color, 'type', None) == 'rgb' and (name := colour_name(font.color)) not in ('', 'black'):  # theme text colour is the default
                     cell_notes.append(f'{{column}} written in {name}')
                 if cell_notes:
                     extras['cell_notes'].append((r, c, cell_notes))
@@ -416,7 +416,7 @@ def read_package(z, sheet_names, report, read_image, read_file, progress=None):
     images_seen = 0
 
     def add(item):
-        item['id'] = f'{item["kind"]}-{len(items) + 1}'
+        item['id'] = f'{item["kind"]}-{sum(1 for i in items if i["kind"] == item["kind"]) + 1}'
         items.append(item)
 
     for part, sheet in sheet_parts.items():

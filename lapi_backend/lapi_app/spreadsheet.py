@@ -473,6 +473,9 @@ def query(store, document_id, spec):
         if entry is None:
             raise SpreadsheetError('No sheet named "' + str(wanted) + '". Sheets: ' + ', '.join(e['name'] for e in entries))
     table = pq.read_table(io.BytesIO(store.get(entry['key'])))
+    joined = None
+    if spec.get('join'):
+        table, entry, joined = _join(store, document_id, table, entry, spec['join'])
     filters = spec.get('filters') or []
     if not isinstance(filters, list) or len(filters) > 10:
         raise SpreadsheetError('Use up to 10 filters.')
@@ -542,4 +545,36 @@ def query(store, document_id, spec):
     rows = [[round(v, 6) if isinstance(v, float) else v if isinstance(v, int) and not isinstance(v, bool) else _display(v) for v in row.values()]
             for row in result.to_pylist()]
     return {'document_id': document_id, 'sheet': entry['name'], 'columns': result.column_names, 'rows': rows,
-            'matched_rows': matched, 'row_numbers': row_numbers, 'truncated': truncated}
+            'matched_rows': matched, 'row_numbers': row_numbers, 'truncated': truncated, **({'join': joined} if joined else {})}
+
+
+def _join(store, document_id, table, entry, join):
+    """Add the columns of a linked sheet (this workbook or another spreadsheet) to each row, matched on a
+    key: Transactions.Counterparty = Vendors.Name gives every transaction its vendor's columns as
+    "Vendors.Country". Rows without a match get empty values; the counts are reported."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    if not isinstance(join, dict) or not join.get('sheet') or not join.get('on') or not join.get('key'):
+        raise SpreadsheetError('A join needs the other sheet, the column in this sheet ("on") and the matching column in the other sheet ("key").')
+    other_doc = join.get('document_id') or document_id
+    others = tables(store, other_doc)
+    other = next((e for e in others if e['name'].lower() == str(join['sheet']).strip().lower()), None)
+    if other is None:
+        raise SpreadsheetError('No sheet named "' + str(join['sheet']) + '" to join. Sheets: ' + ', '.join(e['name'] for e in others))
+    left = _column(entry, join['on'])
+    right = _column(other, join['key'])
+    right_table = pq.read_table(io.BytesIO(store.get(other['key'])))
+    index = {}
+    for i, value in enumerate(right_table[right['name']].to_pylist()):
+        if not _empty(value):
+            index.setdefault(_display(value).strip().lower(), i)
+    positions = [index.get(_display(v).strip().lower()) if not _empty(v) else None for v in table[left['name']].to_pylist()]
+    columns = list(entry['columns'])
+    for column in other['columns']:
+        name = f'{other["name"]}.{column["name"]}'
+        values = right_table[column['name']].to_pylist()
+        table = table.append_column(name, pa.array([values[p] if p is not None else None for p in positions], right_table[column['name']].type))
+        columns.append({'name': name, 'type': column['type']})
+    matched = sum(p is not None for p in positions)
+    detail = {'on': f'{entry["name"]}.{left["name"]} = {other["name"]}.{right["name"]}', 'matched_rows': matched, 'unmatched_rows': len(positions) - matched}
+    return table, dict(entry, columns=columns), detail

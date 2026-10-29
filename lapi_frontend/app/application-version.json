@@ -1,6 +1,18 @@
 {
-  "version": "26.1.16.34",
+  "version": "26.1.16.35",
   "releases": [
+    {
+      "version": "26.1.16.35",
+      "date": "2026-10-29",
+      "title": "Workbooks: everything read and connected",
+      "changes": [
+        "Lapi now reads every part of an Excel workbook: formulas (and calculates results Excel never saved), comments, links, highlights, hidden rows, images (read by the AI vision model), charts, text boxes and embedded files. Anything it cannot read is listed with the reason, never skipped silently.",
+        "Each part is tied to its sheet, cell and row, and the links are recorded: formula sources, keys shared between sheets (Transactions to Vendors), chart data ranges, and receipts or files that belong to a row, with amounts that disagree flagged.",
+        "Extraction from spreadsheets matches your fields to columns by meaning (Invoice number to Reference No, Vendor country through the Vendors sheet), checks every match, and lets you confirm or change it in Quick start before it runs.",
+        "Fields that are not columns, such as text on a receipt image or a comment, are read by the AI row by row in small batches, so large sheets never exceed the model's limit.",
+        "In chat, the agent understands what each column and value means, joins linked sheets for exact numbers, and can start from an image or an invoice number to reach everything connected to it."
+      ]
+    },
     {
       "version": "26.1.16.34",
       "date": "2026-10-29",

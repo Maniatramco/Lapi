@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.35 - 29 October 2026
+
+Workbooks: everything read and connected (see `lapi_docs/workbooks.md`)
+
+- `workbook.py`: lists every package part; cells with formulas (pycel for results Excel never saved, `excel_functions.py` for COUNTA/XLOOKUP/XMATCH/TEXTJOIN/DATEDIF/NETWORKDAYS/WORKDAY/SWITCH/PROPER/MEDIAN/STDEV/RANK/COUNTBLANK), classic and threaded comments, hyperlinks, fills and text colours, hidden rows, dropdowns, highlight rules, named ranges; drawings (images via `ocr.read_image` + `ocr.describe`, charts with data from cells when no cache, text boxes, SmartArt), embedded files (OLE unwrapped with olefile), pivots, macros and external links noted; unknown parts reported. Relationships: formula links and per-cell lineage with labels, column formulas, key links between sheets (proven/likely), chart ranges, items linked to rows by anchor and by value, amount agreement. Meaning profiles. Coverage report. Saved as `documents/<id>/workbook.json`; row notes go into the row's text; items, profiles, lineage and coverage become searchable pages.
+- `table_extraction.py`: fields mapped by meaning with `providers.plan` over the profiles, checked (column exists, type fits, other sheets only through a key link; exact names win); columns on linked sheets looked up; non-column per-row fields read by the model from each row's own text in budgeted batches; whole-table fields named. `POST /api/templates/table-plan`; `column_mapping` on extractions; Quick start confirmation panel. Workbook field suggestions start from the profiles.
+- Chat: `query_table` `join` (same workbook or another spreadsheet), new tools `workbook_map` and `row_context`, and system guidance to map wording to real columns and values and state the mapping and joins.
+- `spreadsheet.py`: password-protected workbooks get a clear message. Requirements: pycel 1.0b30, networkx 2.6.3 (also in requirements-local), ruamel.yaml, olefile.
+
 ## v26.1.16.34 - 29 October 2026
 
 Spreadsheets are extracted row by row

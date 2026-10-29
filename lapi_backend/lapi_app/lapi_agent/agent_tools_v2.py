@@ -166,9 +166,17 @@ class ChartSpec(_Strict):
     y: list[str] = Field(min_length=1, max_length=3, description='Result columns with the numbers (for example ["sum of Revenue"]).')
 
 
+class TableJoin(_Strict):
+    sheet: str = Field(min_length=1, max_length=100, description='The linked sheet whose columns to add (for example "Vendors").')
+    on: str = Field(min_length=1, max_length=200, description='Column in the queried sheet holding the key (for example "Counterparty").')
+    key: str = Field(min_length=1, max_length=200, description='Matching column in the linked sheet (for example "Name").')
+    document: str = Field(default='', max_length=300, description='Another spreadsheet in the dataset that holds the linked sheet; empty for the same workbook.')
+
+
 class QueryTableArgs(A):
     document: str = Field(min_length=1, max_length=300, description='Spreadsheet (XLSX, CSV or TSV) name or ID.')
     sheet: str = Field(default='', max_length=100, description='Sheet name; empty uses the first sheet.')
+    join: TableJoin | None = Field(default=None, description='Add the columns of a linked sheet to each row (named "Sheet.Column") so filters, groups and metrics can use them. Use the links listed by workbook_map.')
     filters: list[TableFilter] = Field(default_factory=list, max_length=10, description='Only rows matching all conditions.')
     group_by: list[TableGroup] = Field(default_factory=list, max_length=2, description='Group rows by up to two columns.')
     metrics: list[TableMetric] = Field(default_factory=list, max_length=6, description='Calculations per group (or over all rows).')
@@ -177,6 +185,20 @@ class QueryTableArgs(A):
     descending: bool = Field(default=False, description='Sort largest first.')
     limit: int = Field(default=50, ge=1, le=200, description='Result rows to return.')
     chart: ChartSpec | None = Field(default=None, description='Draw the result as a chart for the person; only when they ask for a chart, graph or visual.')
+    dataset: str = DatasetArg
+
+
+class WorkbookMapArgs(A):
+    document: str = Field(min_length=1, max_length=300, description='Spreadsheet name or ID.')
+    dataset: str = DatasetArg
+
+
+class RowContextArgs(A):
+    document: str = Field(min_length=1, max_length=300, description='Spreadsheet name or ID.')
+    sheet: str = Field(default='', max_length=100, description='Sheet name; empty uses the first sheet.')
+    row: int = Field(default=0, ge=0, le=1_048_576, description='Spreadsheet row number (as in "Row 12"); 0 when giving item or match instead.')
+    item: str = Field(default='', max_length=40, description='A workbook item id from workbook_map (image-1, chart-3, text-4, embedded-2).')
+    match: str = Field(default='', max_length=200, description='A value to find the row by (for example an invoice number or transaction ID).')
     dataset: str = DatasetArg
 
 
@@ -261,6 +283,10 @@ CONTRACTS = {
     'query_table': (QueryTableArgs, 'Exact calculations on an uploaded spreadsheet (XLSX, CSV, TSV): filter rows, group (dates by month/quarter/year), count, sum, avg, min, max, or list rows; optionally draw a bar, line, pie or scatter chart from the result. Use for every number, total, ranking or chart from spreadsheet data; never compute these from search text. An error lists the sheets and columns.',
         {'document': 'sales.xlsx', 'sheet': 'Sales', 'group_by': [{'column': 'Date', 'bucket': 'month'}], 'metrics': [{'op': 'sum', 'column': 'Revenue'}],
          'chart': {'type': 'line', 'title': 'Revenue by month', 'x': 'Date (month)', 'y': ['sum of Revenue']}}),
+    'workbook_map': (WorkbookMapArgs, 'Understand a spreadsheet before answering: what each sheet and column means (types, ranges, the real values of label columns such as Status), formulas and where calculated cells come from, links between sheets (keys to join on), images, charts, text boxes and embedded files with the rows they belong to and any amounts that disagree, and what could not be read.',
+        {'document': 'ledger.xlsx'}),
+    'row_context': (RowContextArgs, 'Everything connected to one spreadsheet row: its values, comments, links and highlights, the images, text boxes and files attached to it (with their text), and the matching rows of linked sheets. Find the row by number, by an item id, or by a value such as an invoice number.',
+        {'document': 'ledger.xlsx', 'match': 'BILL-2025-0002'}),
     'compare_records': (CompareArgs, 'Aligned field table for 2-10 extractions or documents.',
         {'items': ['invoice_a.pdf', 'invoice_b.pdf'], 'fields': ['total', 'due_date']}),
     'get_workflow_status': (WorkflowStatusArgs, 'Progress and failures of a workflow in this conversation.',
@@ -609,7 +635,7 @@ class AgentTools(Tools):
         return envelope(data, [n])
 
     def v2_query_table(self, document, sheet='', filters=None, group_by=None, metrics=None, columns=None, sort_by='', descending=False,
-                       limit=50, chart=None, extraction=''):
+                       limit=50, chart=None, extraction='', join=None):
         """One validated calculation on a stored spreadsheet; numbers and charts come from the data."""
         from .. import core, spreadsheet
         self.dataset(); did = self.resolve_documents([document])[0]
@@ -620,6 +646,9 @@ class AgentTools(Tools):
         spec = {'sheet': sheet, 'filters': filters or [], 'group_by': [g if g.get('bucket') else g['column'] for g in group_by or []],
                 'metrics': metrics or [], 'columns': columns or [], 'limit': limit,
                 'sort': {'by': sort_by, 'desc': descending} if sort_by else {}}
+        if join:
+            spec['join'] = {'sheet': join['sheet'], 'on': join['on'], 'key': join['key'],
+                            'document_id': self.resolve_documents([join['document']])[0] if join.get('document') else did}
         try: result = spreadsheet.query(core.store, did, spec)
         except spreadsheet.SpreadsheetError as error: raise HTTPException(422, str(error))
         entry = next(s for s in sheets if s['name'] == result['sheet'])
@@ -627,10 +656,14 @@ class AgentTools(Tools):
                 'sheet_columns': [c['name'] + ' (' + c['type'] + ')' for c in entry['columns']],
                 'other_sheets': [s['name'] for s in sheets if s['name'] != result['sheet']]}
         if result['row_numbers']: data['spreadsheet_rows'] = result['row_numbers']
+        if result.get('join'): data['join'] = result['join']
         label = 'Calculated from ' + name + ' · sheet ' + result['sheet']
         n = self.cite(label, json.dumps({k: data[k] for k in ('sheet', 'columns', 'rows', 'matched_rows')}, ensure_ascii=False, default=str),
                       key='table:' + did + ':' + json.dumps(spec, sort_keys=True, default=str), kind='knowledge', document_id=did, section='Sheet: ' + result['sheet'])
         note = 'Exact values calculated from the stored spreadsheet (' + str(result['matched_rows']) + ' matching rows).'
+        if result.get('join'):
+            note += (' Joined ' + result['join']['on'] + ': ' + str(result['join']['matched_rows']) + ' rows matched, '
+                     + str(result['join']['unmatched_rows']) + ' had no match. Say this join in the answer.')
         if chart:
             for column in [chart['x'], *chart['y']]:
                 if column not in result['columns']:
@@ -644,6 +677,93 @@ class AgentTools(Tools):
                                         'truncated': result['truncated']})
             note += ' The chart is shown to the person under your answer; describe what it shows, do not repeat every number.'
         return envelope(data, [n], truncated=result['truncated'], note=note)
+
+    def _workbook(self, document):
+        from .. import core, spreadsheet, workbook
+        self.dataset(); did = self.resolve_documents([document])[0]
+        name = next((d.name for d in self.documents() if d.id == did), document)
+        sheets = spreadsheet.tables(core.store, did)
+        if not sheets:
+            raise HTTPException(422, repr(name) + ' is not a spreadsheet, or it has not been read yet.')
+        return did, name, sheets, workbook.load(core.store, did) or {}
+
+    def v2_workbook_map(self, document):
+        """Sheets, meanings, links, calculated cells, attached items and coverage of one spreadsheet."""
+        from .. import workbook
+        did, name, sheets, book = self._workbook(document)
+        profiles = book.get('profiles') or []
+        items = [{'id': i['id'], 'kind': i['kind'], 'where': workbook.where(i), 'about': workbook.item_summary(i, short=True)[:400],
+                  'connected': [{k: v for k, v in l.items() if k in ('sheet', 'row', 'value', 'column', 'how', 'strength', 'agrees', 'differs')} for l in i.get('links', [])]}
+                 for i in book.get('items', []) if not i.get('skipped')]
+        data = {'document': name,
+                'sheets': [workbook.profile_text(p) for p in profiles] or [s['name'] + ': ' + ', '.join(c['name'] + ' (' + c['type'] + ')' for c in s['columns']) for s in sheets],
+                'links': book.get('links', [])[:40],
+                'calculated_cells': [{k: e[k] for k in ('sheet', 'cell', 'label', 'value', 'formula') if k in e} for e in book.get('lineage', [])][:60],
+                'items': items[:60], 'named_ranges': book.get('names', [])[:30],
+                'coverage': workbook.coverage_text(book['coverage']) if book.get('coverage') else 'Read before the full workbook reader: cells only.'}
+        n = self.cite('Workbook map of ' + name, json.dumps(data, ensure_ascii=False, default=str)[:20000], key='workbook:' + did,
+                      kind='knowledge', document_id=did, section='Workbook')
+        return envelope(data, [n], note="Map the person's words to these real columns and values; name the columns, values and any join you use.")
+
+    def v2_row_context(self, document, sheet='', row=0, item='', match=''):
+        """One row with everything connected to it: notes, attached items and linked rows."""
+        import io as _io
+        import pyarrow.parquet as pq
+        from .. import core, spreadsheet, workbook
+        did, name, sheets, book = self._workbook(document)
+        read = lambda entry: pq.read_table(_io.BytesIO(core.store.get(entry['key']))).to_pylist()
+        same = lambda value, wanted: spreadsheet._display(value).strip().lower() == wanted
+        entry = next((s for s in sheets if s['name'].lower() == sheet.strip().lower()), sheets[0]) if sheet else sheets[0]
+        found_item = next((i for i in book.get('items', []) if i['id'] == item), None) if item else None
+        if item and not found_item:
+            raise HTTPException(422, 'No item ' + repr(item) + ' in ' + repr(name) + '. Use workbook_map to list items.')
+        if found_item:
+            target = next((l for l in found_item.get('links', []) if l.get('row')), None)
+            if not target:
+                data = {'document': name, 'item': {'id': found_item['id'], 'kind': found_item['kind'], 'where': workbook.where(found_item),
+                                                   'content': workbook.item_summary(found_item)}, 'row': None}
+                n = self.cite(found_item['id'] + ' in ' + name, json.dumps(data, ensure_ascii=False, default=str), key='item:' + did + ':' + item,
+                              kind='knowledge', document_id=did)
+                return envelope(data, [n], note='This item is not linked to a single row.')
+            entry = next((s for s in sheets if s['name'] == target['sheet']), entry); row = target['row']
+        table = read(entry)
+        if match and not row:
+            wanted = match.strip().lower()
+            for candidate in [entry] + [s for s in sheets if s is not entry]:
+                rows = table if candidate is entry else read(candidate)
+                hit = next((r for r in rows if any(same(v, wanted) for k, v in r.items() if k != '__row')), None)
+                if hit:
+                    entry, table, row = candidate, rows, hit['__row']; break
+            if not row:
+                raise HTTPException(422, 'No row of ' + repr(name) + ' has a cell equal to ' + repr(match) + '. Use query_table with "contains" to search.')
+        values = next((r for r in table if r.get('__row') == row), None)
+        if values is None:
+            raise HTTPException(422, 'Sheet ' + repr(entry['name']) + ' has no data row ' + str(row) + '.')
+        saved = next((s for s in book.get('sheets', []) if s['name'] == entry['name']), {})
+        attached = []
+        for i in book.get('items', []):
+            for l in i.get('links', []):
+                if l['sheet'] == entry['name'] and l.get('row') == row:
+                    attached.append({'id': i['id'], 'kind': i['kind'], 'where': workbook.where(i), 'how': l['how'], 'strength': l['strength'],
+                                     'content': workbook.item_summary(i)[:1500], **({'agrees': l['agrees']} if l.get('agrees') else {}),
+                                     **({'differs': l['differs']} if l.get('differs') else {})})
+        linked = []
+        for link in book.get('links', []):
+            if link.get('kind') == 'key' and link['from'] == entry['name']:
+                key = spreadsheet._display(values.get(link['from_column'])).strip().lower()
+                other = next((s for s in sheets if s['name'] == link['to']), None)
+                if key and other:
+                    hit = next((r for r in read(other) if same(r.get(link['to_column']), key)), None)
+                    if hit:
+                        linked.append({'sheet': other['name'], 'row': hit['__row'], 'through': link['from_column'] + ' = ' + link['to'] + '.' + link['to_column'],
+                                       'strength': link['strength'], 'values': {k: spreadsheet._display(v) for k, v in hit.items() if k != '__row'}})
+        data = {'document': name, 'sheet': entry['name'], 'row': row,
+                'values': {k: spreadsheet._display(v) for k, v in values.items() if k != '__row'},
+                'notes': (saved.get('row_notes') or {}).get(str(row), []), 'attached': attached, 'linked_rows': linked}
+        n = self.cite(name + ' · ' + entry['name'] + ' row ' + str(row), json.dumps(data, ensure_ascii=False, default=str)[:20000],
+                      key='row:' + did + ':' + entry['name'] + ':' + str(row), kind='knowledge', document_id=did,
+                      section='Sheet: ' + entry['name'] + ' · row ' + str(row))
+        return envelope(data, [n], note='Values are from the stored table; attached image text is OCR (check it against the original). Say how each item is connected.')
 
     def v2_aggregate_results(self, operation, field='', group_by='', filters=None, extraction=''):
         self.dataset(); rows = [r for r in self.latest_records(extraction)
