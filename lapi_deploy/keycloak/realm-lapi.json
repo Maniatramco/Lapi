@@ -82,6 +82,7 @@
       "builtIn": false,
       "authenticationExecutions": [
         {"authenticator": "auth-cookie", "authenticatorFlow": false, "requirement": "ALTERNATIVE", "priority": 10, "userSetupAllowed": false},
+        {"authenticator": "identity-provider-redirector", "authenticatorFlow": false, "requirement": "ALTERNATIVE", "priority": 15, "userSetupAllowed": false},
         {"authenticatorFlow": true, "flowAlias": "lapi browser forms", "requirement": "ALTERNATIVE", "priority": 20, "userSetupAllowed": false}
       ]
     },

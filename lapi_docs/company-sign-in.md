@@ -67,6 +67,14 @@ deployment currently lists `google`. The sign-in page then shows **Sign in with 
 **Sign in with Google**; **Use a Keycloak account instead** stays for Keycloak-only accounts, and the
 break-glass administrator form stays below.
 
+## If the button shows Keycloak's page instead of Google
+
+Keycloak only jumps straight to the provider when its **Identity Provider Redirector** step is in the
+browser flow. New installs have it (`realm-lapi.json`); an already-created realm must be fixed once by
+hand: **https://sso.92.4.94.96.sslip.io/admin** → realm **lapi** → **Authentication** → flow **lapi browser**
+→ **Add step** → search **Identity Provider Redirector** → **Add** → set its requirement to **Alternative**
+and move it so it sits between **Cookie** and **lapi browser forms**. No restart or deploy is needed.
+
 ## Good to know
 
 - **First sign-in**: Keycloak creates the person from their Microsoft/Google profile. If a Keycloak
