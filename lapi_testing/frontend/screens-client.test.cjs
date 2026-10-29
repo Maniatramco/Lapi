@@ -19,8 +19,8 @@ test('the agent-only phone version has no More menu, except for administrators',
  assert.equal(agentOnly({...phone,views:['Review']},false),false);assert.equal(agentOnly({...phone,device:'computer'},false),false);
 });
 
-test('the training has five short cards and every example is something the agent can do',()=>{
- assert.equal(TRAINING_CARDS.length,5);
+test('the training has six short cards and every example is something the agent can do',()=>{
+ assert.equal(TRAINING_CARDS.length,6);
  for(const card of TRAINING_CARDS){assert.ok(card.title.length<40&&card.text.length<220,card.id);if(card.action==='ask')assert.ok(card.example);}
- assert.match(TRAINING_CARDS[4].text,/never/);
+ assert.match(TRAINING_CARDS[5].text,/never/);assert.match(TRAINING_CARDS[4].text,/skill/i);
 });

@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.31 - 29 October 2026
+
+Skills that apply themselves
+
+- `skills.py`: front matter `document_types`, `domains`, `keywords`, `documents` → `applies_to`; `applies(skill, text, document_names)` returns the reason (word match in the request, document-type or glob match on document names) or ''; `Library.relevant(...)` (at most 4); `render(skill)` writes SKILL.md; `POST /api/skills/upload` (multipart, replaces your skill of the same name), `GET /api/skills/{id}/download`; `SkillInput.applies_to` validated.
+- `agentic_chat.system()`: `_auto_skills()` loads matching skills before the answer and adds a "Skills in use (because …)" section; they still only narrow tool access. Built-in `invoice-review` carries applies_to as the example.
+- Skills & memory: Upload SKILL.md, "When it applies" fields, chips, Download. Training card "Teach me with a skill" (`TRAINING_VERSION` 2); tour scene "Skills" on both versions (`TOUR_VERSION` 3; 69 seconds).
+
 ## v26.1.16.30 - 29 October 2026
 
 The agent guides plain requests end to end

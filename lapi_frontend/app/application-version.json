@@ -1,6 +1,17 @@
 {
-  "version": "26.1.16.30",
+  "version": "26.1.16.31",
   "releases": [
+    {
+      "version": "26.1.16.31",
+      "date": "2026-10-29",
+      "title": "Skills that apply themselves",
+      "changes": [
+        "A skill can say when it applies: document types, domains, keywords or specific documents. The agent then uses it by itself whenever a request or document matches, and says which skill it used.",
+        "Upload a skill as a SKILL.md file (front matter + steps) in Skills & memory, and download any skill to share it. Uploading a name you already have replaces your skill.",
+        "The built-in invoice-review skill is the example: it applies to invoices, bills and receipts.",
+        "The tour has a new Skills scene and the agent training a new card, so everyone sees how skills work."
+      ]
+    },
     {
       "version": "26.1.16.30",
       "date": "2026-10-29",

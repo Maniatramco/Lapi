@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Activity, CheckCircle2, ChevronLeft, ChevronRight, Cloud, Database, FileText, FolderOpen, KeyRound, Pause, Play, RotateCcw, ScanText, ShieldCheck, Sparkles, Users, Volume2, VolumeX, X } from "lucide-react";
+import { Activity, CheckCircle2, ChevronLeft, ChevronRight, Cloud, Database, FileText, FolderOpen, KeyRound, MessageSquare, Pause, Play, RotateCcw, ScanText, ShieldCheck, Sparkles, Users, Volume2, VolumeX, X } from "lucide-react";
 import { MOBILE_QUERY, TOUR_VERSION, clampScene, formatClock, nextScene, pickVoice, previousScene, sceneAt, sceneStart, scenesFor, segmentFill, shouldShowTour, totalSeconds, type Device, type SceneId } from "./walkthrough-data";
 import "./walkthrough.css";
 
@@ -119,6 +119,23 @@ function Extract() {
         <dl>{FIELDS.map(([f, v], i) => <div key={f} className="wt-in-up" {...at(2.8 + i * 0.7)}><dt>{f}</dt><dd>{v}</dd></div>)}</dl>
         <span className="wt-approved wt-in-pop" {...at(6.6)}><CheckCircle2 size={14} aria-hidden="true" />Reviewer approved · trusted result</span>
       </div>
+    </div>
+  </div>;
+}
+
+/** A SKILL.md taking effect: its "when it applies" lines, then the agent using it on a matching request. */
+function Skills() {
+  const lines = ["name: invoice-review", "document_types: invoice, bill", "keywords: overdue, duplicate", "1. Total by supplier.", "2. Flag duplicates and late ones."];
+  return <div className="wt-scene wt-skills">
+    <div className="wt-panel wt-skill-file wt-in-up" {...at(0.2)}>
+      <span className="wt-panel-head"><Sparkles size={15} aria-hidden="true" />SKILL.md</span>
+      <pre>{lines.map((line, i) => <span key={line} className="wt-in-up" {...at(0.6 + i * 0.55)}>{line}{"\n"}</span>)}</pre>
+    </div>
+    <div className="wt-panel wt-skill-use wt-in-up" {...at(4.2)}>
+      <span className="wt-panel-head"><MessageSquare size={15} aria-hidden="true" />Lapi Agent</span>
+      <p className="wt-skill-ask">Which invoices are overdue?</p>
+      <p className="wt-skill-using wt-in-pop" {...at(5.4)}><Sparkles size={13} aria-hidden="true" />Using skill: invoice-review</p>
+      <p className="wt-in-up" {...at(6.4)}>3 overdue, 1 duplicate · totals by supplier below</p>
     </div>
   </div>;
 }
@@ -317,7 +334,7 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
       <button type="button" className="wt-button" onClick={replay}><RotateCcw size={15} aria-hidden="true" />Replay</button>
     </div>}
   </div>;
-  const scenes: Record<SceneId, ReactNode> = { welcome: <Welcome />, connect: <Connect mobile={device === "mobile"} />, unify: <Unify />, ask: <Ask />, extract: <Extract />, secure: <Secure endCard={endCard} /> };
+  const scenes: Record<SceneId, ReactNode> = { welcome: <Welcome />, connect: <Connect mobile={device === "mobile"} />, unify: <Unify />, ask: <Ask />, extract: <Extract />, skills: <Skills />, secure: <Secure endCard={endCard} /> };
 
   const player = <div className="wt-player" data-mode={mode} data-device={device} data-playing={playing || undefined} data-still={still || undefined} data-reduced={reduced || undefined}>
     <header className="wt-top">

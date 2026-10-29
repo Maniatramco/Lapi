@@ -246,6 +246,8 @@ POLICY = {
     ('GET', '/api/skills'): 'signed_in',
     # Personal skills; sharing with a dataset or the workspace is administrator-only in skills.py.
     ('POST', '/api/skills'): 'signed_in',
+    ('POST', '/api/skills/upload'): 'signed_in',
+    ('GET', '/api/skills/{skill_id}/download'): 'signed_in',
     ('PUT', '/api/skills/{skill_id}'): 'signed_in',
     ('DELETE', '/api/skills/{skill_id}'): 'signed_in',
 }

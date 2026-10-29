@@ -26,6 +26,7 @@ export const TRAINING_CARDS:TrainingCard[]=[
  {id:'add',title:'Add documents',text:'Tap the paper-clip for a photo or files, or use Quick start for a guided first upload. Several pages can be merged into one document.',tryLabel:'Open Quick start',action:'quick-start'},
  {id:'extract',title:'Pull out data',text:'Say what you need and I suggest the fields, extract them, and show every value next to its source for you to review.',tryLabel:'Try: pull out invoice totals',action:'ask',example:'/Extract the invoice number, date and total from my documents'},
  {id:'numbers',title:'Exact numbers and charts',text:'From spreadsheets I calculate exactly on the table, and I can draw bar, line or pie charts when you ask.',tryLabel:'Try: chart revenue by month',action:'ask',example:'Chart total revenue by month'},
+ {id:'skills',title:'Teach me with a skill',text:'A skill is a short playbook: when it applies (document types, keywords or documents) and the steps. Upload a SKILL.md or write one in Skills & memory; I use it by myself when a request matches.',tryLabel:'Try: list my skills',action:'ask',example:'/skill'},
  {id:'trust',title:'What I never do',text:'I never send your passwords or tokens to an AI model, never show you data beyond your access, and I ask before anything goes to an external service.',action:'none'},
 ];
-export const TRAINING_VERSION=1;
+export const TRAINING_VERSION=2;

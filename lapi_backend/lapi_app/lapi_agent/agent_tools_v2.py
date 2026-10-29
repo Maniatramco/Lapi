@@ -318,7 +318,7 @@ class AgentTools(Tools):
         super().__init__(owner, body, conversation_id, main)
         self._cache = {}; self.plan = []; self.on_plan = on_plan; self.lock = threading.RLock()
         self.skills = skills  # WS5 library, optional
-        self.loaded_skills = []; self.instruction_proposal = None
+        self.loaded_skills = []; self.auto_skills = []; self.instruction_proposal = None
         self.charts = []  # Charts drawn from query_table results, shown with the answer.
         self._selected_dataset = body.dataset_id; self._selected_documents = list(body.document_ids)
 

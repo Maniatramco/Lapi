@@ -1,10 +1,10 @@
 /* The 1-minute Lapi tour: scene script and pure timing helpers (no React, unit tested). */
 
-export type SceneId = "welcome" | "connect" | "unify" | "ask" | "extract" | "secure";
+export type SceneId = "welcome" | "connect" | "unify" | "ask" | "extract" | "skills" | "secure";
 export type Scene = { id: SceneId; title: string; caption: string; seconds: number };
 
 /** Raise when the tour changes enough to show it again; must match the API's TOUR_VERSION. */
-export const TOUR_VERSION = 2;
+export const TOUR_VERSION = 3;
 
 /** Each caption is also the scene's voice-over line, so subtitles always match the narration.
  * Keep lines short enough to speak within the scene (see `wordsPerSecond`). Two versions share
@@ -22,6 +22,8 @@ export const SCENES: readonly Scene[] = [
     caption: "Ask the Lapi Agent in plain language. Every answer shows its sources. Press the question mark key to see keyboard shortcuts." },
   { id: "extract", title: "Extract & review", seconds: 10,
     caption: "Need data out? Lapi suggests the fields, then you review each value side by side with its source." },
+  { id: "skills", title: "Skills", seconds: 9,
+    caption: "Teach the agent with skills: a short playbook for a kind of document, written or uploaded once. It uses them whenever they fit." },
   { id: "secure", title: "Secure by design", seconds: 9,
     caption: "Single sign-on, access per dataset and an activity log keep it safe. You're ready: start with Quick start on your Dashboard." },
 ];
@@ -37,6 +39,8 @@ export const MOBILE_SCENES: readonly Scene[] = [
     caption: "Ask in plain language, right from your phone. Every answer shows its sources, so you can check them." },
   { id: "extract", title: "Extract", seconds: 10,
     caption: "Pull out data in Quick start: Lapi suggests the fields, extracts them, and you review each value." },
+  { id: "skills", title: "Skills", seconds: 9,
+    caption: "Skills teach the agent how to handle a kind of document. Add one once, and it is used whenever it fits." },
   { id: "secure", title: "Secure", seconds: 9,
     caption: "Sign in once, see only what is shared with you, and every change is logged. Start with Quick start." },
 ];

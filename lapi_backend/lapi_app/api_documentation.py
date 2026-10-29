@@ -201,6 +201,8 @@ NOTES = {
     'GET /api/documentation': 'Read this live API contract and learning notes. No document data, user records, or configured credential values are included.',
     'GET /api/skills': 'List the skills you can use in chat: your own, those shared with a dataset or the workspace, and built-in playbooks.',
     'POST /api/skills': 'Create a skill (name, description, steps, optional allowed tools and output format). Sharing with a dataset or the workspace requires an administrator.',
+    'POST /api/skills/upload': 'Upload a skill as a SKILL.md file: front matter (name, description, allowed_tools, output_format, and when it applies: document_types, domains, keywords, documents) followed by the steps. Uploading a name you already have replaces your skill.',
+    'GET /api/skills/{skill_id}/download': 'Download a skill as SKILL.md, ready to share or upload elsewhere.',
     'PUT /api/skills/{skill_id}': 'Save a new version of a skill you own (administrators can edit shared skills).',
     'DELETE /api/skills/{skill_id}': 'Remove a skill you own from chat. Built-in skills cannot be removed.',
     'GET /api/me/memory': 'Read your chat memory: the short preference note, whether memory is on, and your recent questions (kept 90 days, private to you).',

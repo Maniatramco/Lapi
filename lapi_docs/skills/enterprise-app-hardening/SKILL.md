@@ -31,6 +31,7 @@ Reference files in this folder:
 - `reference/deploy-pitfalls.md`: all three images (api, web, keycloak) must carry the release tag; failed-create recovery.
 - `reference/ocr-dense-pages.md`: read a dense scanned page in strips when the OCR answer is cut off.
 - `reference/agent-guide.md`: deterministic guide layer for plain requests (upload this / pull out / create dataset) before the model.
+- `reference/skills-that-apply.md`: SKILL.md upload/download and applies_to matching so the agent uses skills by itself.
 
 ## How the user works (follow this)
 

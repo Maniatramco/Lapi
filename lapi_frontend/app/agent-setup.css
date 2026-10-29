@@ -26,3 +26,8 @@
 .agent-instruction-diff pre{white-space:pre-wrap;font-size:.85rem;padding:8px;border-radius:8px;border:1px solid var(--border,#e5e7eb);margin:4px 0 0;max-height:260px;overflow:auto}
 .agent-source-snippet{margin:2px 0 0;font-size:.82rem}
 @media (max-width:640px){.agent-setup-card{padding:12px}}
+
+.agent-setup-applies{border:1px solid var(--line,#e3e7ef);border-radius:12px;padding:8px 12px 12px;margin:0}
+.agent-setup-applies legend{font-size:13px;color:var(--muted,#5b6475);padding:0 4px}
+.agent-setup-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+.agent-setup-chips .agent-chip{min-height:26px;padding:0 10px;font-size:12.5px;cursor:default}
