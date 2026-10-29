@@ -27,6 +27,11 @@ consent before anything goes to an AI model, and help write the extraction promp
    → Reading N documents with the AI model → Checking the values → Ready), then the values **in the same popup**
    with **Finish** and **Review**. Review dispatches `lapi:open-review` (`openReviewPage(id)`), handled in
    `page.tsx` with `openReview(id)` (a ref keeps the latest function), closing the popup.
+   **On failure** (user's phone screenshot, v26.1.16.33): put the reason at the TOP of the step ("The extraction
+   stopped: <error>") because on a phone the bottom alert is below the fold; mark the red cross on the step that
+   failed (furthest status seen while polling, else what the error names), never always on "Waiting for a
+   worker"; a poll timeout is "Still running", not "Stopped". The worker does not log job errors, so the
+   extraction's `error` field is the only place the reason lives - always show it.
 8. **Done**: next actions (Review / keep asking, add more documents, share with the team).
 
 ## Layout rules learned from the user's screenshots

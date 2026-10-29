@@ -34,11 +34,17 @@ export function mergedName(files:{name:string}[]){
 }
 
 export type StageState='done'|'on'|'todo'|'failed';
-/** The extraction workflow shown while Lapi pulls out data, from the extraction's real status. */
-export function extractionStages(status:string|undefined,documents:number):{label:string;state:StageState}[]{
+const stageIndex=(status:string|undefined)=>status==='ready'?5:status==='running'||status==='processing'?2:status==='queued'||status==='blocked'?1:0;
+/** The extraction workflow shown while Lapi pulls out data, from the extraction's real status.
+ * A failure is marked on the step it happened in: the furthest status seen while polling, or,
+ * when it failed between polls, the step its error names (indexing or worker), else the AI read. */
+export function extractionStages(status:string|undefined,documents:number,reached?:string,error=''):{label:string;state:StageState}[]{
  const labels=['Prompt saved','Waiting for a worker',`Reading ${documents} document${documents===1?'':'s'} with the AI model`,'Checking the values against your fields','Ready to review'];
- if(status==='failed'||status==='cancelled')return labels.map((label,i)=>({label,state:i===0?'done':i===1?'failed':'todo'}));
- const at=status==='ready'?5:status==='running'||status==='processing'?2:status==='queued'?1:0;
+ if(status==='failed'||status==='cancelled'){
+  const failed=stageIndex(reached)>=2?2:/index|worker|queue|recovery/i.test(error)?1:2;
+  return labels.map((label,i)=>({label,state:i<failed?'done':i===failed?'failed':'todo'}));
+ }
+ const at=stageIndex(status);
  return labels.map((label,i)=>({label,state:i<at?'done':i===at?'on':'todo'}));
 }
 

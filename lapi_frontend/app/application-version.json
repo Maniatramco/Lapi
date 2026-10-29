@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.32",
+  "version": "26.1.16.33",
   "releases": [
+    {
+      "version": "26.1.16.33",
+      "date": "2026-10-29",
+      "title": "Clearer extraction failures in Quick start",
+      "changes": [
+        "When an extraction stops, the reason is shown at the top of the step instead of below the screen.",
+        "The red cross now sits on the step that actually failed (for example reading with the AI model), not always on \"Waiting for a worker\".",
+        "If an extraction takes longer than 10 minutes, Quick start says it is still running and where to check it, instead of saying it stopped."
+      ]
+    },
     {
       "version": "26.1.16.32",
       "date": "2026-10-29",

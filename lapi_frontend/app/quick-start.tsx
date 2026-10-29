@@ -45,7 +45,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
  const [promptName,setPromptName]=useState(''),[instructions,setInstructions]=useState(''),[fields,setFields]=useState<Field[]>([]),[change,setChange]=useState('');
  const [extraction,setExtraction]=useState<Entity|null>(null);
  const [busy,setBusy]=useState(false),[working,setWorking]=useState(''),[error,setError]=useState('');
- const sheet=useRef<HTMLDivElement>(null),camera=useRef<HTMLInputElement>(null),picker=useRef<HTMLInputElement>(null);
+ const reached=useRef<string|undefined>(undefined),sheet=useRef<HTMLDivElement>(null),camera=useRef<HTMLInputElement>(null),picker=useRef<HTMLInputElement>(null);
  const dataset=datasets.find(d=>d.id===datasetId);
  const position=Math.max(0,steps.indexOf(step));
  const cloud=sources.filter(s=>s!=='files'&&s!=='not_sure');
@@ -130,16 +130,18 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
   go('extracting');setWorking('Pulling out your data…');
   const created=await api('/extractions','POST',{document_ids:readyIds.slice(0,20),template_id:template.id,dataset_id:datasetId,allow_external:true});
   const id=created.id||created.extraction_id;const started=Date.now();
-  let current:Entity=created;setExtraction(created);
+  let current:Entity=created;setExtraction(created);reached.current=created.status;
   while(!['ready','failed','cancelled'].includes(current.status)&&Date.now()-started<POLL_LIMIT_MS){
-   await wait(POLL_MS);current=await api(`/extractions/${encodeURIComponent(id)}`,'GET',undefined,undefined,true);setExtraction(current);
+   await wait(POLL_MS);current=await api(`/extractions/${encodeURIComponent(id)}`,'GET',undefined,undefined,true);
+   if(!['failed','cancelled'].includes(current.status))reached.current=current.status;setExtraction(current);
   }
   setExtraction(current);onChanged();
-  if(current.status!=='ready')throw new Error(current.error||'The extraction did not finish. Open Review to see it, or try again.');
+  if(current.status!=='ready')throw new Error(current.error||(['failed','cancelled'].includes(current.status)?'The extraction did not finish. Open Review to see it, or try again.':'This is taking longer than 10 minutes. It keeps running: check it later on the Review page.'));
  });
 
  const state=progress(uploaded.map(item=>item.state));
  const canShare=isAdmin||dataset?.my_access==='owner';
+ const extractStopped=extraction?.status==='failed'||extraction?.status==='cancelled';
  const rows=extraction?.status==='ready'?resultRows(extraction.result,fields):[];
  const consentBox=(id:string,checked:boolean,set:(value:boolean)=>void,text:string)=><label className="quick-start-consent" htmlFor={id}>
   <input id={id} type="checkbox" checked={checked} onChange={e=>set(e.target.checked)} disabled={busy}/><span>{text}</span></label>;
@@ -267,8 +269,9 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
     </>}
 
     {step==='extracting'&&<>
-     {!rows.length&&<p className="quick-start-lead">{error?'The extraction stopped.':'Lapi is reading your documents with the prompt. This usually takes under a minute.'}</p>}
-     {!rows.length&&<ol className="quick-start-stages" aria-live="polite">{extractionStages(extraction?.status||'saved',Math.max(1,Math.min(readyIds.length,20))).map(stage=><li key={stage.label} data-state={stage.state}>
+     {!rows.length&&!error&&<p className="quick-start-lead">Lapi is reading your documents with the prompt. This usually takes under a minute.</p>}
+     {!rows.length&&error&&<p className="quick-start-error" role="alert"><CircleAlert size={16}/> {extractStopped?`The extraction stopped: ${error}`:error}</p>}
+     {!rows.length&&<ol className="quick-start-stages" aria-live="polite">{extractionStages(extraction?.status||'saved',Math.max(1,Math.min(readyIds.length,20)),reached.current,extraction?.error||error).map(stage=><li key={stage.label} data-state={stage.state}>
       <span className="quick-start-stage-dot">{stage.state==='done'?<Check size={14}/>:stage.state==='on'?<Loader2 size={14} className="animate-spin"/>:stage.state==='failed'?<X size={14}/>:null}</span>{stage.label}</li>)}</ol>}
      {error&&!busy&&<button type="button" className="quick-start-secondary" onClick={()=>{setExtraction(null);go('prompt');}}>Back to the fields</button>}
      {rows.length>0&&<article className="quick-start-answer" aria-live="polite"><h3><Check size={16}/> {promptName||'Extracted values'}</h3>
@@ -289,7 +292,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
     </>}
 
     {busy&&working&&<p className="quick-start-working" role="status"><Loader2 size={16} className="animate-spin"/> {working}</p>}
-    {error&&<p className="quick-start-error" role="alert"><CircleAlert size={16}/> {error}</p>}
+    {error&&step!=='extracting'&&<p className="quick-start-error" role="alert"><CircleAlert size={16}/> {error}</p>}
    </div>
 
    <footer className="quick-start-foot">
@@ -302,7 +305,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
     {step==='extracting'&&(rows.length&&extraction?<div className="quick-start-foot-actions">
      <button type="button" className="quick-start-secondary" onClick={next}>Finish</button>
      <button type="button" className="quick-start-primary" onClick={()=>{openReviewPage(extraction.extraction_id||extraction.id);onClose();}}><FileSearch size={18}/> Review</button>
-    </div>:<button type="button" className="quick-start-primary" disabled>{error?'Stopped':'Extracting…'}</button>)}
+    </div>:<button type="button" className="quick-start-primary" disabled>{error?(extractStopped?'Stopped':'Still running'):'Extracting…'}</button>)}
     {step==='done'&&<button type="button" className="quick-start-primary" onClick={onClose}>Close</button>}
    </footer>
    </div>

@@ -2,6 +2,13 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.33 - 29 October 2026
+
+Clearer extraction failures in Quick start
+
+- `quick-start-flow.ts`: `extractionStages(status, documents, reached?, error?)` marks a failure on the step it happened in: the furthest status seen while polling, else the step the error names (indexing / worker / recovery → "Waiting for a worker"), else "Reading … with the AI model". `blocked` counts as waiting.
+- `quick-start.tsx`: remembers the furthest status (`reached`), shows "The extraction stopped: <reason>" at the top of the Extracting step (the bottom alert is hidden there), and a poll timeout says the extraction is still running ("Still running") instead of "Stopped".
+
 ## v26.1.16.32 - 29 October 2026
 
 The tour is a motion video

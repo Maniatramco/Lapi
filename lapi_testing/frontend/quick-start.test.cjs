@@ -73,6 +73,11 @@ test('the extraction workflow follows the real extraction status',()=>{
  assert.deepEqual(states('queued'),['done','on','todo','todo','todo']);
  assert.deepEqual(states('running'),['done','done','on','todo','todo']);
  assert.deepEqual(states('ready'),['done','done','done','done','done']);
- assert.deepEqual(states('failed'),['done','failed','todo','todo','todo']);
+ assert.deepEqual(states('failed'),['done','done','failed','todo','todo']);
+ // The failure is marked where it happened, not always on the worker step.
+ assert.deepEqual(extractionStages('failed',2,'running').map(x=>x.state),['done','done','failed','todo','todo']);
+ assert.deepEqual(extractionStages('failed',2,'queued','Model provider rejected the request').map(x=>x.state),['done','done','failed','todo','todo']);
+ assert.deepEqual(extractionStages('failed',2,'blocked','Source indexing failed. Correct/retry the source job').map(x=>x.state),['done','failed','todo','todo','todo']);
+ assert.deepEqual(extractionStages('failed',2,'queued','Worker recovery attempts exhausted').map(x=>x.state),['done','failed','todo','todo','todo']);
  assert.match(extractionStages('running',1)[2].label,/Reading 1 document with/);
 });
