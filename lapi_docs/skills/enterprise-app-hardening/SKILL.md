@@ -17,7 +17,8 @@ Reference files in this folder:
 - `reference/route-policy.md`: the access levels (incl. Contributor), what each allows, and the route-policy pattern.
 - `reference/keycloak-realm.md`: Keycloak realm, client, mappers, MFA flow, and Lapi's OIDC handling.
 - `reference/company-sign-in.md`: Microsoft/Google/GitHub buttons via Keycloak identity providers, and the
-  Keycloak problems we hit in production with their fixes.
+  Keycloak problems we hit in production with their fixes (incl. the Identity Provider Redirector step and
+  checking a provider exists from its login page).
 - `reference/roles-and-models.md`: administrator / contributor / auditor from Keycloak; admins set model Defaults
   and mapping; new datasets use the Defaults; chat model choices for everyone.
 - `reference/sessions-and-sign-in.md`: idle timeout, My sessions, cookie, client IP, sign-in limits, TOTP.
@@ -108,7 +109,9 @@ Read `reference/keycloak-realm.md`, `reference/sessions-and-sign-in.md` and `ref
   roles and teams); **back-channel logout** endpoint; `id_token_hint` on sign-out. `REQUIRE_ADMIN_MFA` exists but
   the user chose **"rely only on Keycloak"** (`false`; enforce OTP in Keycloak) after it blocked admins whose
   `amr` lacked `otp`.
-- Company sign-in buttons (`kc_idp_hint`) driven by Terraform `keycloak_identity_providers`.
+- Company sign-in buttons (`kc_idp_hint`) driven by Terraform `keycloak_identity_providers`; the custom browser flow
+  must keep the Identity Provider Redirector step or the button lands on Keycloak's page; the popup never says
+  "Keycloak" (work account / Google / username and password / emergency administrator sign-in).
 - Sessions: 30-minute idle timeout, "My sessions", admin "sign out everywhere", `__Host-` cookie with HTTPS.
 - Sign-in limits in the database (5 per username / 20 per address per 15 min), TOTP for break-glass accounts.
 - Client IP: trust `X-Forwarded-For` only from loopback; **PROXY protocol v2** on the LB TCP listeners + Caddy.

@@ -36,3 +36,16 @@ want to sign in" (with provider buttons) or "Sign in with your work account"; th
 username and password instead"; the local-admin form is "Emergency administrator sign-in"; error texts say
 "sign-in service". Keep the provider list in Terraform, and check the provider exists in Keycloak first by
 fetching its login page with PKCE parameters and looking for `broker/<alias>`.
+
+## kc_idp_hint only works with the Identity Provider Redirector (learned 29 Oct 2026)
+A custom browser flow (for example one built for a conditional admin OTP step) must keep Keycloak's
+`identity-provider-redirector` execution between Cookie and the forms sub-flow (ALTERNATIVE, priority 15 in
+`realm-lapi.json`). Without it, `?provider=google` (`kc_idp_hint=google`) lands on Keycloak's own login page with
+the provider only as a small link. `--import-realm` does not update an existing realm, so a live realm is fixed
+once by hand in the admin console (Authentication → flow → Add step). Verify by clicking the button in a browser
+and checking that the URL goes to accounts.google.com, not sso.…/realms/…/auth.
+
+## Checking a provider exists without admin credentials
+Fetch the realm's auth endpoint with the client id, a redirect URI the client allows and PKCE parameters
+(`code_challenge`, `code_challenge_method=S256`), then grep the HTML for `broker/<alias>`; without PKCE the
+client redirects back with an error and shows nothing.
