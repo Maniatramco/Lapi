@@ -170,3 +170,31 @@ def test_document_chat_preserves_unverified_ocr_citation(system,cloud_vision):
     assert citation['document_id']==did and citation['page']==1
     assert citation['text_origin']=='ocr' and citation['ocr']['verified'] is False
     assert citation['ocr']['coordinates'] is None and '42.50' in citation['text']
+
+
+def test_cut_off_answer_splits_the_page_into_strips(monkeypatch):
+    """A dense page the model cannot return in one answer is read in parts; nothing is lost."""
+    import base64
+    calls=[]
+    def call(cfg,path,payload=None,timeout=None):
+        image=Image.open(io.BytesIO(base64.b64decode(payload['messages'][1]['images'][0])));calls.append(image.size)
+        if image.height>500:return {'done':True,'done_reason':'length','message':{'content':'{"text":"cut'}}
+        return {'done':True,'message':{'content':json.dumps({'text':'part at y=%d'%image.height,'unreadable':False})}}
+    monkeypatch.setattr(ocr,'call',call)
+    from PIL import ImageDraw
+    page=Image.new('RGB',(600,900),'white');draw=ImageDraw.Draw(page)
+    for y in (40,120,700,820):draw.text((30,y),'Line of text',fill='black')
+    out=io.BytesIO();page.save(out,format='PNG')
+    text,meta=ocr.transcribe(out.getvalue(),ocr.config()|{'digest':'a'})
+    assert len(calls)==3 and calls[0]==(600,900) and sum(h for _,h in calls[1:])==900
+    assert text.count('part at y=')==2 and meta['split_parts']==2 and 'in 2 parts' in meta['notice']
+
+
+def test_cut_off_answer_gives_up_after_four_strips(monkeypatch):
+    monkeypatch.setattr(ocr,'call',lambda *a,**k:{'done':True,'done_reason':'length'})
+    out=io.BytesIO();Image.new('RGB',(600,1800),'white').save(out,format='PNG')
+    from PIL import ImageDraw
+    page=Image.new('RGB',(600,1800),'white');draw=ImageDraw.Draw(page)
+    for y in range(20,1800,60):draw.text((30,y),'Dense line',fill='black')
+    out=io.BytesIO();page.save(out,format='PNG')
+    with pytest.raises(ocr.OcrError,match='incomplete.*even after splitting'):ocr.transcribe(out.getvalue(),ocr.config()|{'digest':'a'})

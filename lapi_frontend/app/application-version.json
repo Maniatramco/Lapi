@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.28",
+  "version": "26.1.16.29",
   "releases": [
+    {
+      "version": "26.1.16.29",
+      "date": "2026-10-29",
+      "title": "Dense pages are read in parts",
+      "changes": [
+        "When a scanned page has more text than the OCR model can return in one answer, Lapi now splits the page into strips and reads it in parts (up to four), instead of failing with a request to change server limits.",
+        "The remaining OCR message is in plain words and says what to do."
+      ]
+    },
     {
       "version": "26.1.16.28",
       "date": "2026-10-29",

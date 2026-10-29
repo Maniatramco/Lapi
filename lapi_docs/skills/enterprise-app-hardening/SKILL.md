@@ -29,6 +29,7 @@ Reference files in this folder:
 - `reference/spreadsheets-and-charts.md`: XLSX/CSV/TSV with row-aware indexing, exact `query_table` answers, charts.
 - `reference/mobile-agent-first.md`: the agent-first phone version, screen control through OpenFGA, agent training.
 - `reference/deploy-pitfalls.md`: all three images (api, web, keycloak) must carry the release tag; failed-create recovery.
+- `reference/ocr-dense-pages.md`: read a dense scanned page in strips when the OCR answer is cut off.
 
 ## How the user works (follow this)
 

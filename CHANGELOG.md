@@ -2,6 +2,13 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.29 - 29 October 2026
+
+Dense pages are read in parts
+
+- `ocr.transcribe`: when the model answer is cut off (`done` false or `done_reason == 'length'`), the page image is split at the whitest row near the middle (`split_rows`) and each strip is transcribed, recursively up to 4 strips (`SPLIT_DEPTH`); blank strips are skipped; metadata carries `split_parts`. The final error no longer asks people to change `LAPI_OCR_*` settings.
+- Deploy: `terraform.tfvars` holds `keycloak_identity_providers`; all three images carry the release tag.
+
 ## v26.1.16.28 - 29 October 2026
 
 Sign in with Google

@@ -124,7 +124,35 @@ def render_pdf(raw, index, dpi):
             doc.close()
 
 
-def transcribe(image, cfg):
+SPLIT_DEPTH = 2  # A page is split into at most 4 strips before OCR gives up.
+SPLIT_MIN_HEIGHT = 400  # Strips shorter than this are not split further.
+
+
+def split_rows(image):
+    """Cut a page image into a top and a bottom strip at the whitest row near the middle, so a
+    dense page can be transcribed in parts. Every pixel stays in exactly one strip."""
+    from PIL import Image
+    with Image.open(io.BytesIO(image)) as source:
+        source = source.convert('RGB'); width, height = source.size
+        rows = list(source.convert("L").resize((1, height), Image.BOX).tobytes())  # mean brightness per row
+        low, high = int(height * 0.35), max(int(height * 0.65), int(height * 0.35) + 1)
+        cut = max(range(low, high), key=lambda y: (rows[y], -abs(y - height // 2)))
+        parts = []
+        for box in ((0, 0, width, cut), (0, cut, width, height)):
+            out = io.BytesIO(); source.crop(box).save(out, format='PNG'); parts.append(out.getvalue())
+    return parts
+
+
+def _blank(image):
+    from PIL import Image
+    with Image.open(io.BytesIO(image)) as source:
+        return all(low == high and low >= 245 for low, high in source.convert('RGB').getextrema())
+
+
+def transcribe(image, cfg, _depth=0):
+    """Transcribe one page image. When the model's answer is cut off (the page has more text than
+    it may return at once), the page is split into strips and read in parts, without anyone having
+    to change OCR limits; partial text is never indexed."""
     from PIL import Image
     try:
         with Image.open(io.BytesIO(image)) as source:
@@ -167,7 +195,19 @@ def transcribe(image, cfg):
                     **({'num_gpu':0} if runtime_config.get('LAPI_OCR_FORCE_CPU') else {})}, 'keep_alive': runtime_config.get('LAPI_OCR_KEEP_ALIVE')})
         token_usage.record(result, 'ollama', usage_call)
     if not result.get('done') or result.get('done_reason') == 'length':
-        raise OcrError('OCR output was incomplete. Increase LAPI_OCR_MAX_TOKENS and LAPI_OCR_CONTEXT or split the page, then retry. Partial text was not indexed.')
+        if _depth < SPLIT_DEPTH and height >= SPLIT_MIN_HEIGHT:
+            texts, parts = [], 0
+            for strip in split_rows(image):
+                if _blank(strip):
+                    continue
+                text, meta = transcribe(strip, cfg, _depth + 1)
+                texts.append(text); parts += meta.get('split_parts', 1)
+            return '\n'.join(texts), {'model': cfg['model'], 'digest': cfg['digest'], 'seconds': round(time.monotonic() - started, 3),
+                'provider': cfg.get('provider', 'ollama'), 'digest_type': cfg.get('digest_type', 'weights'), 'split_parts': parts,
+                'verified': False, 'confidence': None, 'coordinates': None,
+                'notice': 'AI OCR transcription read in %d parts; check names, numbers and tables against the unchanged original.' % parts}
+        raise OcrError('OCR output was incomplete: this page has more text than the OCR model can return at once, even after splitting it into parts. '
+                       'Upload the page at a lower resolution or as a searchable PDF, or ask an administrator to raise the OCR output limit (LAPI_OCR_MAX_TOKENS). Partial text was not indexed.')
     try:
         value = json.loads(result['message']['content']); validate(value, SCHEMA)
     except Exception:
