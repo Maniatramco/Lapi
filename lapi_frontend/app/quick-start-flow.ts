@@ -159,3 +159,36 @@ export function resultRows(result:unknown,fields:Field[]):{label:string;value:st
  const order=(key:string)=>{const index=fields.findIndex(f=>f.key===key);return index<0?fields.length:index;};
  return Object.entries(record).sort(([a],[b])=>order(a)-order(b)).map(([key,value])=>({label:label(key),value:show(value)}));
 }
+
+/** How each field will be read from a spreadsheet (POST /templates/table-plan), shown before extracting. */
+export type ColumnChoice={sheet:string;column:string;how:string;confidence:number;via?:{column:string;key:string;strength:string}};
+export type TablePlanDocument={document_id:string;name:string;sheet:string;rows:number;fields:Record<string,ColumnChoice>;row_fields:string[];whole_fields:string[];unmatched:string[];columns:{sheet:string;column:string}[]};
+export type TablePlan={applies:boolean;documents:TablePlanDocument[]};
+const SEP='\u0001';
+export const columnValue=(sheet:string,column:string)=>sheet+SEP+column;
+
+/** The select value per field: a column, "row" (read by the model from each row) or "" (leave empty). */
+export function initialChoices(doc:TablePlanDocument,keys:string[]):Record<string,string>{
+ return Object.fromEntries(keys.map(key=>{const found=doc.fields[key];return [key,found?columnValue(found.sheet,found.column):doc.row_fields.includes(key)?'row':''];}));
+}
+
+/** The person's choices as the extraction's column_mapping; "row" stays the server's decision. */
+export function columnMapping(choices:Record<string,string>):Record<string,{sheet:string;column:string}|null>{
+ const out:Record<string,{sheet:string;column:string}|null>={};
+ for(const [key,value] of Object.entries(choices)){
+  if(value==='row')continue;
+  if(!value){out[key]=null;continue;}
+  const [sheet,column]=value.split(SEP);out[key]={sheet,column};
+ }
+ return out;
+}
+
+/** Why a column was chosen, in plain words. */
+export function howChosen(doc:TablePlanDocument,key:string,choice:string):string{
+ if(choice==='row')return 'Read from each row\'s cells, comments and images by the AI model';
+ if(!choice)return doc.whole_fields.includes(key)?'About the whole table: ask in chat for an exact answer':'No matching column: left empty';
+ const found=doc.fields[key];
+ if(!found||columnValue(found.sheet,found.column)!==choice)return 'Chosen by you';
+ const via=found.via?` through ${found.via.column} → ${found.sheet}.${found.via.key}`:'';
+ return found.how==='by meaning'?`Matched by meaning (${Math.round(found.confidence*100)}% sure)${via}`:found.how==='same name'?`Same name${via}`:`Similar name${via}`;
+}

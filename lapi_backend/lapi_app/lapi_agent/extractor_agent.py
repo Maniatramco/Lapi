@@ -38,10 +38,13 @@ def run(jid, record, data, snapshot, documents, sources, check):
         check(); workflow.transition(jid, name, status)
 
     # Spreadsheets whose columns are the requested fields: one record per row, read from the table.
-    chosen = None if data.get('merge_records') else table_extraction.plan(data['schema'], documents)
+    chosen = None if data.get('merge_records') else table_extraction.plan(data['schema'], documents, override=data.get('column_mapping'))
     if chosen:
         stage('retrieving'); stage('retrieving', 'completed'); stage('reranking', 'completed'); stage('generate')
-        result, evidence, notice = table_extraction.extract(data['schema'], chosen, sources, check)
+        selection = data.get('model_selection') or {}
+        result, evidence, notice = table_extraction.extract(data['schema'], chosen, sources, check,
+            limits={'context': selection.get('context_limit'), 'output': selection.get('max_output_tokens')})
+        data['column_plan'] = table_extraction.preview(chosen)
         data['schema'] = table_extraction.schema_for(data['schema'])
         stage('generate', 'completed'); stage('validate')
         validate(result, data['schema']); parquet_results.encoded(result); stage('validate', 'completed')

@@ -2,7 +2,7 @@ const {test}=require('node:test');const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
 const filename=path.resolve(__dirname,'../../lapi_frontend/app/quick-start-flow.ts'),compiled=new Module(filename,module);compiled.paths=module.paths;
 compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
-const {stepsFor,uploadable,askable,fileState,progress,pickFiles,sourceName,defaultDatasetName,fieldKey,fieldsToSchema,fieldProblems,resultRows,MAX_FILES,canMerge,mergeByDefault,mergedName,extractionStages,recordCount}=compiled.exports;
+const {stepsFor,uploadable,askable,fileState,progress,pickFiles,sourceName,defaultDatasetName,fieldKey,fieldsToSchema,fieldProblems,resultRows,MAX_FILES,canMerge,mergeByDefault,mergedName,extractionStages,recordCount,initialChoices,columnMapping,howChosen,columnValue}=compiled.exports;
 const datasets=[{id:'v',name:'Policies',my_access:'viewer'},{id:'e',name:'Contracts',my_access:'editor'},{id:'o',name:'Old',my_access:'owner',active:false}];
 
 test('people who can add documents choose to ask or extract; Viewers choose a dataset and ask',()=>{
@@ -87,4 +87,18 @@ test('a record list shows the first record\'s own fields and counts every record
  const rows=resultRows(result,[{key:'transaction_id',label:'Transaction ID',type:'text',description:''},{key:'amount',label:'Amount',type:'number',description:''}]);
  assert.deepEqual(rows,[{label:'Transaction ID',value:'TXN-100001'},{label:'Amount',value:'10'}]);
  assert.equal(recordCount(result),2);assert.equal(recordCount({total:1}),1);assert.equal(recordCount(null),0);
+});
+
+test('spreadsheet fields show how they will be read and the person can change them',()=>{
+ const doc={document_id:'d',name:'ledger.xlsx',sheet:'Transactions',rows:6,row_fields:['dispute'],whole_fields:['total'],unmatched:['total','paid'],
+  fields:{invoice:{sheet:'Transactions',column:'Reference No',how:'by meaning',confidence:0.93},country:{sheet:'Vendors',column:'Country',how:'by meaning',confidence:0.9,via:{column:'Counterparty',key:'Name',strength:'proven'}}},
+  columns:[{sheet:'Transactions',column:'Reference No'},{sheet:'Vendors',column:'Country'},{sheet:'Transactions',column:'Amount (USD)'}]};
+ const picks=initialChoices(doc,['invoice','country','dispute','total','paid']);
+ assert.deepEqual(picks,{invoice:columnValue('Transactions','Reference No'),country:columnValue('Vendors','Country'),dispute:'row',total:'',paid:''});
+ assert.equal(howChosen(doc,'invoice',picks.invoice),'Matched by meaning (93% sure)');
+ assert.equal(howChosen(doc,'country',picks.country),'Matched by meaning (90% sure) through Counterparty → Vendors.Name');
+ assert.match(howChosen(doc,'total',''),/whole table/);assert.match(howChosen(doc,'dispute','row'),/each row/);
+ picks.paid=columnValue('Transactions','Amount (USD)');
+ assert.equal(howChosen(doc,'paid',picks.paid),'Chosen by you');
+ assert.deepEqual(columnMapping(picks),{invoice:{sheet:'Transactions',column:'Reference No'},country:{sheet:'Vendors',column:'Country'},total:null,paid:{sheet:'Transactions',column:'Amount (USD)'}});
 });

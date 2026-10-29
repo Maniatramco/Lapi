@@ -57,6 +57,15 @@ class SuggestInput(BaseModel):
     allow_external: bool = False
 
 
+class TablePlanInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', populate_by_name=True)
+    dataset_id: str = Field(min_length=1)
+    document_ids: list[str] = Field(min_length=1, max_length=20)
+    schema_: dict = Field(alias='schema')
+    column_mapping: dict[str, dict[str, str] | None] | None = Field(default=None, max_length=100)
+    allow_external: bool = False
+
+
 def excerpt(document_ids):
     """The start of each document's extracted text, within one budget."""
     parts, budget = [], EXCERPT_CHARS
@@ -66,6 +75,10 @@ def excerpt(document_ids):
         except FileNotFoundError:
             continue
         text = '\n'.join(str(page.get('text') or '') for page in pages).strip()
+        from . import workbook
+        if (book := workbook.load(core.store, document_id)):
+            # A workbook: what each sheet means (all its columns and values), then its first rows.
+            text = '\n\n'.join(workbook.profile_text(p) for p in book.get('profiles', [])) + '\n\n' + text
         if not text:
             continue
         piece = text[:max(500, budget // max(1, len(document_ids)))]
@@ -91,7 +104,7 @@ def to_schema(fields):
     return {'type': 'object', 'additionalProperties': False, 'properties': properties, 'required': list(properties)}
 
 
-def call_model(messages, snapshot):
+def call_model(messages, snapshot, output=OUTPUT):
     """One reply from the dataset's extraction model (the same provider extraction uses)."""
     settings = snapshot['settings']
     protocol = (settings.get('model_connection') or {}).get('protocol') if settings['model_provider'] == 'registered' else settings['model_provider']
@@ -99,7 +112,7 @@ def call_model(messages, snapshot):
         if protocol == 'ollama':
             from . import ollama_provider
             payload = {'model': ollama_provider.local_model_name(settings['model']), 'messages': messages,
-                       'stream': False, 'think': False, 'format': OUTPUT, 'options': {'temperature': 0}}
+                       'stream': False, 'think': False, 'format': output, 'options': {'temperature': 0}}
             try:
                 result = ollama_provider.request('/api/chat', payload, settings['timeout'])
             except ollama_provider.OllamaError as error:
@@ -158,3 +171,24 @@ def install(app, auth):
         except (ValueError, ValidationError):
             raise HTTPException(502, 'The extraction model\'s suggestion could not be read. Try again.')
         return result | {'schema': to_schema(result['fields'])}
+
+    @app.post('/api/templates/table-plan')
+    def table_plan(body: TablePlanInput, owner=Depends(auth)):
+        """How each field will be read from spreadsheet columns, for the person to confirm."""
+        from .main import external_check
+        from . import dataset_models as routing
+        from .lapi_agent import table_extraction
+        dataset = access.get_record(body.dataset_id, owner, 'knowledge_base', level='editor')
+        documents = []
+        for document_id in body.document_ids:
+            document = access.get_record(document_id, owner, 'document')
+            if document.parent_id != dataset.id:
+                raise HTTPException(400, 'Choose documents from this dataset.')
+            if document.status != 'ready':
+                raise HTTPException(409, 'Wait until the documents are read, then try again.')
+            documents.append(document)
+        snapshot = routing.execution_snapshot(dataset, 'extraction')
+        external_check(body.allow_external, cfg=snapshot['settings'])
+        with core.execution_context(snapshot):
+            plans = table_extraction.propose(body.schema_, documents, override=body.column_mapping)
+        return {'applies': bool(plans), 'documents': table_extraction.preview(plans) if plans else []}

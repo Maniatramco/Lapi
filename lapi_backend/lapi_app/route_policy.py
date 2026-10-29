@@ -183,6 +183,7 @@ POLICY = {
     ('POST', '/api/templates/validate'): 'signed_in',
     ('POST', '/api/templates'): 'editor',
     ('POST', '/api/templates/suggest'): 'editor',
+    ('POST', '/api/templates/table-plan'): 'editor',
     ('PUT', '/api/templates/{id}'): 'editor',
     ('GET', '/api/templates/{id}/versions'): 'viewer',
     ('GET', '/api/templates/{id}/export'): 'viewer',

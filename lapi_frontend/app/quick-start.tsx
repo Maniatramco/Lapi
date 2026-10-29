@@ -2,8 +2,8 @@
 import {useEffect,useRef,useState} from "react";
 import {ArrowLeft,Camera,Check,CircleAlert,FileSearch,FileUp,Loader2,Maximize2,MessageSquare,Minimize2,Plus,Sparkles,Table2,Trash2,Users,Wand2,X} from "lucide-react";
 import "./quick-start.css";
-import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,defaultDatasetName,extractionStages,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,recordCount,resultRows,sourceName,stepsFor,uploadable,
- type Field,type FieldType,type FileState,type Path,type Step} from "./quick-start-flow";
+import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,columnMapping,columnValue,defaultDatasetName,extractionStages,howChosen,initialChoices,isSpreadsheet,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,recordCount,resultRows,sourceName,stepsFor,uploadable,
+ type Field,type FieldType,type FileState,type Path,type Step,type TablePlan} from "./quick-start-flow";
 import {eligibleAgentModels} from "./agent-document-selection";
 import {openDatasetEditor} from "./manage-dataset";
 
@@ -44,6 +44,8 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
  const [question,setQuestion]=useState(''),[answer,setAnswer]=useState<Entity|null>(null);
  const [promptName,setPromptName]=useState(''),[instructions,setInstructions]=useState(''),[fields,setFields]=useState<Field[]>([]),[change,setChange]=useState('');
  const [extraction,setExtraction]=useState<Entity|null>(null);
+ // Spreadsheets: how each field will be read (matched by meaning), confirmed before extracting.
+ const [tablePlan,setTablePlan]=useState<TablePlan|null>(null),[columnPicks,setColumnPicks]=useState<Record<string,string>>({});
  const [busy,setBusy]=useState(false),[working,setWorking]=useState(''),[error,setError]=useState('');
  const reached=useRef<string|undefined>(undefined),sheet=useRef<HTMLDivElement>(null),camera=useRef<HTMLInputElement>(null),picker=useRef<HTMLInputElement>(null);
  const dataset=datasets.find(d=>d.id===datasetId);
@@ -55,6 +57,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
   const key=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!busy)onClose();};document.addEventListener('keydown',key);
   return()=>{document.removeEventListener('keydown',key);previous?.focus?.();};},[]);
  useEffect(()=>{sheet.current?.querySelector<HTMLElement>('h2')?.focus();setError('');},[step]);
+ useEffect(()=>{setTablePlan(null);},[fields]);  // changed fields need a new match
 
  // While documents are being read, check them every few seconds.
  useEffect(()=>{
@@ -124,11 +127,19 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
   if(patch.label!==undefined)updated.key=fieldKey(patch.label,current.filter((_,j)=>j!==index).map(f=>f.key));
   return updated;}));
  const addField=()=>setFields(current=>[...current,{key:fieldKey('New field',current.map(f=>f.key)),label:'New field',type:'text',description:'What to pull out, exactly as written.'}]);
- const extract=()=>run('Saving the prompt…',async()=>{
+ const extract=(confirmed?:Record<string,{sheet:string;column:string}|null>)=>run('Saving the prompt…',async()=>{
   const problems=fieldProblems(fields);if(problems.length)throw new Error(problems[0]);
-  const template=await api('/templates','POST',{name:(promptName.trim()||'Extraction').slice(0,200),schema:fieldsToSchema(fields),instructions,dataset_id:datasetId});
+  const schema=fieldsToSchema(fields);
+  const sheets=uploaded.filter(item=>item.state==='ready');
+  if(!confirmed&&sheets.length&&sheets.every(item=>isSpreadsheet(item.name))){
+   // Show how each field will be read from the columns first; the person confirms or changes it.
+   setWorking('Matching your fields to the spreadsheet columns…');
+   const plan:TablePlan=await api('/templates/table-plan','POST',{dataset_id:datasetId,document_ids:readyIds.slice(0,20),schema,allow_external:true});
+   if(plan.applies&&plan.documents[0]){setTablePlan(plan);setColumnPicks(initialChoices(plan.documents[0],fields.map(f=>f.key)));return;}
+  }
+  const template=await api('/templates','POST',{name:(promptName.trim()||'Extraction').slice(0,200),schema,instructions,dataset_id:datasetId});
   go('extracting');setWorking('Pulling out your data…');
-  const created=await api('/extractions','POST',{document_ids:readyIds.slice(0,20),template_id:template.id,dataset_id:datasetId,allow_external:true});
+  const created=await api('/extractions','POST',{document_ids:readyIds.slice(0,20),template_id:template.id,dataset_id:datasetId,allow_external:true,...(confirmed?{column_mapping:confirmed}:{})});
   const id=created.id||created.extraction_id;const started=Date.now();
   let current:Entity=created;setExtraction(created);reached.current=created.status;
   while(!['ready','failed','cancelled'].includes(current.status)&&Date.now()-started<POLL_LIMIT_MS){
@@ -262,6 +273,18 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
         <button type="submit" className="quick-start-secondary" disabled={busy||!change.trim()}><Wand2 size={16}/> Rewrite</button></div>
       </form>
      </>}
+     {tablePlan?.documents[0]&&(()=>{const doc=tablePlan.documents[0];return <section className="quick-start-mapping" aria-label="How Lapi will read your spreadsheet">
+      <h3>How Lapi will read {doc.name}</h3>
+      <p className="quick-start-note">One record per row of sheet “{doc.sheet}” ({doc.rows.toLocaleString()} rows). Values come straight from the columns; check each match and change any that are wrong.</p>
+      <ul>{fields.map(field=>{const pick=columnPicks[field.key]??'';return <li key={field.key}>
+       <label htmlFor={`qs-col-${field.key}`}>{field.label}</label>
+       <select id={`qs-col-${field.key}`} value={pick} onChange={e=>setColumnPicks(current=>({...current,[field.key]:e.target.value}))} disabled={busy}>
+        <option value="">Leave empty</option>
+        <option value="row">Read from each row (AI)</option>
+        {doc.columns.map(c=><option key={columnValue(c.sheet,c.column)} value={columnValue(c.sheet,c.column)}>{c.sheet===doc.sheet?c.column:`${c.sheet} › ${c.column}`}</option>)}
+       </select>
+       <small>{howChosen(doc,field.key,pick)}</small></li>;})}</ul>
+     </section>;})()}
      {!fields.length&&!busy&&<div className="quick-start-foot-actions quick-start-start-fields">
       <button type="button" className="quick-start-secondary" onClick={()=>void suggest()}><Wand2 size={16}/> Suggest fields</button>
       <button type="button" className="quick-start-secondary" onClick={()=>{setError('');setPromptName(name=>name||'Extraction');addField();}}><Plus size={16}/> Add fields yourself</button>
@@ -301,7 +324,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
     {step==='processing'&&<button type="button" className="quick-start-primary" disabled={!state.ready} onClick={next}>{state.ready?'Continue':'Reading…'}</button>}
     {step==='choose'&&<p className="quick-start-foot-note">{aiConsent?'Choose one above.':'Tick the box above to continue.'}</p>}
     {step==='ask'&&<button type="button" className="quick-start-primary" disabled={!answer||busy} onClick={next}>{answer?'Finish':'Ask to continue'}</button>}
-    {step==='prompt'&&<button type="button" className="quick-start-primary" disabled={busy||!fields.length} onClick={()=>void extract()}>Save prompt and extract</button>}
+    {step==='prompt'&&<button type="button" className="quick-start-primary" disabled={busy||!fields.length} onClick={()=>void extract(tablePlan?columnMapping(columnPicks):undefined)}>{tablePlan?'Extract with these columns':'Save prompt and extract'}</button>}
     {step==='extracting'&&(rows.length&&extraction?<div className="quick-start-foot-actions">
      <button type="button" className="quick-start-secondary" onClick={next}>Finish</button>
      <button type="button" className="quick-start-primary" onClick={()=>{openReviewPage(extraction.extraction_id||extraction.id);onClose();}}><FileSearch size={18}/> Review</button>

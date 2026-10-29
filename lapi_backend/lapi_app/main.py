@@ -664,6 +664,8 @@ class ExtractInput(BaseModel):
     display_name:str|None=Field(default=None,min_length=1,max_length=200)
     idempotency_key:str|None=Field(default=None,min_length=1,max_length=160)
     wait_for_index:bool=False
+    # Spreadsheets: the field -> column mapping the person confirmed ({field: {sheet, column}} or null to leave empty).
+    column_mapping:dict[str,dict[str,str]|None]|None=Field(default=None,max_length=100)
 @app.get('/api/extractions')
 def extractions(owner=Depends(auth)):
     output=[]

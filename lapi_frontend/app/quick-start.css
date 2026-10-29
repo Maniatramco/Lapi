@@ -171,3 +171,13 @@ body:has(.quick-start) .operation-popup{display:none}
 .quick-start-foot-actions .quick-start-primary{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px}
 @media(min-width:900px){.quick-start-foot-actions .quick-start-primary{flex:none}}
 .quick-start-start-fields{justify-content:flex-start;flex-wrap:wrap}
+
+/* Spreadsheet fields matched to columns, confirmed before extracting. */
+.quick-start-mapping{margin-top:16px;border:1px solid var(--line,#e2e8f0);border-radius:12px;padding:14px 16px;background:var(--panel-soft,#f8fafc)}
+.quick-start-mapping h3{margin:0 0 4px;font-size:15px}
+.quick-start-mapping ul{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:10px}
+.quick-start-mapping li{display:grid;grid-template-columns:minmax(120px,1fr) minmax(160px,1.4fr);gap:4px 12px;align-items:center}
+.quick-start-mapping label{font-weight:600;font-size:14px}
+.quick-start-mapping select{min-height:40px;border-radius:8px;border:1px solid var(--line,#cbd5e1);padding:0 8px;background:var(--panel,#fff);color:inherit;max-width:100%}
+.quick-start-mapping small{grid-column:2;color:var(--muted,#64748b);font-size:12px}
+@media (max-width:560px){.quick-start-mapping li{grid-template-columns:1fr}.quick-start-mapping small{grid-column:1}}
