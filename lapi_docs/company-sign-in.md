@@ -61,7 +61,9 @@ Keycloak's address for each provider (you will paste these):
 ## 5. Tell Lapi (Claude does this)
 
 Lapi's Terraform setting `keycloak_identity_providers = { microsoft = "Microsoft", google = "Google" }`
-is added and deployed (about 3 minutes). The sign-in page then shows **Sign in with Microsoft** and
+is added to `lapi_deploy/lapi_containers/terraform.tfvars` (not in git) and deployed (about 3 minutes;
+the container instance is replaced because the setting is an environment variable). The hosted
+deployment currently lists `google`. The sign-in page then shows **Sign in with Microsoft** and
 **Sign in with Google**; **Use a Keycloak account instead** stays for Keycloak-only accounts, and the
 break-glass administrator form stays below.
 
