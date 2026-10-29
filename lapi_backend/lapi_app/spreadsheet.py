@@ -60,6 +60,8 @@ def _csv_rows(name, raw):
 def _xlsx_sheets(raw):
     """(sheet name, rows, notes) for every sheet; merged ranges filled from their top-left cell."""
     if not raw.startswith(b'PK\x03\x04'):
+        if raw.startswith(b'\xd0\xcf\x11\xe0') and 'EncryptedPackage'.encode('utf-16-le') in raw[:1_000_000]:
+            raise SpreadsheetError('The workbook is password protected. Remove the password in Excel (File > Info > Protect Workbook) and upload it again.')
         if raw.startswith(b'\xd0\xcf\x11\xe0'):
             raise SpreadsheetError('This is an old Excel (.xls) file. Open it in Excel and save it as .xlsx or CSV.')
         raise SpreadsheetError('This is not an .xlsx workbook. Save it from Excel as .xlsx or CSV.')
@@ -238,6 +240,8 @@ def read(name, raw):
 def record(sheet, number, values):
     """One row as a self-contained line: every value keeps its column name and the row number."""
     cells = [f'{column}: {_display(value)}' for column, value in zip(sheet['columns'], values) if not _empty(value)]
+    # Comments, links, colours and items attached to this row (workbook.attach_notes) stay with it.
+    cells += sheet.get('row_notes', {}).get(number, [])
     return f'Row {number} · ' + ' · '.join(cells) if cells else ''
 
 

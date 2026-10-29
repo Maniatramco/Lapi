@@ -163,6 +163,22 @@ def parse_document(name,raw,*,ocr_enabled=True,progress=None,cache_id=None):
         return [{'page':None,'text':text,**({'text_origin':'native+ocr','ocr':{'model':image_results[0]['model'],'provider':image_results[0].get('provider','ollama'),'images':image_results,'verified':False,'notice':'DOCX image transcription; page location unavailable.'}} if ocr_enabled and image_results else {})}]
     raise ValueError('Unsupported document format')
 
+def workbook_image(did):
+    """Reads an image placed in a workbook: OCR text and a short description of what it shows."""
+    from . import ocr
+    def read(raw,item):
+        out={}
+        try:
+            value=ocr.read_image(raw,cache_id=did)
+            out['text']=value['text'];item['ocr']=value.get('ocr')
+        except ocr.OcrError as error:
+            out['ocr_error']=str(error)
+        out['description']=ocr.describe(raw,cache_id=did)
+        if not out.get('text') and not out['description']:
+            out['error']=out.get('ocr_error') or 'the image could not be read'
+        return out
+    return read
+
 def _fits(size):
     """Whether a spreadsheet chunk fits the embedding model as one piece (rows are never cut)."""
     cfg=settings()
@@ -199,7 +215,7 @@ def chunk_pages(did,pages,size,overlap):
             content=text[start:start+size]
             if not content.strip():continue
             ident=str(uuid.uuid5(uuid.NAMESPACE_URL,f'{did}:{page["page"]}:{start}:{providers.fingerprint()}:{content}'))
-            chunks.append({'id':ident,'document_id':did,'page':page['page'],'offset':start,'text':content,**{k:page[k] for k in ('source_key','source_filename','source_page','text_origin','ocr','section','sheet','table_summary') if k in page}})
+            chunks.append({'id':ident,'document_id':did,'page':page['page'],'offset':start,'text':content,**{k:page[k] for k in ('source_key','source_filename','source_page','text_origin','ocr','section','sheet','table_summary','workbook_item') if k in page}})
     if settings()['embedding_provider']=='sentence_transformers' and settings()['search_provider']!='oci':
         model=providers.local_model('sentence-transformers/all-MiniLM-L6-v2');tokenizer=model.tokenizer;limit=model.max_seq_length-2;safe=[]
         for chunk in chunks:
@@ -273,10 +289,15 @@ def _process(jid,token,snapshot):
             if merged and (merged.get('ocr_pending') or any(p.get('ocr') for p in merged.get('pages',[]))):
                 pages=merged_documents.read_sources(did,merged,progress=ocr_progress)
             elif not merged and file_formats.extension(name) in file_formats.SPREADSHEETS:
-                from . import spreadsheet
-                sheets=spreadsheet.read(name,store.get(ref))
-                spreadsheet.save(store,did,sheets)
-                pages=spreadsheet.pages(sheets)
+                from . import spreadsheet,workbook
+                # Every part of the workbook is read or reported (workbook.py): cells, formulas, comments,
+                # images (OCR), charts, text boxes, embedded files, and the links between them.
+                book=workbook.read(name,store.get(ref),read_image=workbook_image(did),
+                                   read_file=lambda file,data:'\n'.join(p.get('text','') for p in parse_document(file,data,cache_id=did)),
+                                   progress=lambda note:ocr_progress(1,note))
+                spreadsheet.save(store,did,book['sheets'])
+                workbook.save(store,did,book)
+                pages=spreadsheet.pages(book['sheets'])+workbook.item_pages(book,1)
             else:pages=merged['pages'] if merged else parse_document(name,store.get(ref),progress=ocr_progress,cache_id=did)
             chunks=chunk_pages(did,pages,cfg['chunk_size'],cfg['chunk_overlap'])
         if not chunks:raise ValueError('Document has no usable text')
