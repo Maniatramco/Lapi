@@ -22,7 +22,7 @@ const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
  * reading → a first answer with sources, or a first extraction with a prompt the AI drafts
  * from the document. Full screen on phones, a dialog on larger screens. */
 const ENLARGED_KEY='lapi:quick-start-enlarged';
-export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNavigate,onSelectDataset}:{api:Api;user:Entity;datasets:Entity[];sources?:string[];onClose:()=>void;onChanged:()=>void;onNavigate:(view:string)=>void;onSelectDataset?:(id:string)=>void}){
+export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose,onChanged,onNavigate,onSelectDataset}:{api:Api;user:Entity;datasets:Entity[];sources?:string[];initialFiles?:File[];onClose:()=>void;onChanged:()=>void;onNavigate:(view:string)=>void;onSelectDataset?:(id:string)=>void}){
  // Contributors (Keycloak lapi-contributor) create datasets and are Owner on all of them, like administrators.
  const isAdmin=Boolean(user?.is_admin||user?.is_contributor);
  const editor=canAddDocuments(datasets,isAdmin);
@@ -35,7 +35,7 @@ export function QuickStart({api,user,datasets,sources=[],onClose,onChanged,onNav
  const toggleEnlarged=()=>setEnlarged(value=>{try{localStorage.setItem(ENLARGED_KEY,value?'0':'1');}catch{}return !value;});
  const [datasetId,setDatasetId]=useState<string>(choices[0]?.id||(isAdmin?'new':''));
  const [newName,setNewName]=useState(defaultDatasetName(user?.username)),[newDescription,setNewDescription]=useState('');
- const [files,setFiles]=useState<File[]>([]),[note,setNote]=useState('');
+ const [files,setFiles]=useState<File[]>(initialFiles),[note,setNote]=useState('');  // may start with documents attached in the agent
  // Two or more files: stitch them into one document first, or keep them separate.
  const [merge,setMerge]=useState(false),[mergeTouched,setMergeTouched]=useState(false);
  // Consent, asked where data first goes to an AI model: reading documents, then answering or extracting.

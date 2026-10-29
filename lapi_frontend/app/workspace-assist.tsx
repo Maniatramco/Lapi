@@ -142,7 +142,8 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
  // Ask first: after the tour, on the Dashboard, until answered or skipped once.
  useEffect(()=>{if(view==='Home'&&tourDone&&shouldAskSetup(preferences))setSheetOpen(true);},[view,tourDone,preferences]);
  useEffect(()=>{const open=()=>{setHelpOpen(false);setSheetOpen(true);};window.addEventListener(OPEN_SETUP_EVENT,open);return()=>window.removeEventListener(OPEN_SETUP_EVENT,open);},[]);
- useEffect(()=>{const open=()=>{setHelpOpen(false);setSheetOpen(false);setQuickOpen(true);};window.addEventListener(OPEN_QUICK_START_EVENT,open);return()=>window.removeEventListener(OPEN_QUICK_START_EVENT,open);},[]);
+ const [quickFiles,setQuickFiles]=useState<File[]>([]);  // documents attached in the agent before a guided start
+ useEffect(()=>{const open=(event:Event)=>{setQuickFiles((event as CustomEvent).detail?.files||[]);setHelpOpen(false);setSheetOpen(false);setQuickOpen(true);};window.addEventListener(OPEN_QUICK_START_EVENT,open);return()=>window.removeEventListener(OPEN_QUICK_START_EVENT,open);},[]);
  const save=useCallback(async(next:Preferences)=>{const saved=cleanPreferences(await api('/me/preferences','PUT',next,undefined,true));setPreferences(saved);return saved;},[api]);
  const skip=()=>{setSheetOpen(false);const next={...(preferences||cleanPreferences({})),completed:true};setPreferences(next);void save(next).catch(()=>undefined);say('Set-up skipped. You can answer later from the Dashboard or About.');};
  const dismissCard=()=>{if(!preferences)return;const next={...preferences,dismissed_next_steps:true};setPreferences(next);void save(next).catch(()=>undefined);say('Next steps hidden. Open About to change your answers.');};
@@ -260,7 +261,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   {view==='Home'&&!sheetOpen&&<button type="button" className="mobile-ask-fab" aria-label="Ask a question" onClick={()=>void ask()}><MessageSquare size={20} aria-hidden="true"/><span>Ask</span></button>}
   {sheetOpen&&preferences&&<SetupSheet initial={preferences} access={access} onSave={async answers=>{await save(answers);}} onSkip={skip} onAct={step=>void act(step)} onClose={()=>setSheetOpen(false)}/>}
   {helpOpen&&<ShortcutsDialog onClose={()=>setHelpOpen(false)}/>}
-  {quickOpen&&<QuickStart onSelectDataset={onSelectDataset} api={api} user={user} datasets={datasets} sources={preferences?.sources||[]} onClose={()=>setQuickOpen(false)} onChanged={onChanged} onNavigate={target=>go(target)}/>}
+  {quickOpen&&<QuickStart onSelectDataset={onSelectDataset} api={api} user={user} datasets={datasets} sources={preferences?.sources||[]} initialFiles={quickFiles} onClose={()=>{setQuickOpen(false);setQuickFiles([]);}} onChanged={onChanged} onNavigate={target=>go(target)}/>}
   <p className="sr-only" aria-live="polite" role="status">{announcement}</p>
  </div>;
  return <>{hero}{launcher}{card}{mounted&&createPortal(layer,document.body)}</>;

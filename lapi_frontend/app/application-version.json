@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.29",
+  "version": "26.1.16.30",
   "releases": [
+    {
+      "version": "26.1.16.30",
+      "date": "2026-10-29",
+      "title": "The agent guides plain requests end to end",
+      "changes": [
+        "Type what you want in plain words (\"upload this one\", \"pull out the totals\", \"create a dataset\", \"write a prompt\", \"start\") and the agent leads you through what is missing: attach the document, pick or create a dataset, draft a prompt, with one next-step button each. Your words stay in the box so you can send again when ready.",
+        "A guided start can begin with the documents you already attached in the agent.",
+        "When nothing is missing, such a request runs the real workflow directly instead of being guessed at by the model."
+      ]
+    },
     {
       "version": "26.1.16.29",
       "date": "2026-10-29",

@@ -154,3 +154,8 @@ body .shell .agent-v2 .agent-v2-chips{display:flex;flex-wrap:wrap;gap:8px;max-wi
 .screens-matrix th[scope=row] small{display:block;font-size:11.5px;color:#64748b;font-weight:500}
 .screens-matrix select{min-height:36px;padding:0 8px;border:1px solid #d6deef;border-radius:9px;background:#fff;font:inherit;font-size:13.5px}
 .screens-matrix td.screens-changed select{border-color:#fb923c;box-shadow:0 0 0 2px rgba(251,146,60,.25)}
+
+/* Guided step: the agent's short lead-in and the next-step chips, before a request can run. */
+.agent-guide{display:grid;gap:10px;max-width:var(--chat-column,768px)}
+.agent-guide p{margin:0;font-size:16px;line-height:1.55}
+.agent-guide .agent-v2-chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}

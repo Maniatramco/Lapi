@@ -10,6 +10,7 @@ import {promptSelections,restoreSavedPrompt,rememberSavedPrompt,rememberAssistan
 import {AgentDocumentFilter} from './agent-document-filter';
 import {documentMention,documentOptionLabel,matchingDocuments,readyDatasetDocuments,eligibleAgentModels} from './agent-document-selection';
 import {agentCommands,agentMention,agentOperation,agentInputIssue,insertAgentCommand,isManageCommand,isStartCommand} from './agent-commands';
+import {guideIntent,guideFor,guidedOperation,type GuideStep,type GuideAction} from './agent-guide';
 import {readChatStream} from './chat-stream';
 import {AgentChatAnswer,AgentRequest,conversationExchanges} from './agent-v2-chat';
 import {BatchProgress} from './batch-progress';
@@ -54,6 +55,8 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  const [history,setHistory]=useState<Entity[]>([]); const [historyOpen,setHistoryOpen]=useState(false);
  const [documents,setDocuments]=useState<string[]>([]); const conversations=useRef<Record<string,string>>({}); const answerController=useRef<AbortController|null>(null);
  const [dataset,setDataset]=useState(''); const [planner,setPlanner]=useState('');
+ // A guided step shown when a plain request ("upload this one") cannot run yet; the text stays in the composer.
+ const [guide,setGuide]=useState<(GuideStep&{request:string})|null>(null);
  const [scopeReady,setScopeReady]=useState(false);const datasetChangeRef=useRef(onDatasetChange);datasetChangeRef.current=onDatasetChange;
  const [caret,setCaret]=useState(0);const [mentionClosed,setMentionClosed]=useState(false);const [mentionIndex,setMentionIndex]=useState(0);
  const [text,setText]=useState(''); const [files,setFiles]=useState<File[]>([]);
@@ -284,7 +287,14 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
   if(isManageCommand(text)){if(!dataset){setError('Choose a dataset above, then use /Manage to edit it here.');return;}setError('');setManaging(dataset);setText('');followLatest();return;}
   if(isStartCommand(text)){setText('');openQuickStart();return;}  // Guided first workflow, from the agent.
   const issue=agentInputIssue(text);if(issue){setError('');setMentionClosed(false);composer.current?.focus();return;}
-  const requestedOperation=agentOperation(text);const onboardingRequest=requestedOperation==='onboard';
+  // Plain words first: lead the person through what is missing instead of letting the model guess.
+  // Retries re-send an accepted request; they are never guided again.
+  const intent=agentOperation(text)||retryPlanId.current||retrySubmittedPrompt.current?null:guideIntent(text);
+  if(intent==='start'){setText('');openQuickStart(documentFiles);return;}
+  const step=guideFor(intent,{dataset:Boolean(dataset),files:files.length+(promptAttachment||savedPrompt?1:0),templates:catalog.templates.filter((t:Entity)=>!t.parent_id||t.parent_id===dataset).length,canOnboard:Boolean(catalog.can_onboard_datasets),datasets:catalog.datasets.length,promptAttached:Boolean(promptAttachment||savedPrompt)});
+  if(step){setGuide({...step,request:text});setError('');followLatest();return;}
+  setGuide(null);
+  const requestedOperation=agentOperation(text)||guidedOperation(intent);const onboardingRequest=requestedOperation==='onboard';
   if(onboardingRequest&&!catalog.can_onboard_datasets){setError('Only the administrator can onboard datasets.');return;}
   if(unresolvedJson.length){setError('Is each JSON attachment a prompt template or a document? Choose below its filename.');return;}
   if(promptAttachment&&promptAttachment.datasetId!==dataset){setError('Attach the prompt again for the selected dataset.');return;}
@@ -404,6 +414,14 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  useEffect(()=>{let live=true;void api('/conversations','GET',undefined,undefined,true).then(result=>{if(live&&Array.isArray(result))setHistory(result);}).catch(()=>{});return()=>{live=false;};},[api,plans.length,catalogRevision]);
  const openSaved=(conversation:Entity)=>void api(`/conversations/${conversation.id}`,'GET',undefined,undefined,true).then(saved=>{restoreConversation(saved);sessionStorage.setItem(key+'-conversation',conversation.id);sessionStorage.removeItem(key);sessionStorage.removeItem(key+'-history');setHistoryOpen(false);setError('');}).catch(e=>setError(e.message));
  const latestWorkflow=[...plans].reverse().find(plan=>plan.calls?.length);
+ const runGuide=(action:GuideAction)=>{
+  if(action==='attach'){fileInput.current?.click();return;}
+  if(action==='quick-start'){setGuide(null);openQuickStart(files.filter(file=>!isJsonAttachment(file)||jsonDocuments[attachmentKey(file)]));return;}
+  if(action==='choose-dataset'){document.querySelector<HTMLSelectElement>('select[aria-label="Agent dataset"]')?.focus();return;}
+  if(action==='prompt'){setGuide(null);onReview?.('Prompt templates');return;}
+  if(action==='onboard'){setGuide(null);startWorkflow('/Onboard');return;}
+  setGuide(null);void send();
+ };
  const startWorkflow=(label:string)=>{const next=`${label} `;setText(next);setCaret(next.length);setMentionClosed(true);requestAnimationFrame(()=>{composer.current?.focus();composer.current?.setSelectionRange(next.length,next.length);});};
  const commandToken=/^(\s*)([/@]\S+)(?=\s|$)/.exec(text);
  const highlightedCommand=commandToken&&agentCommands.some(command=>command.label.slice(1).toLowerCase()===commandToken[2].slice(1).toLowerCase())?commandToken:null;
@@ -491,6 +509,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
    {promptProgress&&<AgentPromptProgress progress={promptProgress}/>}
    {working&&pendingRequest&&!promptProgress&&<div className="agent-v2-speaker"><AgentActivity task={/sav/i.test(working)?'save':'think'} size={24}/><strong>Lapi Agent</strong><AgentAnswerWorkflow workflow={{status:'running',started_at:requestStartedAt,steps:[{id:'submitting',label:'Submitting request',status:'running',started_at:requestStartedAt}]}}/></div>}
    {working&&!pendingRequest&&!plans.some(p=>p.chat?.status==='streaming')&&<p className="agent-v2-working" role="status"><AgentActivity task={/sav/i.test(working)?'save':'think'} size={18} compact/>{working}</p>}
+   {guide&&<article className="agent-v2-exchange agent-guide-exchange" aria-label="Guided step"><AgentRequest text={guide.request} attachments={files.map(file=>({name:file.name,size:file.size}))}/><div className="agent-v2-speaker"><AgentLogo size={24}/><strong>Lapi Agent</strong></div><div className="agent-guide"><p>{guide.text}</p><div className="agent-v2-chips" aria-label="Next steps">{guide.actions.map(item=><button key={item.action} type="button" className="agent-chip" onClick={()=>runGuide(item.action)}>{item.label}</button>)}<button type="button" className="text-button" onClick={()=>setGuide(null)}>Dismiss</button></div></div></article>}
    {managing&&renderManage&&<article className="agent-v2-exchange agent-manage-exchange" aria-label="Manage dataset"><div className="agent-v2-speaker"><AgentLogo size={24}/><strong>Lapi Agent</strong></div>{renderManage({datasetId:managing,onClose:()=>setManaging(null),onCommand:label=>{setDataset(managing);setManaging(null);startWorkflow(label);}})}</article>}
    {error&&!displayedChatError&&<p className="agent-v2-error" role="alert">{error}</p>}<div ref={end}/>
   </div>
@@ -521,7 +540,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
      if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}
     }}/></div></div>
     <div className="agent-v2-chips" aria-label="Quick actions">
-     <button type="button" className="agent-chip" onClick={openQuickStart}>Guided start</button>
+     <button type="button" className="agent-chip" onClick={()=>openQuickStart()}>Guided start</button>
      {!attachmentsBlocked&&<button type="button" className="agent-chip" onClick={()=>fileInput.current?.click()}>Add documents</button>}
      <button type="button" className="agent-chip" onClick={()=>startWorkflow('/Extract')}>Pull out data</button>
      <button type="button" className="agent-chip" onClick={openAgentTraining}>How the agent works</button>

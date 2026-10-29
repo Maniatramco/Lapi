@@ -30,6 +30,7 @@ Reference files in this folder:
 - `reference/mobile-agent-first.md`: the agent-first phone version, screen control through OpenFGA, agent training.
 - `reference/deploy-pitfalls.md`: all three images (api, web, keycloak) must carry the release tag; failed-create recovery.
 - `reference/ocr-dense-pages.md`: read a dense scanned page in strips when the OCR answer is cut off.
+- `reference/agent-guide.md`: deterministic guide layer for plain requests (upload this / pull out / create dataset) before the model.
 
 ## How the user works (follow this)
 
