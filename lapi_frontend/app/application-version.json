@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.31",
+  "version": "26.1.16.32",
   "releases": [
+    {
+      "version": "26.1.16.32",
+      "date": "2026-10-29",
+      "title": "The tour is a motion video",
+      "changes": [
+        "The one-minute tour is now one continuous motion video with a natural voice and soft music, instead of scene-by-scene cards: documents flow into the knowledge base, a question is answered with sources, fields are pulled out and reviewed, a skill takes effect, and it ends on Quick start.",
+        "Play, pause, sound on/off, a progress bar, captions, and Go to Dashboard or Replay at the end. People who prefer reduced motion keep the scene player."
+      ]
+    },
     {
       "version": "26.1.16.31",
       "date": "2026-10-29",

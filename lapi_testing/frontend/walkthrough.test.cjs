@@ -41,10 +41,15 @@ test('the player renders all controls, a live caption and the first scene as rea
  const file=path.resolve(__dirname,'../../lapi_frontend/app/walkthrough.tsx'),mod=new Module(file,module);mod.filename=file;mod.paths=module.paths;
  const original=mod.require.bind(mod);mod.require=id=>id.endsWith('.css')?{}:id==='./walkthrough-data'?compiled.exports:original(id);
  mod._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{esModuleInterop:true,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,file);
- const inline=renderToStaticMarkup(React.createElement(mod.exports.Walkthrough,{mode:'inline'}));
+ const video=renderToStaticMarkup(React.createElement(mod.exports.Walkthrough,{mode:'inline'}));
+ for(const text of ['<video','/tour/lapi-tour.mp4','/tour/lapi-tour.vtt','Play tour','Lapi in one minute','Sound on'])assert.ok(video.includes(text),text);
+ assert.ok(!video.includes('wt-segment'),'the video player has no scene segments');
+ const inline=renderToStaticMarkup(React.createElement(mod.exports.Walkthrough,{mode:'inline',player:'scenes'}));
  for(const text of ['Lapi in one minute','Connect.','Unify.','Ask.','aria-live="polite"','Previous scene','Next scene','Play tour','0:00','1:09','aria-current="step"'])assert.ok(inline.includes(text),text);
  assert.equal((inline.match(/class="wt-segment"/g)||[]).length,7);assert.ok(!inline.includes('Skip tour'));
  const modal=renderToStaticMarkup(React.createElement(mod.exports.Walkthrough,{mode:'modal',onClose(){}}));
+ assert.ok(modal.includes('<video'));
+ const modalScenes=renderToStaticMarkup(React.createElement(mod.exports.Walkthrough,{mode:'modal',player:'scenes',onClose(){}}));assert.ok(modalScenes.includes('wt-segment'));
  assert.match(modal,/role="dialog"/);assert.match(modal,/aria-modal="true"/);assert.ok(modal.includes('Skip tour'));
 });
 

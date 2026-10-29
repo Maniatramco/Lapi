@@ -2,6 +2,13 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.32 - 29 October 2026
+
+The tour is a motion video
+
+- `lapi_frontend/public/tour/lapi-tour.mp4` (+ `.vtt` captions, `-poster.jpg`): 1280x720, 30 fps, ~67 s, H.264/AAC. Produced by `lapi_docs/tour-video/` (narration recorded with a neural voice from the scene script, word-timed; an original synthesised music bed; frames drawn with Pillow and timed to the narration; assembled with ffmpeg in a container). See `lapi_docs/tour-video.md` to re-render after a script change.
+- `walkthrough.tsx`: `TourVideo` player (play/pause, sound, progress, captions track, end card) used by `Walkthrough` unless `player: "scenes"`, reduced motion, or the video fails to load; the scene player remains as the fallback.
+
 ## v26.1.16.31 - 29 October 2026
 
 Skills that apply themselves

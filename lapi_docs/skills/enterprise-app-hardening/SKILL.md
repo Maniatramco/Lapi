@@ -32,6 +32,7 @@ Reference files in this folder:
 - `reference/ocr-dense-pages.md`: read a dense scanned page in strips when the OCR answer is cut off.
 - `reference/agent-guide.md`: deterministic guide layer for plain requests (upload this / pull out / create dataset) before the model.
 - `reference/skills-that-apply.md`: SKILL.md upload/download and applies_to matching so the agent uses skills by itself.
+- `reference/tour-video.md`: narrated motion video for the tour from Python + edge-tts + ffmpeg, and its player.
 
 ## How the user works (follow this)
 

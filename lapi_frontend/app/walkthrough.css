@@ -250,3 +250,15 @@
 .wt-skill-using{display:inline-flex;align-items:center;gap:.4em;margin:0 0 .6em;padding:.3em .7em;border-radius:999px;background:#fff3e0;color:#9a3412;font-size:.85em;font-weight:700}
 .wt-skill-use p:last-child{margin:0}
 @media (max-width:640px){.wt-skill-file,.wt-skill-use{max-width:none}}
+
+/* Motion-video player: the same shell, with the video where the stage was. */
+.wt-video-wrap{position:relative;background:#0b1b4d}
+.wt-video{display:block;width:100%;aspect-ratio:16/9;background:#0b1b4d;cursor:pointer}
+.wt-video-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:0;background:rgba(11,27,77,.35);color:#fff;font:inherit;font-weight:700;font-size:16px;cursor:pointer}
+.wt-video-overlay svg{width:72px;height:72px;padding:18px;border-radius:50%;background:var(--wt-orange);color:var(--wt-ink);box-shadow:0 12px 30px rgba(0,0,0,.3)}
+.wt-video-end{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(11,27,77,.72);color:#fff;text-align:center;padding:16px}
+.wt-video-end .wt-end-title{margin:0;font-weight:700;font-size:18px}
+.wt-video-bar{display:flex;align-items:center;gap:12px}
+.wt-video-track{flex:1;height:6px;border-radius:3px;background:var(--wt-line);overflow:hidden}
+.wt-video-track i{display:block;height:100%;width:100%;transform-origin:left;background:var(--wt-blue);transition:transform .25s linear}
+@media (max-width:640px){.wt-video-overlay{font-size:15px}.wt-video-overlay svg{width:60px;height:60px;padding:15px}}

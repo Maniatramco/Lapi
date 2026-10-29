@@ -223,8 +223,67 @@ function useNarration() {
 
 const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
+/** The tour as one continuous motion video (narrated, with music), produced from the same script as the
+ * scenes; see lapi_docs/tour-video.md. Falls back to the scene player on error or reduced motion. */
+export const TOUR_VIDEO = "/tour/lapi-tour.mp4";
+export const TOUR_CAPTIONS = "/tour/lapi-tour.vtt";
+export const TOUR_POSTER = "/tour/lapi-tour-poster.jpg";
+
+function TourVideo({ mode, titleId, autoPlay, onClose, finish, onError }: { mode: "inline" | "modal"; titleId: string; autoPlay: boolean; onClose?: () => void; finish?: () => void; onError: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [waiting, setWaiting] = useState(autoPlay);  // autoplay with sound may be refused until a tap
+  const [time, setTime] = useState(0);
+  const [length, setLength] = useState(0);
+  const play = useCallback(() => {
+    const el = video.current; if (!el) return;
+    el.muted = muted; setEnded(false);
+    el.play().then(() => setWaiting(false)).catch(() => setWaiting(true));
+  }, [muted]);
+  const toggle = () => { const el = video.current; if (!el) return; if (el.paused) play(); else el.pause(); };
+  const replay = () => { const el = video.current; if (!el) return; el.currentTime = 0; play(); };
+  useEffect(() => { if (autoPlay) play(); }, [autoPlay, play]);
+  useEffect(() => { const el = video.current; if (el) el.muted = muted; }, [muted]);
+  return <div className="wt-player wt-player-video" data-mode={mode} data-playing={playing || undefined} data-ended={ended || undefined}>
+    <header className="wt-top">
+      <h2 id={titleId} className="wt-title"><LapiMark size={22} />Lapi in one minute</h2>
+      <span className="wt-top-actions">
+        <button type="button" className="wt-button wt-voice" onClick={() => setMuted(value => !value)} aria-pressed={!muted} aria-label={muted ? "Turn sound on" : "Turn sound off"} title={muted ? "Sound off" : "Sound on"}>
+          {muted ? <VolumeX size={15} aria-hidden="true" /> : <Volume2 size={15} aria-hidden="true" />}<span>{muted ? "Sound off" : "Sound on"}</span></button>
+        {mode === "modal" && <button type="button" className="wt-button wt-skip" onClick={onClose}><X size={15} aria-hidden="true" />{ended ? "Close" : "Skip tour"}</button>}
+      </span>
+    </header>
+    <div className="wt-video-wrap">
+      <video ref={video} className="wt-video" src={TOUR_VIDEO} poster={TOUR_POSTER} playsInline preload="auto" crossOrigin="anonymous" aria-label="Lapi in one minute: connect, unify, ask"
+        onPlay={() => { setPlaying(true); setWaiting(false); }} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setEnded(true); }}
+        onTimeUpdate={event => setTime(event.currentTarget.currentTime)} onLoadedMetadata={event => setLength(event.currentTarget.duration)} onError={onError} onClick={toggle}>
+        <track kind="captions" srcLang="en" label="English" src={TOUR_CAPTIONS} />
+      </video>
+      {(waiting || (!playing && !ended)) && <button type="button" className="wt-video-overlay" onClick={play} aria-label="Play tour"><Play size={34} aria-hidden="true" /><span>Play tour</span></button>}
+      {ended && <div className="wt-video-end">
+        <LapiMark size={40} />
+        <p className="wt-end-title">You're ready: start on your Dashboard</p>
+        <div className="wt-end-actions">
+          {finish && <button type="button" className="wt-button wt-primary" onClick={finish}>Go to Dashboard</button>}
+          <button type="button" className="wt-button" onClick={replay}><RotateCcw size={15} aria-hidden="true" />Replay</button>
+        </div>
+      </div>}
+    </div>
+    <div className="wt-controls wt-video-bar">
+      <button type="button" className="wt-button wt-play" onClick={ended ? replay : toggle} aria-label={ended ? "Replay tour" : playing ? "Pause tour" : "Play tour"}>
+        {ended ? <RotateCcw size={18} aria-hidden="true" /> : playing ? <Pause size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}<span>{ended ? "Replay" : playing ? "Pause" : "Play"}</span></button>
+      <span className="wt-video-track" aria-hidden="true"><i style={{ transform: `scaleX(${length ? Math.min(1, time / length) : 0})` }} /></span>
+      <span className="wt-time"><span className="visually-hidden-wt">Elapsed </span><time>{formatClock(time)}</time> / <time>{formatClock(length)}</time></span>
+    </div>
+  </div>;
+}
+
 export type WalkthroughProps = {
   mode?: "inline" | "modal";
+  /** "video" (default): the motion video; "scenes": the animated scene player (also the fallback). */
+  player?: "video" | "scenes";
   /** Modal: Close / Skip / Esc. */
   onClose?: () => void;
   /** The end card's "Go to Dashboard" action; in a modal it defaults to closing. */
@@ -233,8 +292,10 @@ export type WalkthroughProps = {
 };
 
 /** The animated 1-minute Lapi tour: six auto-advancing scenes with captions and player controls. */
-export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mode === "modal" }: WalkthroughProps) {
+export function Walkthrough({ mode = "inline", player: wanted = "video", onClose, onFinish, autoPlay = mode === "modal" }: WalkthroughProps) {
   const reduced = useReducedMotion();
+  const [videoOk, setVideoOk] = useState(true);
+  const useVideo = wanted === "video" && !reduced && videoOk;
   const device = useDevice();
   const SCENES = scenesFor(device);
   const TOTAL = totalSeconds(SCENES);
@@ -370,12 +431,13 @@ export function Walkthrough({ mode = "inline", onClose, onFinish, autoPlay = mod
     </div>
   </div>;
 
+  const shell = useVideo ? <TourVideo mode={mode} titleId={titleId} autoPlay={autoPlay} onClose={onClose} finish={finish} onError={() => setVideoOk(false)} /> : player;
   if (mode === "modal") {
     return <div className="wt-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose?.(); }}>
-      <div ref={dialogRef} className="wt-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={onKeyDown}>{player}</div>
+      <div ref={dialogRef} className="wt-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={useVideo ? undefined : onKeyDown}>{shell}</div>
     </div>;
   }
-  return <section className="wt-inline" aria-labelledby={titleId} onKeyDown={onKeyDown}>{player}</section>;
+  return <section className="wt-inline" aria-labelledby={titleId} onKeyDown={useVideo ? undefined : onKeyDown}>{shell}</section>;
 }
 
 /** Fires when the tour has closed, or was not needed, for a person; the set-up questions wait for it. */
