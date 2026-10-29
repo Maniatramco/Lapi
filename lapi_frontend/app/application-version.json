@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.27",
+  "version": "26.1.16.28",
   "releases": [
+    {
+      "version": "26.1.16.28",
+      "date": "2026-10-29",
+      "title": "Sign in with Google",
+      "changes": [
+        "The sign-in popup shows a Sign in with Google button that goes straight to Google.",
+        "The popup no longer mentions Keycloak: it talks about your work account, Google, and a username and password."
+      ]
+    },
     {
       "version": "26.1.16.27",
       "date": "2026-10-29",

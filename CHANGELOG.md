@@ -2,6 +2,13 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.28 - 29 October 2026
+
+Sign in with Google
+
+- Hosted deployment: `keycloak_identity_providers = { google = "Google" }` (terraform.tfvars) turns on the Google button; Keycloak's `google` identity provider was already configured.
+- Sign-in popup wording never says "Keycloak": "Choose how you want to sign in", "Sign in with Google", "Sign in with a username and password instead", "Emergency administrator sign-in", and plain sign-in error messages.
+
 ## v26.1.16.27 - 29 October 2026
 
 Agent-first phone version (mobile Release 1)

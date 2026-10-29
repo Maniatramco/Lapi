@@ -29,3 +29,10 @@
 - `ORA-28007: the password cannot be reused` in the api log at start-up is harmless (the bootstrap tries to reset
   the Keycloak DB password to the same value).
 - Never paste real passwords into chat or screenshots; if one was shown, tell the person to change it.
+
+## Wording (v26.1.16.28)
+People do not know what Keycloak is, so the sign-in popup never names it: the description is "Choose how you
+want to sign in" (with provider buttons) or "Sign in with your work account"; the fallback link is "Sign in with a
+username and password instead"; the local-admin form is "Emergency administrator sign-in"; error texts say
+"sign-in service". Keep the provider list in Terraform, and check the provider exists in Keycloak first by
+fetching its login page with PKCE parameters and looking for `broker/<alias>`.

@@ -130,12 +130,12 @@ const date = (v: string | number) =>
 const json = (v: unknown) => JSON.stringify(v, null, 2);
 // Codes the Keycloak callback adds to /?sign_in_error= (lapi_app/keycloak_auth.py).
 const SIGN_IN_ERRORS: Record<string, string> = {
-  denied: "Keycloak sign-in was cancelled.",
+  denied: "Sign-in was cancelled.",
   expired: "That sign-in took too long or was started in another tab. Try again.",
-  unavailable: "Keycloak is unreachable right now. Try again in a minute.",
-  account_conflict: "A local Lapi account already uses your Keycloak username. Ask an administrator to rename or delete it.",
-  mfa_required: "Administrators must sign in with an authenticator code. Set up your authenticator app in Keycloak, then sign in again.",
-  failed: "Keycloak sign-in did not complete. Try again, or ask an administrator to check the server log.",
+  unavailable: "The sign-in service is unreachable right now. Try again in a minute.",
+  account_conflict: "A local Lapi account already uses your username. Ask an administrator to rename or delete it.",
+  mfa_required: "Administrators must sign in with an authenticator code. Set up your authenticator app in your account security settings, then sign in again.",
+  failed: "Sign-in did not complete. Try again, or ask an administrator to check the server log.",
 };
 /** The provider's own mark on its sign-in button (brand colours, as their sign-in guidelines ask). */
 function ProviderMark({alias}:{alias:string}){
@@ -147,7 +147,7 @@ function ProviderMark({alias}:{alias:string}){
 }
 /** With Keycloak, Lapi's password form is only the local administrators' break-glass path. */
 function BreakGlass({ on, children }: { on: boolean; children: ReactNode }) {
-  return on ? <details className="login-breakglass"><summary>Administrator sign-in without Keycloak</summary>{children}</details> : <>{children}</>;
+  return on ? <details className="login-breakglass"><summary>Emergency administrator sign-in</summary>{children}</details> : <>{children}</>;
 }
 function Status({ value }: { value: string }) {
   const green = [
@@ -726,16 +726,16 @@ export default function App() {
     return (
       <SignInLayout>
           <h1 id="login-heading" className="screen-heading">Welcome back</h1>
-          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : keycloak ? "Sign in with your organization account." : "Sign in to your workspace."}</p>
+          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : keycloak && providers.length > 0 ? "Choose how you want to sign in." : keycloak ? "Sign in with your work account." : "Sign in to your workspace."}</p>
           {setupRequired && <div className="login-setup-notice" role="status">No administrator exists yet. Create one on the server with <code>lapi_local_use/lapi_scripts/create-admin.sh</code>, then sign in here.</div>}
           {error && <div className="login-error" role="alert"><AlertCircle size={18} aria-hidden="true" /><span>{error}</span></div>}
           {keycloak && providers.length > 0 && <div className="login-providers">
             {providers.map(provider => <a key={provider.alias} className="btn login-provider" href={`/api/auth/keycloak/start?provider=${encodeURIComponent(provider.alias)}`}>
               <ProviderMark alias={provider.alias}/>Sign in with {provider.label}</a>)}
-            <a className="login-keycloak-other" href="/api/auth/keycloak/start">Use a Keycloak account instead</a>
+            <a className="login-keycloak-other" href="/api/auth/keycloak/start">Sign in with a username and password instead</a>
           </div>}
           {keycloak && !providers.length && <a className="btn primary login-submit login-keycloak" href="/api/auth/keycloak/start">
-            <KeyRound size={17} aria-hidden="true" />Sign in with Keycloak</a>}
+            <KeyRound size={17} aria-hidden="true" />Sign in with your work account</a>}
           <BreakGlass on={keycloak}>
           <form noValidate aria-busy={busy} onSubmit={e => {
             e.preventDefault();
