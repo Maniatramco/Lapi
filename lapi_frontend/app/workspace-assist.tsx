@@ -10,6 +10,7 @@ import './workspace-assist.css';
 import './mobile.css';
 import './phone-design.css';
 import {QuickStart} from './quick-start';
+import {HelpBotIcon} from './lapi-bot-button';
 import {PhoneStatus} from './phone-status';
 import {canAddCollections} from './workspace-scope';
 
@@ -119,7 +120,7 @@ function ShortcutsDialog({onClose}:{onClose:()=>void}){
  </div>;
 }
 
-export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigation,onChanged=()=>undefined,agentOnly=false,onSelectDataset,documents=[],jobs=[],workspace}:{api:Api;user:Entity;view:string;datasets:Entity[];onNavigate:(view:string)=>unknown;onOpenNavigation:()=>void;onChanged?:()=>void;agentOnly?:boolean;onSelectDataset?:(id:string)=>void;documents?:Entity[];jobs?:Entity[];workspace?:Entity}){
+export function WorkspaceAssist({onHelp,api,user,view,datasets,onNavigate,onOpenNavigation,onChanged=()=>undefined,agentOnly=false,onSelectDataset,documents=[],jobs=[],workspace}:{onHelp?:()=>void;api:Api;user:Entity;view:string;datasets:Entity[];onNavigate:(view:string)=>unknown;onOpenNavigation:()=>void;onChanged?:()=>void;agentOnly?:boolean;onSelectDataset?:(id:string)=>void;documents?:Entity[];jobs?:Entity[];workspace?:Entity}){
  const userId=String(user?.id||user?.username||'');
  const baseAccess=accessFor(user,datasets);
  // People who can add to the open workspace can start there, even before it has a collection.
@@ -252,6 +253,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   <nav className="mobile-tab-bar" aria-label="Quick navigation">
    {tab('Lapi agent V2','Agent',null)}
    {access.canAddKnowledge&&<button type="button" className="tab-bar-item" aria-label="Quick Extract" aria-current={quickExtract?'page':undefined} onClick={()=>{setQuickExtract(true);setQuickOpen(true);}}><Table2 size={22} aria-hidden="true"/><span>Quick Extract</span></button>}
+   {onHelp&&<button type="button" className="tab-bar-item" aria-label="Help from Lapi" onClick={onHelp}><HelpBotIcon size={24}/><span>Help</span></button>}
    {!agentOnly&&<button type="button" className="tab-bar-item" aria-label="More pages" aria-haspopup="dialog" aria-controls="workspace-navigation" onClick={onOpenNavigation}><Menu size={22} aria-hidden="true"/><span>More</span></button>}
   </nav>
   {sheetOpen&&preferences&&<SetupSheet initial={preferences} access={access} onSave={async answers=>{await save(answers);}} onSkip={skip} onAct={step=>void act(step)} onClose={()=>setSheetOpen(false)}/>}

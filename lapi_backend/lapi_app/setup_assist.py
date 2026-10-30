@@ -13,7 +13,7 @@ from jsonschema import ValidationError, validate
 from pydantic import BaseModel, ConfigDict, Field
 from . import core, providers
 
-Stage = Literal['name', 'team', 'team-name', 'choose', 'collection', 'type', 'interest', 'fields', 'change', 'documents', 'consent', 'results', 'done']
+Stage = Literal['help', 'name', 'team', 'team-name', 'choose', 'collection', 'type', 'interest', 'fields', 'change', 'documents', 'consent', 'results', 'done']
 OUTPUT = {'type': 'object', 'additionalProperties': False, 'required': ['decision'], 'properties': {
     'decision': {'enum': ['yes', 'no', 'change', 'skip', 'answer', 'unclear']},
     'name': {'type': 'string', 'maxLength': 60},
@@ -22,6 +22,7 @@ OUTPUT = {'type': 'object', 'additionalProperties': False, 'required': ['decisio
         'label': {'type': 'string', 'minLength': 1, 'maxLength': 60}, 'type': {'enum': ['text', 'number', 'date', 'yes_no', 'list']}, 'description': {'type': 'string', 'minLength': 1, 'maxLength': 240}}}},
     'message': {'type': 'string', 'maxLength': 200}}}
 STAGES = {
+    'help': 'Lapi asked what it can do for the person and gave options: collection (make a collection), team (a team workspace), extract (pull data out of documents), email (reach a person for help or report a problem). Put the matching option word in "pick"; "unclear" with a message if none fits.',
     'name': 'Lapi asked what to call the person. Put their name, corrected for typos and capitalised, in "name" (first name, or first and last). Decision "answer". If no name is there, "unclear" with a kind message asking again.',
     'team': 'Lapi asked whether they also want a team workspace. Decision "yes" or "no"; "unclear" with a message if neither.',
     'team-name': 'Lapi asked what the team workspace should be called. Put a clean name in "pick" (fix typos, Title Case). Decision "answer".',

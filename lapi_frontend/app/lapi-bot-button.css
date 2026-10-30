@@ -1,0 +1,9 @@
+/* The Help Bot: in the phone tab bar and at the bottom of the side menu, animated like the Agent. */
+.lapi-bot-icon{position:relative;display:inline-grid;place-items:center;flex:none}
+.lapi-bot-badge{position:absolute;right:-7px;top:-6px;display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--orange);color:var(--ink);font:800 10px/1 var(--font-ui,system-ui);box-shadow:0 1px 4px rgba(20,33,61,.25)}
+.sidebar-help-bot{display:flex;align-items:center;gap:12px;width:calc(100% - 24px);margin:6px 12px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.sidebar-help-bot:hover,.sidebar-help-bot:focus-visible{border-color:var(--blue-line);background:var(--blue-soft)}
+.sidebar-help-bot:focus-visible{outline:3px solid #315de7;outline-offset:2px}
+.sidebar-help-bot span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.sidebar-help-bot strong{font-size:14px}.sidebar-help-bot small{font-size:12px;color:var(--muted)}
+.tab-bar-item .lapi-bot-icon .lapi-agent-logo{width:24px;height:24px}

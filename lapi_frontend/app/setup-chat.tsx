@@ -1,9 +1,10 @@
 "use client";
 import {useEffect,useRef,useState} from 'react';
-import {ArrowUp,Mic} from 'lucide-react';
+import {ArrowUp,Mic,X} from 'lucide-react';
+import {SUPPORT_NAME,helpMailto} from './support';
 import {AgentLogo} from './agent-logo';
 import {ACCEPT,fieldsToSchema,fileState,openReviewPage,pickFiles,recordCount,resultRows,type Field} from './quick-start-flow';
-import {after,applyChange,cleanName,fieldList,matchType,matchWorkspace,no,prompt,suggestFields,yes,type Quick,type Stage} from './setup-chat-script';
+import {after,applyChange,cleanName,fieldList,helpWish,matchType,matchWorkspace,no,prompt,suggestFields,yes,type Quick,type Stage} from './setup-chat-script';
 import {fieldKey} from './quick-start-flow';
 import './setup-chat.css';
 
@@ -16,17 +17,17 @@ const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
 /** First sign-in as a chat with Lapi: your name, a team workspace if you want one, which workspace
  * to use, your first collection, what to pull out (fields prefilled from your words), your first
  * documents, reading, extraction and the results. Answers can be typed, tapped or spoken. */
-export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,needName,onNamed,onTeamCreated,onChoose,onCollectionCreated,onChanged,onDone}:{api:Api;user:Entity;workspaces:Entity[];canCreateTeam:boolean;current?:Entity;chosen:boolean;needName:boolean;onNamed:(name:string)=>void;onTeamCreated:(workspace:Entity)=>void;onChoose:(id:string)=>void;onCollectionCreated:(id:string)=>void;onChanged?:()=>void;onDone:()=>void}){
+export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,needName,entry='setup',dataset,lastError='',page='',version='',onNamed,onTeamCreated,onChoose,onCollectionCreated,onChanged,onDone}:{api:Api;user:Entity;workspaces:Entity[];canCreateTeam:boolean;current?:Entity;chosen:boolean;needName:boolean;entry?:'setup'|'help'|'email';dataset?:Entity;lastError?:string;page?:string;version?:string;onNamed:(name:string)=>void;onTeamCreated:(workspace:Entity)=>void;onChoose:(id:string)=>void;onCollectionCreated:(id:string)=>void;onChanged?:()=>void;onDone:()=>void}){
  const ctx={workspaces,current,canCreateTeam,chosen};
  const [name,setName]=useState<string>(user.display_name||'');
- const [stage,setStage]=useState<Stage>(()=>needName?'name':after('name',ctx));
+ const [stage,setStage]=useState<Stage>(()=>entry==='help'?'help':entry==='email'?'email':needName?'name':after('name',ctx));
  const [lines,setLines]=useState<Line[]>([]);
  const [text,setText]=useState(''),[busy,setBusy]=useState(false),[listening,setListening]=useState(false),[error,setError]=useState('');
  const [teamName,setTeamName]=useState(''),[collectionName,setCollectionName]=useState(''),[collectionType,setCollectionType]=useState(''),[collectionId,setCollectionId]=useState('');
  const [promptName,setPromptName]=useState(''),[fields,setFields]=useState<Field[]>([]),[files,setFiles]=useState<File[]>([]);
  const [progress,setProgress]=useState(''),[results,setResults]=useState(''),[extractionId,setExtractionId]=useState('');
  const input=useRef<HTMLInputElement|null>(null),thread=useRef<HTMLDivElement|null>(null),recognizer=useRef<any>(null),camera=useRef<HTMLInputElement|null>(null),picker=useRef<HTMLInputElement|null>(null),live=useRef(true);
- const said=prompt(stage,{name,workspaces,current,canCreateTeam,teamName,collectionName,collectionType,fields,files:files.map(f=>f.name),progress,results});
+ const said=prompt(stage,{name,workspaces,current,canCreateTeam,teamName,collectionName,collectionType,fields,files:files.map(f=>f.name),progress,results,lastError});
  const voice=typeof window!=='undefined'&&Boolean((window as any).SpeechRecognition||(window as any).webkitSpeechRecognition);
 
  useEffect(()=>()=>{live.current=false;},[]);
@@ -88,7 +89,19 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
    const isYes=d==='yes'||(!d||d==='answer'||d==='unclear')&&yes(value);
    const isNo=d==='no'||d==='skip'||(!d||d==='answer'||d==='unclear')&&no(value);
    const unclear=(fallback:string)=>new Error(read?.message||fallback);
-   if(stage==='name'){
+   if(stage==='help'){
+    const wish=(['collection','team','extract','email'].includes(read?.pick||'')?read?.pick:label?value:helpWish(value)) as string;
+    if(wish==='collection')move('collection');
+    else if(wish==='team')move(canCreateTeam?'team-name':'collection');
+    else if(wish==='extract'){if(dataset?.id){setCollectionId(dataset.id);setCollectionName(dataset.name||'');setCollectionType(dataset.collection_type||'');move('interest');}else move('collection');}
+    else if(wish==='email')move('email');
+    else throw unclear('Tap one of the options, or say what you need in a few words.');
+   }else if(stage==='email'){
+    window.location.href=helpMailto({message:value,name,workspace:current?.name,page,version,error:lastError});
+    move('sent');
+   }else if(stage==='sent'){
+    if(value==='help')move('help');else onDone();
+   }else if(stage==='name'){
     const given=cleanName(read?.name||value);if(!given)throw unclear("I didn't catch that. What should I call you?");
     const saved=await api('/me/preferences','GET',undefined,undefined,true).catch(()=>({}));
     const result=await api('/me/preferences','PUT',{goals:saved?.goals||[],sources:saved?.sources||[],completed:Boolean(saved?.completed),dismissed_next_steps:Boolean(saved?.dismissed_next_steps),name:given});
@@ -156,7 +169,7 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
 
  const working=stage==='reading'||stage==='extracting';
  return <div className="setup-chat-backdrop"><div className="setup-chat" role="dialog" aria-modal="true" aria-label="Set up with Lapi">
-  <header className="setup-chat-head"><AgentLogo size={34} label="Lapi"/><div><strong>Lapi</strong><small>{busy||working?'Working…':listening?'Listening…':'Setting you up'}</small></div></header>
+  <header className="setup-chat-head"><AgentLogo size={34} label="Lapi"/><div><strong>Lapi</strong><small>{busy||working?'Working…':listening?'Listening…':entry==='setup'?'Setting you up':'Here to help'}</small></div><button type="button" className="setup-chat-close" aria-label="Close" disabled={working} onClick={onDone}><X size={20}/></button></header>
   <div ref={thread} className="setup-chat-thread" aria-live="polite">
    {lines.map((line,i)=><p key={i} className={`setup-chat-line is-${line.who}`}>{line.text}</p>)}
    {error&&<p className="setup-chat-line is-lapi is-error" role="alert">{error}</p>}

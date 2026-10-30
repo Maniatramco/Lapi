@@ -2,10 +2,11 @@
  * collection and its type, then what to pull out, the documents, reading and the first results.
  * Pure, so the steps can be tested without a screen. */
 import {COLLECTION_TYPES} from './workspace-scope';
+import {SUPPORT_NAME} from './support';
 import {fieldKey,type Field,type FieldType} from './quick-start-flow';
 
 type Entity=Record<string,any>;
-export type Stage='name'|'team'|'team-name'|'choose'|'collection'|'type'|'interest'|'fields'|'change'|'documents'|'consent'|'reading'|'extracting'|'results'|'done';
+export type Stage='help'|'email'|'sent'|'name'|'team'|'team-name'|'choose'|'collection'|'type'|'interest'|'fields'|'change'|'documents'|'consent'|'reading'|'extracting'|'results'|'done';
 export type Quick={label:string;value:string};
 export type Prompt={text:string;quick?:Quick[];typing?:boolean};
 
@@ -32,6 +33,17 @@ export function matchType(answer:string){
 }
 
 export const first=(name:string)=>name.trim().split(/\s+/)[0]||'';
+
+/** What the person wants from the Help Bot, in their own words. */
+export type HelpWish='collection'|'team'|'extract'|'email'|'';
+export function helpWish(answer:string):HelpWish{
+ const t=answer.trim().toLowerCase();if(!t)return '';
+ if(/email|mail|help|support|wrong|error|problem|bug|broken|stuck|contact|human|person/.test(t))return 'email';
+ if(/team|share|colleague|invite|people/.test(t))return 'team';
+ if(/extract|pull|data|field|total|invoice|read|scan/.test(t))return 'extract';
+ if(/collection|folder|new|create|add/.test(t))return 'collection';
+ return '';
+}
 
 /* ---- What to pull out: prefilled fields from everyday words ---- */
 type Preset={match:RegExp;name:string;fields:[string,FieldType,string][]};
@@ -87,9 +99,12 @@ export function interestSuggestions(collectionType:string):Quick[]{
 export const fieldList=(fields:Field[])=>fields.map(f=>f.label).join(', ');
 
 /** What Lapi says at each stage. */
-export function prompt(stage:Stage,ctx:{name:string;workspaces:Entity[];current?:Entity;canCreateTeam:boolean;teamName?:string;collectionName?:string;collectionType?:string;fields?:Field[];files?:string[];progress?:string;results?:string}):Prompt{
+export function prompt(stage:Stage,ctx:{name:string;workspaces:Entity[];current?:Entity;canCreateTeam:boolean;teamName?:string;collectionName?:string;collectionType?:string;fields?:Field[];files?:string[];progress?:string;results?:string;lastError?:string}):Prompt{
  const me=first(ctx.name);
  switch(stage){
+  case 'help':return {text:`Hi${me?` ${me}`:''}, what can I do for you?`,quick:[{label:'Add a collection',value:'collection'},...(ctx.canCreateTeam?[{label:'A team workspace',value:'team'}]:[]),{label:'Pull out data',value:'extract'},{label:`Email ${SUPPORT_NAME} for help`,value:'email'}],typing:true};
+  case 'email':return {text:`${ctx.lastError?`I saw this: "${ctx.lastError}". `:''}Tell me what happened, or what you need, and I'll put it in an email to ${SUPPORT_NAME} with the details.`,typing:true};
+  case 'sent':return {text:`I've opened your email app with everything filled in. Send it and ${SUPPORT_NAME} will get back to you. Anything else?`,quick:[{label:'No, thanks',value:'close'},{label:'Something else',value:'help'}]};
   case 'name':return {text:"Hi, I'm Lapi. I'll set things up with you in a minute. What should I call you?",typing:true};
   case 'team':return {text:`Nice to meet you, ${me}. Your own workspace, ${ctx.current?.name||`${me}'s workspace`}, is ready for your documents. Would you also like a team workspace, to share collections with other people?`,quick:[{label:'Yes, a team workspace',value:'yes'},{label:'Not now',value:'no'}]};
   case 'team-name':return {text:'What should the team workspace be called? For example: Finance team.',typing:true};

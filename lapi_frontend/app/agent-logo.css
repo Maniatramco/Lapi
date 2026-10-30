@@ -1,1 +1,8 @@
-.lapi-agent-logo{display:inline-block;object-fit:contain;flex-shrink:0;vertical-align:middle}.agent-page-title{display:flex;align-items:center;gap:9px}
+.lapi-agent-logo{display:inline-block;flex-shrink:0;vertical-align:middle;overflow:visible}.agent-page-title{display:flex;align-items:center;gap:9px}
+/* The bubble floats and its dots type for a moment every few seconds. */
+.lapi-logo-bubble{transform-box:fill-box;transform-origin:30% 80%;animation:lapi-logo-float 4s ease-in-out infinite}
+.lapi-logo-dot{transform-box:fill-box;transform-origin:center;animation:lapi-logo-dot 4s ease-in-out infinite}
+.lapi-logo-dot:nth-child(4){animation-delay:.15s}.lapi-logo-dot:nth-child(5){animation-delay:.3s}
+@keyframes lapi-logo-float{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-1.5px) rotate(-3deg)}}
+@keyframes lapi-logo-dot{0%,60%,100%{transform:translateY(0);opacity:1}66%{transform:translateY(-2.2px);opacity:.6}72%{transform:translateY(0);opacity:1}}
+@media (prefers-reduced-motion: reduce){.lapi-logo-bubble,.lapi-logo-dot{animation:none}}

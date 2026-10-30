@@ -2,7 +2,9 @@
 .setup-chat-backdrop{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:16px;background:rgba(15,23,42,.5)}
 .setup-chat{display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;width:100%;max-width:460px;height:min(640px,calc(100dvh - 32px));box-sizing:border-box;border-radius:24px;background:#fff;color:var(--ink);box-shadow:0 24px 60px rgba(15,23,42,.3);overflow:hidden}
 .setup-chat-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
-.setup-chat-head div{display:flex;flex-direction:column;gap:1px}.setup-chat-head strong{font-size:16px}.setup-chat-head small{font-size:13px;color:var(--muted)}
+.setup-chat-head div{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.setup-chat-close{display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:50%;background:var(--blue-soft);color:var(--ink);cursor:pointer}
+.setup-chat-close:disabled{opacity:.4;cursor:default}.setup-chat-head strong{font-size:16px}.setup-chat-head small{font-size:13px;color:var(--muted)}
 .setup-chat-thread{display:flex;flex-direction:column;gap:10px;padding:16px 20px;overflow-y:auto;background:#f5f7fb}
 .setup-chat-line{margin:0;white-space:pre-line;max-width:86%;padding:11px 15px;border-radius:18px;font-size:15px;line-height:1.5;overflow-wrap:anywhere;animation:setup-chat-in .25s ease-out both}
 .setup-chat-line.is-lapi{align-self:flex-start;border-radius:4px 18px 18px 18px;background:#fff;border:1px solid var(--line)}

@@ -7,7 +7,9 @@ const scope=load('workspace-scope.ts');require.cache[path.resolve(__dirname,'../
 Module._resolveFilename=((original)=>function(request,...rest){if(request==='./workspace-scope')return path.resolve(__dirname,'../../lapi_frontend/app/workspace-scope');return original.call(this,request,...rest);})(Module._resolveFilename);
 const flow=load('quick-start-flow.ts');require.cache[path.resolve(__dirname,'../../lapi_frontend/app/quick-start-flow')]={exports:flow};
 Module._resolveFilename=((original)=>function(request,...rest){if(request==='./quick-start-flow')return path.resolve(__dirname,'../../lapi_frontend/app/quick-start-flow');return original.call(this,request,...rest);})(Module._resolveFilename);
-const {cleanName,matchWorkspace,matchType,after,prompt,yes,no,suggestFields,applyChange}=load('setup-chat-script.ts');
+const support=load('support.ts');require.cache[path.resolve(__dirname,'../../lapi_frontend/app/support')]={exports:support};
+Module._resolveFilename=((original)=>function(request,...rest){if(request==='./support')return path.resolve(__dirname,'../../lapi_frontend/app/support');return original.call(this,request,...rest);})(Module._resolveFilename);
+const {cleanName,matchWorkspace,matchType,after,prompt,yes,no,suggestFields,applyChange,helpWish}=load('setup-chat-script.ts');
 const me={id:'me',name:"Mani's workspace",audience:'personal',my_access:'owner',collection_count:0},team={id:'t',name:'Finance team',audience:'team',my_access:'editor',collection_count:3};
 
 test('a spoken or typed name becomes a clean first name',()=>{
@@ -57,4 +59,13 @@ test('stages skip what does not apply',()=>{
  assert.equal(after('type',{workspaces:[me],current:me,canCreateTeam:true,chosen:true,created:true}),'interest');
  assert.match(prompt('team',{name:'Mani Tram',workspaces:[me],current:me,canCreateTeam:true}).text,/Nice to meet you, Mani\./);
  assert.equal(prompt('choose',{name:'',workspaces:[me,team],canCreateTeam:true}).quick.length,2);
+});
+
+test('the Help Bot understands what people want in a few words',()=>{
+ assert.equal(helpWish('something is broken'),'email');
+ assert.equal(helpWish('I want to pull out invoice totals'),'extract');
+ assert.equal(helpWish('share with my team'),'team');
+ assert.equal(helpWish('make a new collection'),'collection');
+ assert.equal(helpWish('hello'),'');
+ assert.ok(prompt('help',{name:'Mani',workspaces:[me],current:me,canCreateTeam:true}).quick.some(q=>/Email/.test(q.label)));
 });

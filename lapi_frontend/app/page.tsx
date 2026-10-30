@@ -71,6 +71,8 @@ import { PageBand, PAGE_INTROS } from "./page-band";
 import { EnabledModels } from "./enabled-models";
 import { WorkspaceGate, type GateMode } from "./workspace-gate";
 import { SetupChat } from "./setup-chat";
+import { HelpBotMenuButton } from "./lapi-bot-button";
+import application from "./application-version.json";
 import { canAddCollections, gateStep, inWorkspace, pickWorkspace } from "./workspace-scope";
 import { openQuickStart } from "./quick-start-flow";
 import { JobsBoard } from "./jobs-board";
@@ -339,6 +341,8 @@ export default function App() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [nameSkipped, setNameSkipped] = useState(false);
   const [setupChat, setSetupChat] = useState(false);
+  const [botEntry, setBotEntry] = useState<'setup' | 'help' | 'email'>('setup');
+  const openBot = (entry: 'help' | 'email') => { setBotEntry(entry); setSetupChat(true); };
   useEffect(() => onAttention(scope => setAttention(scope)), []);
   const [manage, setManage] = useState<ManageRequest | null>(null);
   useEffect(() => onDatasetEditor(request => { setAttention(null); setManage(request); }), []);
@@ -879,6 +883,7 @@ export default function App() {
           </div>
           Originals protected. Insights grounded.
         </div>
+        <HelpBotMenuButton onOpen={() => { setMobile(false); openBot('help'); }}/>
       </aside>
       <div className={`shell ${view === "Lapi agent V2" ? "assistant-shell" : view === "Home" ? "notebook-shell" : view === "Extract Data" ? "extract-data-shell" : ""}`} inert={drawerOpen} data-agent-only={phoneAgentOnly || undefined}>
         <header className="topbar">
@@ -946,6 +951,7 @@ export default function App() {
           {error && view !== "Home" && (
             <Notice tone="error">
               {error}
+              <button type="button" className="text-button" style={{ marginLeft: 12 }} onClick={() => openBot('email')}>Email for help</button>
               <button title="Dismiss error"
                 className="btn icon"
                 onClick={() => setError("")}
@@ -956,19 +962,19 @@ export default function App() {
               </button>
             </Notice>
           )}
-          {setupChat && user && <SetupChat api={api} user={user} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)} chosen={gateChosen} needName={needName}
+          {setupChat && user && <SetupChat key={botEntry} api={api} user={user} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)} chosen={gateChosen} needName={needName} entry={botEntry} dataset={kbs.find(d => d.id === kb)} lastError={error} page={viewLabel(view)} version={application.version}
             onNamed={given => { setUser(current => current ? { ...current, display_name: given } : current); setNameSkipped(true); void readWorkspaces(); }}
             onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}
             onChoose={openWorkspace}
             onCollectionCreated={id => { reload(); changeDataset(id); }} onChanged={reload}
-            onDone={() => { setSetupChat(false); setGateChosen(true); setGateSkipped(true); setNameSkipped(true); }}/>}
+            onDone={() => { setSetupChat(false); setBotEntry('setup'); setGateChosen(true); setGateSkipped(true); setNameSkipped(true); }}/>}
           {!setupChat && gateStepNow && <WorkspaceGate mode={gateStepNow} api={api} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)}
             onChoose={openWorkspace}
             onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); setGateOpen('people'); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}
             onPeopleDone={() => { setGateOpen(null); reload(); }}
             onCollectionCreated={id => { setGateOpen(null); setGateSkipped(true); reload(); changeDataset(id); openQuickStart(); }}
             onLater={gateStepNow === 'team' || gateStepNow === 'collection' ? () => { setGateOpen(null); setGateSkipped(true); } : null}/>}
-          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs} workspace={workspaces.find(w => w.id === workspaceId)}/>
+          <WorkspaceAssist onHelp={() => openBot('help')} api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs} workspace={workspaces.find(w => w.id === workspaceId)}/>
           {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin||user.is_contributor)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
           {view === "About" && <AboutLapi/>}
           <WalkthroughGate api={api} active={view === "Home"} userId={user.id as string | undefined}/>
