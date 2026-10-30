@@ -338,6 +338,7 @@ export default function App() {
   const [attention, setAttention] = useState<AttentionScope | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [nameSkipped, setNameSkipped] = useState(false);
+  const [setupChat, setSetupChat] = useState(false);
   useEffect(() => onAttention(scope => setAttention(scope)), []);
   const [manage, setManage] = useState<ManageRequest | null>(null);
   useEffect(() => onDatasetEditor(request => { setAttention(null); setManage(request); }), []);
@@ -702,7 +703,9 @@ export default function App() {
   const gateStepNow = gateOpen || gateStep({ workspaces, current: workspaceId, chosen: gateChosen, skipped: gateSkipped });
   // First sign-in is a chat with Lapi: the name, a team workspace, which workspace, the first collection.
   const needName = Boolean(user && !user.display_name && !nameSkipped && workspaces.length > 0);
-  const setupChat = !gateOpen && (needName || gateStepNow === 'choose' || gateStepNow === 'collection');
+  // Once open, the chat stays until it says it is done, even as the steps it completes stop needing it.
+  const setupWanted = !gateOpen && (needName || gateStepNow === 'choose' || gateStepNow === 'collection');
+  useEffect(() => { if (setupWanted) setSetupChat(true); }, [setupWanted]);
   const authenticate = () =>
     run(async () => {
       let d;
@@ -957,8 +960,8 @@ export default function App() {
             onNamed={given => { setUser(current => current ? { ...current, display_name: given } : current); setNameSkipped(true); void readWorkspaces(); }}
             onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}
             onChoose={openWorkspace}
-            onCollectionCreated={id => { reload(); changeDataset(id); }}
-            onDone={() => { setGateChosen(true); setGateSkipped(true); setNameSkipped(true); }}/>}
+            onCollectionCreated={id => { reload(); changeDataset(id); }} onChanged={reload}
+            onDone={() => { setSetupChat(false); setGateChosen(true); setGateSkipped(true); setNameSkipped(true); }}/>}
           {!setupChat && gateStepNow && <WorkspaceGate mode={gateStepNow} api={api} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)}
             onChoose={openWorkspace}
             onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); setGateOpen('people'); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}

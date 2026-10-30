@@ -7,6 +7,7 @@ The application version and in-app feature history are maintained in `lapi_front
 Lapi sets you up in a chat
 
 - `setup-chat.tsx`, `setup-chat-script.ts`: first sign-in is a scripted chat (no model call): name, team workspace, which workspace, first collection and type; answers typed, tapped or spoken (browser speech recognition). Shown when the person has no name yet or the workspace gate would ask; the gate dialogs remain for team members and later use.
+- The chat continues through the first round after a collection is made here: `suggestFields` prefills fields from everyday words (presets for invoices, candidates, contracts, purchase orders, bank statements, identity documents, reports, plus the person's own words); `applyChange` edits them in words; documents by camera or picker; consent asked in the chat; upload, read, template, extraction and results, then Review. The page keeps the chat mounted until it reports done.
 - `preferences.py`: `name` (free text, 60 chars; omitted on save keeps it). `display_name` on `/api/auth/me` and sign-in. `workspaces.rename_personal` renames the personal workspace while it still has its default name; `_display` prefers the given name.
 - Quick start on phones: starts on documents for Quick Extract and creates the collection at upload; `quick-start-scope` chip, scan-style pick tiles, `quick-start-ring`, `quick-start-field-chips`.
 

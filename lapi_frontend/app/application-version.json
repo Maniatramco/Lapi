@@ -6,7 +6,8 @@
       "date": "2026-10-31",
       "title": "Lapi sets you up in a chat",
       "changes": [
-        "At first sign-in Lapi asks what to call you, offers a team workspace, asks which workspace to use and creates your first collection with its type, from your answers, typed, tapped or spoken.",
+        "At first sign-in Lapi sets you up in a chat: what to call you, a team workspace if you want one, which workspace to use, and your first collection with its type. Answers can be typed, tapped or spoken.",
+        "The chat carries on through your first round: say what you want to pull out and Lapi suggests the fields, filled in from your words; change them in words; take a photo or choose files; Lapi asks before reading them, reads, extracts and shows the first results, with Review one tap away.",
         "Your personal workspace and the greeting use the name you gave.",
         "Quick Extract on phones opens straight on your documents, with a scan-style photo tile, the collection as a chip you can change, a reading ring and fields as chips."
       ]

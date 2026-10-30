@@ -35,7 +35,7 @@ def _unique(values, allowed):
 
 
 def _load(user_id: str) -> dict:
-    blank = Preferences().model_dump()
+    blank = _clean(Preferences())  # name is '' before it is given
     try:
         data = core.local_store.json(_key(user_id))
     except Exception:  # missing or unreadable record: nothing answered yet

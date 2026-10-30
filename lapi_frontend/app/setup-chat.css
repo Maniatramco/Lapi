@@ -4,7 +4,7 @@
 .setup-chat-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
 .setup-chat-head div{display:flex;flex-direction:column;gap:1px}.setup-chat-head strong{font-size:16px}.setup-chat-head small{font-size:13px;color:var(--muted)}
 .setup-chat-thread{display:flex;flex-direction:column;gap:10px;padding:16px 20px;overflow-y:auto;background:#f5f7fb}
-.setup-chat-line{margin:0;max-width:86%;padding:11px 15px;border-radius:18px;font-size:15px;line-height:1.5;overflow-wrap:anywhere;animation:setup-chat-in .25s ease-out both}
+.setup-chat-line{margin:0;white-space:pre-line;max-width:86%;padding:11px 15px;border-radius:18px;font-size:15px;line-height:1.5;overflow-wrap:anywhere;animation:setup-chat-in .25s ease-out both}
 .setup-chat-line.is-lapi{align-self:flex-start;border-radius:4px 18px 18px 18px;background:#fff;border:1px solid var(--line)}
 .setup-chat-line.is-you{align-self:flex-end;width:fit-content;border-radius:18px 18px 4px 18px;background:var(--blue);color:#fff}
 .setup-chat-line.is-error{border-color:var(--orange-line);background:var(--orange-soft);color:var(--orange-strong)}

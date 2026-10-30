@@ -5,7 +5,7 @@ from lapi_app import core, main
 from test_user_management import accounts, login  # noqa: F401  (pytest fixture)
 from test_dataset_models import system  # noqa: F401  (pytest fixture)
 
-BLANK = {'goals': [], 'sources': [], 'completed': False, 'dismissed_next_steps': False}
+BLANK = {'goals': [], 'sources': [], 'completed': False, 'dismissed_next_steps': False, 'name': ''}
 ANSWERS = {'goals': ['extract', 'ask'], 'sources': ['google_drive', 'files'], 'completed': True, 'dismissed_next_steps': False}
 
 
@@ -22,7 +22,7 @@ def test_answers_are_blank_until_saved_then_remembered_on_another_browser(accoun
     saved = client.put('/api/me/preferences', json=ANSWERS)
     assert saved.status_code == 200
     # Choices come back once each, in a fixed order.
-    assert saved.json() == {'goals': ['ask', 'extract'], 'sources': ['files', 'google_drive'], 'completed': True, 'dismissed_next_steps': False}
+    assert saved.json() == {'goals': ['ask', 'extract'], 'sources': ['files', 'google_drive'], 'completed': True, 'dismissed_next_steps': False, 'name': ''}
     assert client.get('/api/me/preferences').json() == saved.json()
     stored = core.local_store.json(_key(me['user']['id']))
     assert stored['goals'] == ['ask', 'extract'] and stored['completed'] is True
