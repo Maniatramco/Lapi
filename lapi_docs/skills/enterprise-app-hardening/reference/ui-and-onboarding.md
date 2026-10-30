@@ -74,8 +74,8 @@ list has loaded and nothing is active; Admins and Contributors create, others ar
 - Assistant prompts: tools keep saying dataset, so instruct the model to say workspace to people.
 - On a shared machine: never `docker ps -q | xargs docker rm`; other projects run there. Filter by your own image or name,
   and cap test runs (`--cpus`, `--memory`, `-n 2`): heavy parallel runs coincided with Docker Desktop failing.
-- Who may create (user's rule): any signed-in person, at most one personal and one team workspace; Administrators and
-  Contributors have no limit. Enforced in `POST /api/datasets` (409), personal workspaces refuse members (400), the creator
+- Who may create (user's rule): any signed-in person, at most one personal and one team workspace; only Administrators
+  have no limit. Enforced in `POST /api/datasets` (409), personal workspaces refuse members (400), the creator
   becomes Owner by updating the grant Lapi already adds on create (adding another breaks the unique key).
   `workspaceSlots` only decides what the screens offer. `migrate-settings` needs Owner on that workspace.
 

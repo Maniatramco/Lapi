@@ -29,7 +29,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
  const editor=canAddDocuments(datasets,isAdmin);
  const choices=editor?uploadable(datasets,isAdmin):askable(datasets);
  const [path,setPath]=useState<Path>(quickExtract?'extract':'ask');
- const slots=workspaceSlots(datasets,isAdmin),canCreate=slots.length>0;
+ const slots=workspaceSlots(datasets,Boolean(user?.is_admin)),canCreate=slots.length>0;
  const [newAudience,setNewAudience]=useState<'personal'|'team'>(slots[0]||'personal');
  const [datasetId,setDatasetId]=useState<string>(choices[0]?.id||(canCreate?'new':''));
  // A new workspace belongs to its creator, so its documents step is always available.

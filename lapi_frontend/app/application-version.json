@@ -1,6 +1,17 @@
 {
-  "version": "26.1.16.42",
+  "version": "26.1.16.43",
   "releases": [
+    {
+      "version": "26.1.16.43",
+      "date": "2026-10-30",
+      "title": "Workspaces",
+      "changes": [
+        "Datasets are now called workspaces everywhere you see them. Manage workspace is now Settings, and the workspace Default model is now the overall Default.",
+        "If you have no workspace when you sign in, Lapi asks you to create one, for just you or for your team. For a team you add people straight away; they need a Lapi account first.",
+        "Anyone can create a workspace and owns what they create: one personal and one team. Administrators have no limit. Personal workspaces cannot be shared.",
+        "The Agent says workspace and understands it when you type it."
+      ]
+    },
     {
       "version": "26.1.16.42",
       "date": "2026-10-30",

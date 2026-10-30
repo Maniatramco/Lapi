@@ -442,9 +442,9 @@ def install_routes(app,auth,write_profile):
     @app.post('/api/datasets')
     def add_dataset(body:DatasetInput,owner=Depends(auth)):
         data=body.model_dump()|copy.deepcopy(ROUTING_DEFAULTS)|{'routing_version':1}
-        # Administrators and Contributors own every dataset and have no limit. Anyone else may have
-        # one personal and one team workspace, and owns what they create.
-        limited=access.request_actor.get() is not None and not access.manages_datasets(owner)
+        # Administrators have no limit. Everyone else may create one personal and one team
+        # workspace, and owns what they create.
+        limited=access.request_actor.get() is not None and not core.is_administrator(owner)
         if not limited:return dataset_public(create('knowledge_base',owner,body.name,data))
         audience=data['audience']=body.audience or 'personal'
         from . import relational

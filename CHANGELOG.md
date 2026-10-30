@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.43 - 30 October 2026
+
+Workspaces
+
+- Visible text says workspace instead of dataset; code names, API paths and fields are unchanged. `#Workspaces` is the new page link; old links still work. Earlier uses became Settings and overall Default.
+- `first-workspace.tsx`: first sign-in with no workspace creates one for just me or my team, then adds people with the existing members screen.
+- `POST /api/datasets` is open to anyone signed in (creator becomes Owner), limited to one personal and one team workspace (`audience`, 409); Administrators have no limit. Personal workspaces refuse members (400). `migrate-settings` requires Owner. `GET /api/datasets` adds `mine`; `workspaceSlots` decides what Quick start offers.
+- Agent prompts say workspace; request matching accepts both words.
+
 ## v26.1.16.42 - 30 October 2026
 
 Signing in starts fresh
