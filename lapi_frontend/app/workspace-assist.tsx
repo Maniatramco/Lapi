@@ -12,7 +12,7 @@ import './phone-design.css';
 import {QuickStart} from './quick-start';
 import {PhoneStatus} from './phone-status';
 import {canAddCollections} from './workspace-scope';
-import {attentionItems,openAttention} from './needs-attention';
+
 
 type Api=(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;
 type Entity=Record<string,any>;
@@ -246,8 +246,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   <button type="button" className="text-button next-steps-change" onClick={()=>setSheetOpen(true)}>Change my answers</button>
  </section>:null;
 
- const attention=attentionItems(documents,jobs,datasets).length;
- const status=userId?<PhoneStatus documents={documents} jobs={jobs} attention={attention} onAttention={()=>openAttention()} onReview={()=>go('Extract')}/>:null;
+ const status=userId?<PhoneStatus documents={documents} jobs={jobs} onReview={()=>go('Extract')}/>:null;
  const tab=(target:string,label:string,Icon:typeof Database|null)=>{const current=view===target;return <button type="button" className="tab-bar-item" aria-label={label} aria-current={current?'page':undefined} onClick={()=>go(target)}>{Icon?<Icon size={22} aria-hidden="true"/>:<AgentLogo size={24}/>}<span>{label}</span></button>;};
  const layer:ReactNode=<div ref={own} className="workspace-assist-layer">
   <nav className="mobile-tab-bar" aria-label="Quick navigation">

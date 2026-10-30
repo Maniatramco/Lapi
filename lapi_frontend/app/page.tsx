@@ -51,6 +51,7 @@ import { ToggleRight,
   Layers,
   Loader2,
   LogOut,
+  AlertTriangle,
   Menu,
   MessageSquare,
   RefreshCw,
@@ -72,7 +73,7 @@ import { WorkspaceGate, type GateMode } from "./workspace-gate";
 import { canAddCollections, gateStep, inWorkspace, pickWorkspace } from "./workspace-scope";
 import { openQuickStart } from "./quick-start-flow";
 import { JobsBoard } from "./jobs-board";
-import { NeedsAttentionDialog, attentionItems, onAttention, type AttentionScope } from "./needs-attention";
+import { NeedsAttentionDialog, attentionItems, onAttention, openAttention, type AttentionScope } from "./needs-attention";
 import { ManageDataset, onDatasetEditor, type ManageRequest } from "./manage-dataset";
 import { MappingOverview } from "./mapping-overview";
 import type { DatasetKnowledgeScope } from "./dataset-knowledge-picker";
@@ -333,9 +334,8 @@ export default function App() {
   const docs = useMemo(() => { if (!workspaceId) return allDocs; const ids = new Set(kbs.map(d => d.id)); return allDocs.filter(d => { const owner = d.dataset_id || d.kb_id; return !owner || ids.has(owner); }); }, [allDocs, kbs, workspaceId]);
   const [kb, setKb] = useState("");
   const [allJobs, setJobs] = useState<Entity[]>([]);
-  // A file's job follows the file; a job about nothing in particular stays visible.
-  const jobs = useMemo(() => { if (!workspaceId) return allJobs; const here = new Set(docs.map(d => d.id)), known = new Set(allDocs.map(d => d.id)); return allJobs.filter(job => { const id = job.document_id || job.target_id; return !known.has(id) || here.has(id); }); }, [allJobs, allDocs, docs, workspaceId]);
   const [attention, setAttention] = useState<AttentionScope | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   useEffect(() => onAttention(scope => setAttention(scope)), []);
   const [manage, setManage] = useState<ManageRequest | null>(null);
   useEffect(() => onDatasetEditor(request => { setAttention(null); setManage(request); }), []);
@@ -362,6 +362,9 @@ export default function App() {
   // A run or prompt with no known collection stays visible rather than disappearing.
   const extractions = useMemo(() => !workspaceId ? allExtractions : allExtractions.filter(e => { const owner = e.dataset_id || e.parent_id || allDocs.find(d => e.document_ids?.includes(d.id))?.dataset_id; return !owner || openIds.has(owner); }), [allExtractions, allDocs, openIds, workspaceId]);
   const templates = useMemo(() => !workspaceId ? allTemplates : allTemplates.filter(t => { const owner = t.dataset_id || t.parent_id; return !owner || openIds.has(owner); }), [allTemplates, openIds, workspaceId]);
+  // A job follows its file, collection or run; old jobs for things no longer here are dropped.
+  const jobs = useMemo(() => { if (!workspaceId) return allJobs; const here = new Set([...docs, ...kbs, ...extractions].map(d => d.id)); return allJobs.filter(job => { const id = job.document_id || job.target_id; return !id || here.has(id); }); }, [allJobs, docs, kbs, extractions, workspaceId]);
+  const phoneAttention = useMemo(() => attentionItems(docs, jobs, kbs).length, [docs, jobs, kbs]);
   const [extraction, setExtraction] = useState<Entity | null>(null);
   const [reviewOpenRequest, setReviewOpenRequest] = useState(0);
   const [reviewRouteId, setReviewRouteId] = useState("");
@@ -832,6 +835,15 @@ export default function App() {
       </SignInLayout>
     );
 
+  const signOut = () => run(async () => {
+    const result = await api("/auth/logout", "POST");
+    setUser(null);
+    setCsrf("");
+    // End the Keycloak session too, or the next sign-in would skip the password.
+    sessionStorage.clear();
+    if (result?.logout_url) window.location.assign(result.logout_url);
+    else startFresh(window.location, sessionStorage);
+  });
   return (
     <>
       {drawerOpen && <div className="navigation-backdrop" aria-hidden="true" onClick={() => setMobile(false)} />}
@@ -904,29 +916,18 @@ export default function App() {
                 />
               </button>
             </div>}
+            {phoneAttention > 0 && <button type="button" className="btn icon topbar-attention" aria-label={`Check ${phoneAttention} ${phoneAttention === 1 ? 'file' : 'files'}`} title="Files that need you" onClick={() => openAttention()}><AlertTriangle size={16} aria-hidden="true" /><span className="topbar-attention-count">{phoneAttention}</span></button>}
             <span className="pill">
               <span className="dot" />
               Private
             </span>
-            <div className="avatar" title={user.username}>
-              {(user.username || "A").slice(0, 2).toUpperCase()}
+            <div className="account">
+              <button type="button" className="avatar account-button" title={user.username} aria-label="Account" aria-haspopup="menu" aria-expanded={accountOpen} onClick={() => setAccountOpen(open => !open)}>
+                {(user.username || "A").slice(0, 2).toUpperCase()}
+              </button>
+              {accountOpen && <div className="account-menu" role="menu"><span className="account-name">{user.username}</span><button type="button" role="menuitem" className="btn" onClick={() => { setAccountOpen(false); signOut(); }}><LogOut size={14} aria-hidden="true" /> Sign out</button></div>}
             </div>
-            <button
-              className="btn icon"
-              title="Sign out"
-              aria-label="Sign out"
-              onClick={() =>
-                run(async () => {
-                  const result = await api("/auth/logout", "POST");
-                  setUser(null);
-                  setCsrf("");
-                  // End the Keycloak session too, or the next sign-in would skip the password.
-                  sessionStorage.clear();
-                  if (result?.logout_url) window.location.assign(result.logout_url);
-                  else startFresh(window.location,sessionStorage);
-                })
-              }
-            >
+            <button className="btn icon" title="Sign out" aria-label="Sign out" onClick={signOut}>
               <LogOut size={14} />
             </button>
           </div>

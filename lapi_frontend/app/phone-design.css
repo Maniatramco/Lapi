@@ -131,3 +131,50 @@ html body .shell .agent-v2 .agent-v2-suggestions > .btn { font-size: var(--fit-s
 @media (max-height: 640px) and (pointer: coarse) {
   :root { --fit-title: 1.375rem; }
 }
+
+/* Account menu and chat options: parts shared by every screen size. */
+.account{position:relative;display:flex}
+.avatar.account-button{border:0;padding:0;font:inherit;font-weight:700;cursor:pointer}
+.account-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:6px;min-width:200px;padding:8px;border:1px solid #e3e9f4;border-radius:14px;background:#fff;box-shadow:0 16px 40px rgba(20,33,61,.18)}
+.account-name{padding:4px 6px;font-size:13px;color:#4d5a75;overflow-wrap:anywhere}
+.account-menu .btn{justify-content:flex-start;gap:8px;min-height:40px}
+.topbar-attention,.agent-v2-scope-chip{display:none}
+.agent-v2-scope-chip{align-items:center;gap:6px;min-width:0;max-width:100%;min-height:40px;padding:0 12px;border:1px solid #dfe6f3;border-radius:20px;background:#f8fafc;color:#14213d;font:600 15px/1 var(--font-ui,system-ui);cursor:pointer}
+.agent-v2-scope-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agent-v2-scope-chip-hero{margin-top:10px;background:#e8f0ff;border-color:#c9d7f2;color:#1e3a8a}
+.agent-v2-sheet-backdrop{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;background:rgba(15,23,42,.45)}
+.agent-v2-sheet{display:flex;flex-direction:column;gap:4px;width:100%;max-height:85dvh;overflow:auto;box-sizing:border-box;padding:10px 16px calc(16px + env(safe-area-inset-bottom));border-radius:24px 24px 0 0;background:#fff}
+.agent-v2-sheet::before{content:'';align-self:center;width:40px;height:5px;margin-bottom:6px;border-radius:3px;background:#d3dbea}
+.agent-v2-sheet-row{display:flex;align-items:center;gap:12px;min-height:50px;padding:0 6px;border:0;border-radius:12px;background:none;color:#14213d;font:600 16px/1.2 var(--font-ui,system-ui);text-align:left;cursor:pointer}
+.agent-v2-sheet-row:disabled{opacity:.5;cursor:default}
+.agent-v2-sheet-row svg{flex:none;color:#1d4ed8}
+.agent-v2-sheet-field{display:flex;flex-direction:column;gap:6px;padding:6px;font-size:13px;font-weight:600;color:#4d5a75}
+.agent-v2-sheet-field select{min-height:46px;padding:0 10px;border:1px solid #dfe6f3;border-radius:12px;background:#f8fafc;font:inherit;font-size:16px;font-weight:500;color:#14213d}
+.agent-v2-sheet-field small{font-weight:400}
+.agent-v2-sheet-done{min-height:50px;margin-top:6px;border:0;border-radius:14px;background:#2563eb;color:#fff;font:700 16px var(--font-ui,system-ui);cursor:pointer}
+.agent-v2-sheet :is(button,select):focus-visible,.account-button:focus-visible,.agent-v2-scope-chip:focus-visible{outline:3px solid #315de7;outline-offset:2px}
+
+/* Phones: one row at the top, a personal greeting with three big starters, one clean input bar, a floating tab bar. */
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
+  html body .shell > .topbar .crumb-workspace, html body .shell > .topbar .breadcrumb > svg, html body .shell > .topbar .pill, html body .shell > .topbar .top-actions > .btn.icon[aria-label="Sign out"] { display: none; }
+  html body .shell > .topbar .workspace-switcher { margin-left: 0; padding-left: 4px; border: 0; background: none; font-size: var(--fit-page); font-weight: 700; }
+  html body .shell > .topbar .top-actions .avatar.account-button { display: grid; width: 36px; height: 36px; border-radius: 50%; font-size: 13px; }
+  html body .shell > .topbar .topbar-attention { position: relative; display: inline-flex; width: 40px; height: 40px; border: 1px solid #fed7aa; border-radius: 50%; background: #fff7ed; color: #9a3412; }
+  html body .shell > .topbar .topbar-attention-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: #ea580c; color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; }
+  /* The chat's own toolbar and the model picker live in the options sheet. */
+  html body .shell .agent-v2-context, html body .shell .agent-v2 .agent-v2-model-control { display: none; }
+  html body .shell .agent-v2 .agent-v2-scope-chip { display: inline-flex; }
+  html body .shell .agent-v2-compose-controls .agent-v2-scope-chip { flex: 1 1 auto; justify-content: space-between; }
+  html body .shell .agent-v2 .agent-v2-starters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 460px; }
+  html body .shell .agent-v2 .agent-v2-starters button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 96px; padding: 12px 6px; border: 1px solid #dfe6f3; border-radius: 20px; background: #fff; color: #14213d; font: 600 var(--fit-small)/1.25 var(--font-ui, system-ui); text-align: center; cursor: pointer; box-shadow: 0 8px 24px rgba(20,33,61,.06); }
+  html body .shell .agent-v2 .agent-v2-starters button svg { color: #1d4ed8; }
+  html body .shell .agent-v2 .agent-v2-starters button:focus-visible { outline: 3px solid #315de7; outline-offset: 2px; }
+  html body .shell .agent-v2 .agent-v2-what { min-height: 40px; color: #1d4ed8; font-weight: 600; }
+  /* Floating tab bar. */
+  body[data-tab-bar=on] .mobile-tab-bar { left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom)); height: var(--tab-bar-height); padding: 4px 6px; border: 1px solid #e3e9f4; border-radius: 24px; background: rgba(255,255,255,.98); box-shadow: 0 14px 36px rgba(20,33,61,.16); }
+  html body .tab-bar-item { border-radius: 18px; }
+  html body .tab-bar-item[aria-current=page] { background: #eef3ff; }
+  html body[data-tab-bar=on] { --connection-footer-height: calc(var(--tab-bar-height) + 10px); }
+  body[data-tab-bar=on]:not(:has(.connection-status)) .shell { padding-bottom: calc(var(--tab-bar-height) + 10px + env(safe-area-inset-bottom)); }
+  body[data-tab-bar=on] .connection-status { bottom: calc(var(--tab-bar-height) + 8px + env(safe-area-inset-bottom)); }
+}

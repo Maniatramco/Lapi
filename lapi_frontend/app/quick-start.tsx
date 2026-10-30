@@ -303,6 +303,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
       <span className="quick-start-stage-dot">{stage.state==='done'?<Check size={14}/>:stage.state==='on'?<Loader2 size={14} className="animate-spin"/>:stage.state==='failed'?<X size={14}/>:null}</span>{stage.label}</li>)}</ol>}
      {error&&!busy&&<button type="button" className="quick-start-secondary" onClick={()=>{setExtraction(null);go('prompt');}}>Back to the fields</button>}
      {rows.length>0&&<article className="quick-start-answer" aria-live="polite"><h3><Check size={16}/> {promptName||'Extracted values'}</h3>
+      <div className="quick-start-figures" aria-label="What was extracted"><div><strong>{recordCount(extraction?.result).toLocaleString()}</strong><span>{recordCount(extraction?.result)===1?'record':'records'}</span></div><div><strong>{rows.length}</strong><span>{rows.length===1?'field':'fields'}</span></div><div><strong>{readyIds.length}</strong><span>{readyIds.length===1?'document':'documents'}</span></div></div>
       <dl className="quick-start-values">{rows.map(row=><div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
       <p className="quick-start-note">{recordCount(extraction?.result)>1?`This is record 1 of ${recordCount(extraction?.result).toLocaleString()} (one per row or file). See all of them on the Review page, correct anything, then approve.`:'Check each value against its source on the Review page, correct anything, then approve.'}</p></article>}
     </>}

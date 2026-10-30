@@ -1,7 +1,7 @@
 "use client";
 import {ActionButton} from "./action-button";
 import {useCallback, useEffect, useLayoutEffect, useRef, useState,type DragEvent} from 'react';
-import {Info,Database,History,Square, Plus, CheckCircle2, Loader2, Mic, ArrowUp, ArrowDown,X,FileText,UploadCloud,Eraser,RotateCcw} from 'lucide-react';
+import {Info,Database,History,Square, Plus, CheckCircle2, Loader2, Mic, ArrowUp, ArrowDown,X,FileText,UploadCloud,Eraser,RotateCcw,ChevronDown,MessageSquare,Table2} from 'lucide-react';
 import {isFileDrag,mergeAgentAttachments,attachmentSize,attachmentKey,isJsonAttachment} from './agent-attachments';
 import {readPromptUpload,type PromptUpload} from './prompt-upload';
 import {PromptUploadPreview} from './prompt-upload-preview';
@@ -101,6 +101,7 @@ export function AgentV2({workspaceId,api,stream,username,onJobs,onVisibleJobs,on
  };
  const datasetConfig=catalog.datasets.find((d:Entity)=>d.id===dataset);
  const device=useDevice();
+ const [sheetOpen,setSheetOpen]=useState(false);  // Phones: collection, model, history and chat actions in one sheet.
  const chatModels=eligibleAgentModels(catalog.models,datasetConfig,device);
  // Resolve the displayed model synchronously: history restoration and catalog effects
  // can settle in different orders after returning from Review. Send uses this same ID.
@@ -432,6 +433,12 @@ export function AgentV2({workspaceId,api,stream,username,onJobs,onVisibleJobs,on
  const startWorkflow=(label:string)=>{const next=`${label} `;setText(next);setCaret(next.length);setMentionClosed(true);requestAnimationFrame(()=>{composer.current?.focus();composer.current?.setSelectionRange(next.length,next.length);});};
  const commandToken=/^(\s*)([/@]\S+)(?=\s|$)/.exec(text);
  const highlightedCommand=commandToken&&agentCommands.some(command=>command.label.slice(1).toLowerCase()===commandToken[2].slice(1).toLowerCase())?commandToken:null;
+ const chooseDataset=(value:string)=>{if(value===dataset)return;retrySubmittedPrompt.current='';retryPlanId.current='';setPromptProgress(null);setDataset(value);sessionStorage.setItem(key+'-dataset',value);setSavedPromptId('');setDocuments([]);setMentionClosed(true);cancelPrompt();setPromptAttachment(null);setPromptNotice('');};
+ // A first name from the sign-in name, when it looks like one.
+ const firstName=(()=>{const raw=(username||'').split('@')[0].split(/[._\-\s]+/)[0]||'';if(raw.length<2||/\d/.test(raw)||/^(admin|administrator|user|test)$/i.test(raw))return '';return raw[0].toUpperCase()+raw.slice(1).toLowerCase();})();
+ const greeting=firstName?`Hi ${firstName}, how can I help?`:'How can I help?';
+ const scopeLabel=dataset?(catalog.datasets.find((d:Entity)=>d.id===dataset)?.name||'Collection'):'General chat';
+ const scopeChip=(extra:string)=><button type="button" className={`agent-v2-scope-chip${extra}`} aria-haspopup="dialog" aria-label={`Chat options · ${scopeLabel}`} onClick={()=>setSheetOpen(true)}><span>{scopeLabel}</span><ChevronDown size={14} aria-hidden="true"/></button>;
  return <section className={`agent-v2 agent-workspace${dragging?' agent-v2-dragging':''}`} aria-label="Lapi Agent conversation" onDragEnter={onFileDragEnter} onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onFileDrop}>
   {dragging&&<div className="agent-v2-drop-overlay" role="status"><UploadCloud size={36}/><strong>{attachmentsBlocked?'Finish the current workflow first':'Drop documents here'}</strong><span>{attachmentsBlocked?'You can attach files when it finishes.':`PDF, DOCX, TXT, JSON · up to 20 files · ${maxUploadMb} MB each`}</span></div>}
   <aside className="agent-rail" aria-label="Agent conversations">
@@ -443,7 +450,7 @@ export function AgentV2({workspaceId,api,stream,username,onJobs,onVisibleJobs,on
   </aside>
   <div className="agent-main">
   <header className="agent-v2-context">
-   <label>Collection<select aria-label="Agent collection" value={dataset} disabled={attachmentsBlocked||(!catalogLoaded.current&&catalogLoading)} onChange={e=>{if(e.target.value===dataset)return;retrySubmittedPrompt.current='';retryPlanId.current='';setPromptProgress(null);setDataset(e.target.value);sessionStorage.setItem(key+'-dataset',e.target.value);setSavedPromptId('');setDocuments([]);setMentionClosed(true);cancelPrompt();setPromptAttachment(null);setPromptNotice('');}}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading collections…':catalogError?'Collections unavailable':'General chat'):'General chat'}</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+   <label>Collection<select aria-label="Agent collection" value={dataset} disabled={attachmentsBlocked||(!catalogLoaded.current&&catalogLoading)} onChange={e=>chooseDataset(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading collections…':catalogError?'Collections unavailable':'General chat'):'General chat'}</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
    {dataset&&<AgentDocumentFilter key={dataset} documents={readyDocuments} selected={documents} onChange={setDocuments} disabled={Boolean(working)||onboardingBusy||plans.some(active)}/>}
    <button type="button" className="btn icon agent-v2-info" aria-label="About this chat" aria-expanded={infoOpen} title="Privacy, connections and version" onClick={()=>setInfoOpen(open=>!open)}><Info size={18}/></button>
    <button className="btn icon" aria-label="Agent chat history" title="Chat history" disabled={Boolean(working)||onboardingBusy||plans.some(active)} onClick={()=>void api('/conversations','GET',undefined,undefined,true).then(result=>{setHistory(result);setHistoryOpen(!historyOpen);}).catch(e=>setError(e.message))}><History size={18}/></button>
@@ -456,13 +463,18 @@ export function AgentV2({workspaceId,api,stream,username,onJobs,onVisibleJobs,on
    {onboardingOpen&&catalog.can_onboard_datasets&&<AgentOnboarding initialDocuments={documentFiles} initialPrompt={promptAttachment||undefined} onReview={onReview} api={api} models={catalog.models} defaults={datasetConfig} storageKey={key+'-onboarding'} onBusy={setOnboardingBusy} onReady={()=>{onWorkspaceChanged?.();void loadCatalog().catch(e=>setError(e.message));}} onEdit={id=>setManaging(id)} onUse={id=>{setDataset(id);setDocuments([]);setSavedPromptId('');rememberAssistantDataset(sessionStorage,username,id);setOnboardingOpen(false);sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}} onClose={completed=>{setOnboardingOpen(false);if(completed){sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}}}/>}
    {catalogError&&<div className="agent-v2-catalog-error" role="alert"><span>Could not load collections and models. {catalogError}</span><ActionButton className="btn" disabled={catalogLoading} onClick={()=>{setError('');setCatalogAttempt(value=>value+1);}} label="Retry collections and models" action="retry"/></div>}
    <AgentTraining api={api} userId={username} onTry={(action,example)=>{if(action==='ask'&&example){setText(example);composer.current?.focus();}else if(action==='attach')fileInput.current?.click();else if(action==='quick-start')openQuickStart();}}/>
-   {!plans.length&&!onboardingOpen&&<div className="agent-v2-welcome"><AgentLogo size={64} label="Lapi Agent"/>{!scopeReady?<p role="status">{catalogError?'Choices are unavailable. Retry loading above.':'Preparing your collection…'}</p>:<><div className="agent-welcome-hero"><div><h2>How can I help?</h2></div></div>
+   {!plans.length&&!onboardingOpen&&<div className="agent-v2-welcome"><AgentLogo size={64} label="Lapi Agent"/>{!scopeReady?<p role="status">{catalogError?'Choices are unavailable. Retry loading above.':'Preparing your collection…'}</p>:<><div className="agent-welcome-hero"><div><h2>{greeting}</h2>{device==='phone'&&scopeChip(' agent-v2-scope-chip-hero')}</div></div>
+    {device==='phone'?<><div className="agent-v2-starters" aria-label="Start with">
+     {!attachmentsBlocked&&<button type="button" onClick={()=>fileInput.current?.click()}><UploadCloud size={24} aria-hidden="true"/><span>Add documents</span></button>}
+     <button type="button" onClick={()=>startWorkflow('/Extract')}><Table2 size={24} aria-hidden="true"/><span>Pull out data</span></button>
+     <button type="button" onClick={()=>{setText('Summarize the key points');composer.current?.focus();}}><MessageSquare size={24} aria-hidden="true"/><span>Summarize my files</span></button>
+    </div><button type="button" className="text-button agent-v2-what" onClick={openAgentTraining}>What can you do?</button></>:
     <div className="agent-v2-suggestions" aria-label="Suggestions">
      <button className="btn" onClick={()=>{setText('Summarize the key points');composer.current?.focus();}}>Summarize the key points</button>
      {!attachmentsBlocked&&<button className="btn" onClick={()=>fileInput.current?.click()}>Add documents</button>}
      <button className="btn" onClick={()=>startWorkflow('/Extract')}>Pull out data</button>
      <button className="btn" onClick={openAgentTraining}>What can you do?</button>
-    </div></>}</div>}
+    </div>}</>}</div>}
    {plans.map(plan=>{
     const index=nextCall(plan);const call=index>=0?plan.calls[index]:null;
     const needInputs=call?.status==='pending'&&!plan.superseded;const uploaded=plan.calls.some((c:Entity)=>c.uploaded_document_ids?.length);
@@ -524,6 +536,16 @@ export function AgentV2({workspaceId,api,stream,username,onJobs,onVisibleJobs,on
    {managing&&renderManage&&<article className="agent-v2-exchange agent-manage-exchange" aria-label="Manage collection"><div className="agent-v2-speaker"><AgentLogo size={24}/><strong>Lapi Agent</strong></div>{renderManage({datasetId:managing,onClose:()=>setManaging(null),onCommand:label=>{setDataset(managing);setManaging(null);startWorkflow(label);}})}</article>}
    {error&&!displayedChatError&&<p className="agent-v2-error" role="alert">{error}</p>}<div ref={end}/>
   </div>
+  {sheetOpen&&device==='phone'&&<div className="agent-v2-sheet-backdrop" onClick={()=>setSheetOpen(false)}><div className="agent-v2-sheet" role="dialog" aria-modal="true" aria-label="Chat options" onClick={event=>event.stopPropagation()}>
+   <label className="agent-v2-sheet-field">Collection<select aria-label="Agent collection" value={dataset} disabled={attachmentsBlocked||(!catalogLoaded.current&&catalogLoading)} onChange={e=>chooseDataset(e.target.value)}><option value="">General chat</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+   <label className="agent-v2-sheet-field">Agent Model<select aria-label="Agent Model" value={effectivePlanner} disabled={busyNow||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">Choose an Agent Model</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select>{catalogLoaded.current&&!catalogLoading&&!chatModels.length&&<small>No chat model is on for phones. An administrator can turn one on in Settings › Enabled models.</small>}</label>
+   <button type="button" className="agent-v2-sheet-row" disabled={attachmentsBlocked} onClick={()=>{setSheetOpen(false);fileInput.current?.click();}}><UploadCloud size={20} aria-hidden="true"/>Add documents</button>
+   <button type="button" className="agent-v2-sheet-row" disabled={busyNow} onClick={()=>{setSheetOpen(false);void api('/conversations','GET',undefined,undefined,true).then(result=>{setHistory(result);setHistoryOpen(true);}).catch(e=>setError(e.message));}}><History size={20} aria-hidden="true"/>Chat history</button>
+   <button type="button" className="agent-v2-sheet-row" disabled={busyNow||!scopeReady} onClick={()=>{setSheetOpen(false);clearConversation();}}><Plus size={20} aria-hidden="true"/>New chat</button>
+   <button type="button" className="agent-v2-sheet-row" disabled={busyNow||!scopeReady||(!plans.length&&!pendingRequest)} onClick={()=>{setSheetOpen(false);clearConversation();}}><Eraser size={20} aria-hidden="true"/>Clear this chat</button>
+   <button type="button" className="agent-v2-sheet-row" aria-expanded={infoOpen} onClick={()=>{setSheetOpen(false);setInfoOpen(open=>!open);}}><Info size={20} aria-hidden="true"/>About this chat</button>
+   <button type="button" className="agent-v2-sheet-done" onClick={()=>setSheetOpen(false)}>Done</button>
+  </div></div>}
   <div className="agent-v2-composer" ref={composerContainer}>
    {showLatest&&<button className="agent-v2-latest btn" aria-label="Scroll to latest message" onClick={followLatest}><ArrowDown size={16}/>Latest message</button>}
    {savedPrompt&&!promptAttachment&&<div className="agent-v2-selected-documents" aria-label="Selected saved prompt"><span>Prompt: {savedPrompt.name}<button title="Clear selected prompt" aria-label="Clear selected prompt" disabled={attachmentsBlocked} onClick={clearSavedPrompt}><X size={12}/></button></span></div>}
@@ -553,6 +575,7 @@ export function AgentV2({workspaceId,api,stream,username,onJobs,onVisibleJobs,on
     <div className="agent-v2-compose-controls">
      <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json,.xlsx,.csv,.tsv,.png,.jpg,.jpeg,.webp" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>
      <button className="btn icon" aria-label="Attach documents for agent" title="Attach PDF, DOCX, TXT, JSON, spreadsheets (XLSX, CSV, TSV) or images (PNG, JPG, WEBP)" disabled={attachmentsBlocked} onClick={()=>fileInput.current?.click()}><Plus size={21}/></button>
+     {device==='phone'&&scopeChip('')}
      <label className="agent-v2-model-control"><span>Agent Model</span><select aria-label="Agent Model" value={effectivePlanner} disabled={Boolean(working)||onboardingBusy||plans.some(active)||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading models…':catalogError?'Models unavailable':'Choose an Agent Model'):'Choose an Agent Model'}</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select>{catalogLoaded.current&&!catalogLoading&&!chatModels.length&&<small className="agent-v2-model-empty">{`No chat model is on for ${device==='phone'?'phones':'computers'}. An administrator can turn one on in Settings › Enabled models.`}</small>}</label>
      <div className="agent-v2-send-controls">
       <button className={`btn icon${listening?' primary':''}`} aria-label={listening?'Stop listening':'Speak your request'} title={voiceSupported?'Speech input':'Speech input unavailable in this browser'} disabled={!voiceSupported||Boolean(working)} onClick={toggleMic}><Mic size={20}/></button>
