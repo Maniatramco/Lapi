@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.44 - 30 October 2026
+
+Workspaces hold collections
+
+- `workspaces.py`: workspaces are `core.Record` rows of kind `workspace` (`audience`, `members`, `teams`, `organization`), with `GET/POST /api/workspaces` and `GET/PUT /api/workspaces/{id}/members`. Access stays on collection grants; members are copied onto them.
+- Dataset JSON gains `workspace_id` and `collection_type`. `place_existing` runs on `GET /api/workspaces` and `POST /api/datasets`: unshared to the owner's personal workspace, shared to one Organization workspace where only administrators are Owner.
+- Limit moved to workspaces: one personal and one team per person, administrators unlimited.
+- `workspace-gate.tsx`, `workspace-scope.ts`: choose or create at login; a switcher in the top bar; documents, jobs, extractions and templates scoped to the open workspace.
+- Visible text says collection for the former dataset. Earlier local work included: fit on short touch screens, Latest message on empty chat, text sizes, the i panel.
+
 ## v26.1.16.43 - 30 October 2026
 
 Workspaces

@@ -1,6 +1,19 @@
 {
-  "version": "26.1.16.43",
+  "version": "26.1.16.44",
   "releases": [
+    {
+      "version": "26.1.16.44",
+      "date": "2026-10-30",
+      "title": "Workspaces hold collections",
+      "changes": [
+        "A workspace now holds document collections, and each collection can have a type such as Finance or Resume.",
+        "When you sign in, Lapi asks which workspace you want. If you have none, it guides you through creating one and a first collection.",
+        "Team workspace members see every collection in it. Files, Review, Extract and prompts follow the open workspace.",
+        "Everyone can create one personal and one team workspace, and can join other people's. Administrators have no limit.",
+        "Existing collections keep their access: unshared ones go to their owner's personal workspace, shared ones to an Organization workspace.",
+        "Connections, version and privacy moved behind the i button so chat has more room, and text sizes follow the screen."
+      ]
+    },
     {
       "version": "26.1.16.43",
       "date": "2026-10-30",

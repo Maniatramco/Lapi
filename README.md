@@ -2,7 +2,7 @@
 
 Secure data lakehouse and AI platform: dataset onboarding, document extraction and review, and a grounded Lapi Agent with hybrid retrieval, reranking and cited answers.
 
-**Working branch: `lapi_sprint1`. Current version: `v26.1.16.43`.**
+**Working branch: `lapi_sprint1`. Current version: `v26.1.16.44`.**
 
 ## Repository layout
 
