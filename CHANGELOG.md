@@ -2,6 +2,17 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.39 - 30 October 2026
+
+Phones: Agent and Quick Extract
+
+- No Dashboard on phones for anyone (`phoneRedirect`, `viewAllowed`); phones land on Lapi Agent; Review always allowed on phones. Tabs: Agent, Quick Extract, More when not agent-only. Removes the phone Home and hero.
+- `QuickStart` `quickExtract`: extract path preset, consent and Continue in place of the ask-or-extract choice.
+- `phone-status.tsx` replaces the floating progress card on phones. Composer is one row; starter chips and footer hide once a conversation exists.
+- `query_table` citations carry `sheet`, `rows` and `reading`; `answer-reading.ts` shows the headline number and "How I read your question".
+- `workbook_context.row_context`, shared by the agent tool and `GET /api/documents/{id}/row-context`; citation Source, Row, Attached and Linked tabs.
+- Review: Previous / Next and swipe through records (`recordStep`), one-page layout on phones.
+
 ## v26.1.16.38 - 30 October 2026
 
 Different models for phones and computers

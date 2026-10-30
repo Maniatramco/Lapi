@@ -1,6 +1,19 @@
 {
-  "version": "26.1.16.38",
+  "version": "26.1.16.39",
   "releases": [
+    {
+      "version": "26.1.16.39",
+      "date": "2026-10-30",
+      "title": "Phones: Agent and Quick Extract",
+      "changes": [
+        "Phones now open on Lapi Agent with two tabs, Agent and Quick Extract. The Dashboard is no longer shown on phones; More stays for people with other screens.",
+        "Quick Extract goes straight to pulling out data from your documents.",
+        "On phones, a short status line replaces the floating progress card, and the chat box takes less room.",
+        "Calculated answers lead with the number and show how your question was read, taken from the calculation that ran.",
+        "Spreadsheet sources open with Source, Row, Attached and Linked tabs, and amounts that disagree are flagged.",
+        "Review moves through results one record at a time, with Previous and Next, or a swipe on phones."
+      ]
+    },
     {
       "version": "26.1.16.38",
       "date": "2026-10-30",
