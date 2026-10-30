@@ -8,6 +8,7 @@ import {PromptUploadPreview} from './prompt-upload-preview';
 import {AgentPromptProgress,type PromptProgress} from './agent-prompt-progress';
 import {promptSelections,restoreSavedPrompt,rememberSavedPrompt,rememberAssistantDataset,assistantDatasetPreference} from './agent-prompt-selection';
 import {AgentDocumentFilter} from './agent-document-filter';
+import {useDevice} from './use-device';
 import {documentMention,documentOptionLabel,matchingDocuments,readyDatasetDocuments,eligibleAgentModels} from './agent-document-selection';
 import {agentCommands,agentMention,agentOperation,agentInputIssue,insertAgentCommand,isManageCommand,isStartCommand} from './agent-commands';
 import {guideIntent,guideFor,guidedOperation,type GuideStep,type GuideAction} from './agent-guide';
@@ -94,7 +95,8 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
   setError('');followBottom.current=true;setShowLatest(false);composer.current?.focus();
  };
  const datasetConfig=catalog.datasets.find((d:Entity)=>d.id===dataset);
- const chatModels=eligibleAgentModels(catalog.models,datasetConfig);
+ const device=useDevice();
+ const chatModels=eligibleAgentModels(catalog.models,datasetConfig,device);
  // Resolve the displayed model synchronously: history restoration and catalog effects
  // can settle in different orders after returning from Review. Send uses this same ID.
  const effectivePlanner=chatModels.find((m:Entity)=>m.id===planner)?.id||chatModels.find((m:Entity)=>m.id===datasetConfig?.default_chat_model_id)?.id||chatModels[0]?.id||planner||'';
@@ -548,7 +550,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
     <div className="agent-v2-compose-controls">
      <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json,.xlsx,.csv,.tsv,.png,.jpg,.jpeg,.webp" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>
      <button className="btn icon" aria-label="Attach documents for agent" title="Attach PDF, DOCX, TXT, JSON, spreadsheets (XLSX, CSV, TSV) or images (PNG, JPG, WEBP)" disabled={attachmentsBlocked} onClick={()=>fileInput.current?.click()}><Plus size={21}/></button>
-     <label className="agent-v2-model-control"><span>Agent Model</span><select aria-label="Agent Model" value={effectivePlanner} disabled={Boolean(working)||onboardingBusy||plans.some(active)||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading models…':catalogError?'Models unavailable':'Choose an Agent Model'):'Choose an Agent Model'}</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select>{catalogLoaded.current&&!catalogLoading&&!chatModels.length&&<small className="agent-v2-model-empty">No chat model is on. An administrator can turn one on in Manage workspace › Enabled models.</small>}</label>
+     <label className="agent-v2-model-control"><span>Agent Model</span><select aria-label="Agent Model" value={effectivePlanner} disabled={Boolean(working)||onboardingBusy||plans.some(active)||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading models…':catalogError?'Models unavailable':'Choose an Agent Model'):'Choose an Agent Model'}</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select>{catalogLoaded.current&&!catalogLoading&&!chatModels.length&&<small className="agent-v2-model-empty">{`No chat model is on for ${device==='phone'?'phones':'computers'}. An administrator can turn one on in Manage workspace › Enabled models.`}</small>}</label>
      <div className="agent-v2-send-controls">
       <button className={`btn icon${listening?' primary':''}`} aria-label={listening?'Stop listening':'Speak your request'} title={voiceSupported?'Speech input':'Speech input unavailable in this browser'} disabled={!voiceSupported||Boolean(working)} onClick={toggleMic}><Mic size={20}/></button>
       {working&&answerController.current?<button title="Stop answer" className="btn icon agent-v2-send" aria-label="Stop answer" onClick={()=>answerController.current?.abort()}><Square size={18}/></button>:<button title="Send agent request" className="btn icon agent-v2-send" aria-label="Send agent request" disabled={(!text.trim()&&!files.length)||Boolean(mention||commandMention)||attachmentsBlocked||Boolean(unresolvedJson.length)||Boolean(inputIssue)} onClick={()=>void send()}><ArrowUp size={21}/></button>}

@@ -80,7 +80,7 @@ test('files-only Send proposes an upload; files are never sent before confirmati
 });
 test('file drops outside the chat cannot navigate the page; listeners are removed',()=>{
  const previous=global.window;const listeners=new Map();global.window={addEventListener:(name,handler)=>listeners.set(name,handler),removeEventListener:(name,handler)=>{assert.equal(listeners.get(name),handler);listeners.delete(name);}};
- try{const view=assistant();const cleanup=view.effects[0]();const event=drag();listeners.get('drop')(event);assert.equal(event.prevented,true);const text=drag([],['text/plain']);listeners.get('drop')(text);assert.equal(text.prevented,false);cleanup();assert.equal(listeners.size,0);}finally{global.window=previous;}
+ try{const view=assistant();const cleanup=view.effects.find(fn=>String(fn).includes('drop'))();const event=drag();listeners.get('drop')(event);assert.equal(event.prevented,true);const text=drag([],['text/plain']);listeners.get('drop')(text);assert.equal(text.prevented,false);cleanup();assert.equal(listeners.size,0);}finally{global.window=previous;}
 });
 
 const flush=()=>new Promise(resolve=>setImmediate(resolve));

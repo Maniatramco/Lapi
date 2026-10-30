@@ -12,6 +12,13 @@
 .enabled-models-uses{display:flex;flex-wrap:wrap;gap:6px}
 .enabled-models-uses span{padding:2px 8px;border-radius:9px;background:#eef2f9;color:#334155;font-size:12px;font-weight:600}
 .enabled-models-uses span.is-default{background:#e8f0ff;color:#1e3a8a}
+.enabled-models-devices{display:flex;gap:8px;flex-wrap:wrap}
+.enabled-models-devices button{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border:1px solid #d6e0f3;border-radius:20px;background:#fff;color:#4d5a75;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.enabled-models-devices button[aria-pressed=true]{border-color:#2563eb;background:#e8f0ff;color:#1e3a8a}
+.enabled-models-devices button:disabled{cursor:not-allowed}
+.enabled-models-devices button[aria-pressed=true]:disabled{opacity:1}
+.enabled-models-devices button:focus-visible{outline:3px solid #315de7;outline-offset:2px}
+@media (max-width:640px){.enabled-models-devices button{min-height:44px}}
 .enabled-models-switch{position:relative;flex:none;width:56px;height:44px;padding:0;border:0;background:none;cursor:pointer}
 .enabled-models-switch>span{position:absolute;left:4px;top:8px;width:48px;height:28px;border-radius:14px;background:#cbd5e1;transition:background .15s}
 .enabled-models-switch>span::after{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.3);transition:transform .15s}

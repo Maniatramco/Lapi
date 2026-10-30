@@ -6,6 +6,7 @@ import {AgentRequest,AgentChatAnswer} from './agent-v2-chat';
 import {DatasetChatStatus} from './dataset-chat-status';
 import {readChatStream} from './chat-stream';
 import {eligibleAgentModels} from './agent-document-selection';
+import {useDevice} from './use-device';
 import type {DatasetKnowledgeScope} from './dataset-knowledge-picker';
 import './agent-v2.css';
 
@@ -17,13 +18,14 @@ export type DashboardChatOptions={initialQuestion?:{id:string;text:string}|null;
 export function DatasetKnowledgeChat({api,stream,username,scope,onBusy,onReview,onOpenAgent,catalogRevision=0,initialQuestion,onInitialSent,onAsk,notice,suggestions}:{api:Api;stream:(path:string,body:unknown,signal:AbortSignal)=>Promise<Response>;username:string;scope:DatasetKnowledgeScope;onBusy?:(busy:boolean)=>void;onReview?:(id:string)=>void;onOpenAgent?:()=>void;catalogRevision?:number}&DashboardChatOptions){
  const [catalog,setCatalog]=useState<Entity>({datasets:[],documents:[],models:[]}),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const [model,setModel]=useState(''),[text,setText]=useState(''),[messages,setMessages]=useState<Entity[]>([]),[conversation,setConversation]=useState('');
+ const device=useDevice();
  const [busy,setBusy]=useState(false),[history,setHistory]=useState<Entity[]|null>(null),[attempt,setAttempt]=useState(0),[restoring,setRestoring]=useState(true);
  const controller=useRef<AbortController|null>(null),locked=useRef(false),mounted=useRef(true),thread=useRef<HTMLDivElement>(null);
  const signature=knowledgeScopeKey(scope),login=typeof sessionStorage==='undefined'?'':sessionStorage.getItem(`lapi-agent-v2:${username}-login-session`)||'preview';
  // This storage namespace and these server threads belong only to Dataset Chat.
  const key=`lapi-dataset-chat:${username}:${login}:${signature}`;
  const dataset=scope.datasetIds.length===1?catalog.datasets.find((item:Entity)=>item.id===scope.datasetIds[0]):undefined;
- const models=eligibleAgentModels(catalog.models,dataset),selectedModel=models.find((item:Entity)=>item.id===model)?.id||models.find((item:Entity)=>item.id===dataset?.default_chat_model_id)?.id||models[0]?.id||'';
+ const models=eligibleAgentModels(catalog.models,dataset,device),selectedModel=models.find((item:Entity)=>item.id===model)?.id||models.find((item:Entity)=>item.id===dataset?.default_chat_model_id)?.id||models[0]?.id||'';
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;controller.current?.abort();};},[]);
  useEffect(()=>{onBusy?.(busy);return()=>onBusy?.(false);},[busy,onBusy]);
  useEffect(()=>{let stopped=false;setLoading(true);void api('/dataset-chat/catalog','GET',undefined,undefined,true).then(result=>{if(!stopped){setCatalog(result);setError('');}}).catch(e=>{if(!stopped)setError(e.message);}).finally(()=>{if(!stopped)setLoading(false);});return()=>{stopped=true;};},[api,catalogRevision,attempt]);

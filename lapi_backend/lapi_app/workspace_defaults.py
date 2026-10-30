@@ -481,21 +481,31 @@ class RetryInput(BaseModel):
     allow_external: bool = False
 
 
+DEVICES = ('computer', 'phone')
+
+
 class EnabledInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     enabled: bool
+    # Where the model is offered: phones, computers or both. Omitted keeps the current choice.
+    devices: list[Literal['computer', 'phone']] | None = None
 
 
-def set_enabled(model_id, enabled, actor):
-    """Offer a registered model for new work, or stop offering it, without editing its connection."""
+def set_enabled(model_id, enabled, actor, devices=None):
+    """Offer a registered model for new work (on phones, computers or both), or stop offering it,
+    without editing its connection. Devices decide which pickers list it; they are a product choice."""
     from . import dataset_models as routing
+    if devices is not None:
+        devices = sorted(set(devices))
+        if not devices: raise HTTPException(400, 'Choose phones, computers or both. To stop offering the model, turn it off.')
     with core.document_lock('model-' + model_id):
         record = routing.owned(model_id, actor, 'model')
         data = routing.model_data(record)
         if data.get('archived'): raise HTTPException(409, 'This registration is archived. Switch its replacement model instead.')
         if not enabled: guard_disable(model_id)
-        if data.get('enabled', True) != enabled:
-            record = routing.write_version(record, dict(data, enabled=enabled))
+        changed = dict(data, enabled=enabled, **({'devices': devices} if devices is not None else {}))
+        if changed != data:
+            record = routing.write_version(record, changed)
     return routing.model_public(record)
 
 
@@ -515,7 +525,7 @@ def install(app, auth):
     @app.put('/api/model-registrations/{id}/enabled')
     def switch(id: str, body: EnabledInput, actor=Depends(auth)):
         access.require_admin(actor)
-        return set_enabled(id, body.enabled, actor)
+        return set_enabled(id, body.enabled, actor, body.devices)
 
     @app.get('/api/workspace/knowledge-index')
     def index(actor=Depends(auth)):

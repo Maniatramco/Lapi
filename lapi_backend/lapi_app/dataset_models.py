@@ -99,6 +99,7 @@ def model_public(r):
     ocr_eligible=cloud_ocr.ready(data,{'settings':cfg,'provider_model':data['provider_model']})
     # Parameter history is served by its own endpoint; lists carry the latest change only.
     history=data.pop('parameter_history',None) or []
+    data.setdefault('devices',['computer','phone'])
     data['parameters_updated']={k:history[-1].get(k) for k in ('version','at','author')} if history else None
     data['parameter_version']=len(history)
     return core.representation(r)|data|{'stage_parameters':{} if embedding else copy.deepcopy(cfg.get('stage_parameters') or {}),'ocr_eligible':ocr_eligible,'provider':connection['protocol'] if connection else p,'connection_profile_version':snap['connection_profile_version'],'credential_configured':configured,'connection':copy.deepcopy(connection),'timeout':cfg.get('timeout',runtime_config.get('LAPI_MODEL_REGISTRATION_TIMEOUT')),'context_limit':cfg.get('embedding_context_limit' if embedding else 'context_limit') or runtime_config.get('LAPI_DEFAULT_EMBEDDING_INPUT_TOKENS' if embedding else 'LAPI_DEFAULT_MODEL_CONTEXT_TOKENS'),'max_output_tokens':None if embedding else cfg.get('max_output_tokens') or runtime_config.get('LAPI_DEFAULT_MODEL_OUTPUT_TOKENS'),'extra_parameters':copy.deepcopy(cfg.get('embedding_extra_parameters' if embedding else 'extra_parameters',{}))}
@@ -423,6 +424,7 @@ def install_routes(app,auth,write_profile):
         existing=owned(id,owner,'model')
         if model_data(existing).get('archived'):raise HTTPException(409,'This registration is archived. Edit its replacement model instead.')
         data=validate_model(body,owner,existing)
+        if model_data(existing).get('devices'):data['devices']=model_data(existing)['devices']  # Kept: set in Enabled models.
         if not data.get('enabled',True):
             from . import workspace_defaults
             workspace_defaults.guard_disable(id)

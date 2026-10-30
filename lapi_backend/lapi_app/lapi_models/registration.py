@@ -298,6 +298,8 @@ def save(body, owner, existing=None):
     core.store.put_json(model_ref, {'name': body.name.strip(), 'provider_model': body.provider_model.strip(),
         'connection_profile_id': profile_id, 'connection_profile_version': version, 'capabilities': capabilities, 'enabled': body.enabled,
         'parameter_history': history,
+        # Where it is offered (Enabled models) survives a connection edit.
+        **({'devices': routing.model_data(existing)['devices']} if existing and routing.model_data(existing).get('devices') else {}),
         # Only a version whose connection test passed can become a workspace Default.
         **({'connection_test': {'connection_profile_version': version, 'passed_at': tested['passed_at']}} if tested else {}),
         **({'ocr_test': {'connection_profile_version': version, 'passed_at': ocr_tested['passed_at']}} if ocr_tested else {})})

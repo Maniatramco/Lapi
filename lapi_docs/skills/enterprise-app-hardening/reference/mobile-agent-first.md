@@ -62,3 +62,13 @@ columns, Review), then built as phone-only CSS plus one component, so desktop is
   only `enabled` changed, no connection re-test; `guard_disable` keeps a workspace Default on (409 with
   the reason, and the UI locks that switch and says which Default to change first). Archived
   registrations are refused.
+- Per-device models (after v26.1.16.37): each model stores `devices` (`computer`, `phone`; missing = both),
+  set with the same endpoint (`{"enabled": true, "devices": ["phone"]}`; omitted keeps it, empty is 400) and
+  kept across connection edits (registration save and `PUT /api/models/{id}` copy it over). `model_public`
+  always returns the list. Enabled models shows Phone and Computer toggle chips per model (the last one
+  cannot be released: turn the model off instead). `eligibleAgentModels(models, dataset, device)` filters
+  Lapi Agent, Dataset Knowledge Chat and Quick start by `useDevice()` (640 px, live on resize), so small
+  models serve phones and large ones computers; the dataset Default is used only when it is offered on the
+  device, else the first offered model. Like screens, this is a product choice enforced in the app.
+- Test harness gotcha: the component tests' stand-in React does not call lazy `useState(() => …)`
+  initialisers and finds effects by order or source text; give hooks plain initial values.
