@@ -91,4 +91,17 @@
   html body .shell .agent-welcome-hero h2 { margin: 0; font-size: 1.75rem !important; }
   html body .shell .agent-workspace .agent-v2-welcome .agent-v2-suggestions { flex-wrap: wrap; justify-content: center; overflow: visible; }
   html body .shell .agent-workspace .agent-v2-welcome .agent-v2-suggestions > .btn { min-height: 44px; white-space: normal; }
+
+  /* The page never slides sideways on a touch screen; wide tables scroll inside their own box. */
+  html, html body { max-width: 100%; overflow-x: clip; }
+  html body .shell, html body .shell > main { min-width: 0; max-width: 100%; }
+  /* The opening screen always fits, even on short screens such as an open foldable. */
+  html body .shell .agent-workspace .agent-v2-welcome { min-height: 0; gap: 12px; padding: 8px 12px; }
+  html body .shell .agent-v2-composer { padding-bottom: 2px; }
+  html body .shell .agent-v2-footer { margin-top: 2px; padding: 0; }
+}
+@media (max-height: 640px) and (pointer: coarse) {
+  /* Very short screens: the conversation keeps the room. */
+  html body .shell .agent-v2-footer { display: none; }
+  html body .shell .agent-welcome-hero h2 { font-size: 1.375rem !important; }
 }
