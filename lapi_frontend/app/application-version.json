@@ -8,8 +8,10 @@
       "changes": [
         "At first sign-in Lapi sets you up in a chat: what to call you, a team workspace if you want one, which workspace to use, and your first collection with its type. Answers can be typed, tapped or spoken.",
         "The chat carries on through your first round: say what you want to pull out and Lapi suggests the fields, filled in from your words; change them in words; take a photo or choose files; Lapi asks before reading them, reads, extracts and shows the first results, with Review one tap away.",
+        "Behind the chat, the overall Default chat model reads what you type or say: it fixes typos in your name, understands yes and no in your own words, turns a plain sentence into fields, and asks again kindly when an answer does not fit. Without a chat model the built-in rules still work.",
         "Your personal workspace and the greeting use the name you gave.",
-        "Quick Extract on phones opens straight on your documents, with a scan-style photo tile, the collection as a chip you can change, a reading ring and fields as chips."
+        "Quick Extract on phones opens straight on your documents, with a scan-style photo tile, the collection as a chip you can change, a reading ring and fields as chips.",
+        "In the Agent, when a request needs a prompt template and there is none, Lapi helps on the spot: say what to pull out and it fills in the fields (or reads the document), lets you change them in words, and saves them as the template."
       ]
     },
     {

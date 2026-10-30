@@ -4,6 +4,7 @@ import {ArrowUp,Mic} from 'lucide-react';
 import {AgentLogo} from './agent-logo';
 import {ACCEPT,fieldsToSchema,fileState,openReviewPage,pickFiles,recordCount,resultRows,type Field} from './quick-start-flow';
 import {after,applyChange,cleanName,fieldList,matchType,matchWorkspace,no,prompt,suggestFields,yes,type Quick,type Stage} from './setup-chat-script';
+import {fieldKey} from './quick-start-flow';
 import './setup-chat.css';
 
 type Entity=Record<string,any>;
@@ -71,50 +72,67 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
   move('results');
  };
 
+ /** Fields the model proposed, as the screen's own field records. */
+ const fromModel=(list:any[]|undefined):Field[]=>{const taken:string[]=[];return (list||[]).slice(0,15).map((f:any)=>{const key=fieldKey(String(f.label||''),taken);taken.push(key);return {key,label:String(f.label||'').slice(0,60),type:f.type||'text',description:String(f.description||'').slice(0,240)};}).filter(f=>f.label);};
+ /** What a typed or spoken answer means, read by the Default chat model when there is one. Taps need no reading. */
+ const interpret=async(value:string,tapped:boolean)=>{
+  if(tapped)return null;
+  try{const read=await api('/setup/interpret','POST',{stage,answer:value,options:(said.quick||[]).map((q:Quick)=>q.label),fields:fields.map(f=>f.label),collection_type:collectionType,name},undefined,true);return read&&read.decision&&read.decision!=='rules'?read:null;}catch{return null;}
+ };
  const answer=(raw:string,label?:string)=>{
   const value=raw.trim();if(!value||busy)return;
   say(label||value);setText('');
   void run(async()=>{
+   const read=await interpret(value,Boolean(label));
+   const d=read?.decision;
+   const isYes=d==='yes'||(!d||d==='answer'||d==='unclear')&&yes(value);
+   const isNo=d==='no'||d==='skip'||(!d||d==='answer'||d==='unclear')&&no(value);
+   const unclear=(fallback:string)=>new Error(read?.message||fallback);
    if(stage==='name'){
-    const given=cleanName(value);if(!given)throw new Error("I didn't catch that. What should I call you?");
+    const given=cleanName(read?.name||value);if(!given)throw unclear("I didn't catch that. What should I call you?");
     const saved=await api('/me/preferences','GET',undefined,undefined,true).catch(()=>({}));
     const result=await api('/me/preferences','PUT',{goals:saved?.goals||[],sources:saved?.sources||[],completed:Boolean(saved?.completed),dismissed_next_steps:Boolean(saved?.dismissed_next_steps),name:given});
     setName(result?.name||given);onNamed(result?.name||given);move(after('name',ctx));
    }else if(stage==='team'){
-    if(yes(value))move('team-name');else if(no(value))move(after('team',ctx));else throw new Error('Say yes for a team workspace, or not now.');
+    if(isYes)move('team-name');else if(isNo)move(after('team',ctx));else throw unclear('Say yes for a team workspace, or not now.');
    }else if(stage==='team-name'){
-    const made=await api('/workspaces','POST',{name:value.slice(0,120)});
+    const made=await api('/workspaces','POST',{name:(read?.pick||value).slice(0,120)});
     setTeamName(made.name);onTeamCreated(made);
     tell(`Created ${made.name}. You can add people to it any time from the workspace menu at the top.`);
     move(after('team',{...ctx,workspaces:[...workspaces,made],chosen:false}));
    }else if(stage==='choose'){
-    const picked=matchWorkspace(workspaces,value);if(!picked)throw new Error('Tap one of the workspaces, or say its name.');
+    const picked=matchWorkspace(workspaces,read?.pick||value);if(!picked)throw unclear('Tap one of the workspaces, or say its name.');
     onChoose(picked.id);move(after('choose',{...ctx,current:picked,chosen:true}));
    }else if(stage==='collection'){
-    setCollectionName(value.slice(0,200));move('type');
+    if(d==='skip'||value==='skip'){move(after('type',ctx));return;}
+    setCollectionName((read?.pick||value).slice(0,200));move('type');
    }else if(stage==='type'){
-    const type=matchType(value);setCollectionType(type);
+    const type=d==='skip'?'':matchType(read?.pick||value);setCollectionType(type);
     const made=await api('/datasets','POST',{name:collectionName,description:'',collection_type:type,workspace_id:current?.id||''});
     await api(`/datasets/${encodeURIComponent(made.id)}/migrate-settings`,'POST',{});
     setCollectionId(made.id);onCollectionCreated(made.id);
     tell(`${collectionName} is ready${type?` as a ${type} collection`:''}.`);
     move(after('type',{...ctx,created:true}));
    }else if(stage==='interest'){
-    if(no(value)){setFields([]);move('documents');return;}
-    const suggested=suggestFields(value,collectionType);
-    if(!suggested.fields.length)throw new Error('Tell me the things you want, for example: invoice number, vendor and total.');
+    if(isNo){setFields([]);move('documents');return;}
+    const proposed=fromModel(read?.fields);
+    const suggested=proposed.length?{name:read?.pick||suggestFields(value,collectionType).name,fields:proposed}:suggestFields(value,collectionType);
+    if(!suggested.fields.length)throw unclear('Tell me the things you want, for example: invoice number, vendor and total.');
     setPromptName(suggested.name);setFields(suggested.fields);move('fields');
    }else if(stage==='fields'){
-    if(yes(value))move('documents');else if(/change|edit|no|different/i.test(value))move('change');else{const next=applyChange(fields,value);setFields(next);tell(`Now: ${fieldList(next)}.`);}
+    const proposed=fromModel(read?.fields);
+    if(proposed.length){setFields(proposed);tell(`Now: ${fieldList(proposed)}.`);}
+    else if(isYes)move('documents');else if(d==='change'||/change|edit|no|different/i.test(value))move('change');else{const next=applyChange(fields,value);setFields(next);tell(`Now: ${fieldList(next)}.`);}
    }else if(stage==='change'){
-    const next=applyChange(fields,value);if(!next.length)throw new Error('That would leave nothing to pull out. Name at least one field.');
+    const proposed=fromModel(read?.fields);
+    const next=proposed.length?proposed:applyChange(fields,value);if(!next.length)throw unclear('That would leave nothing to pull out. Name at least one field.');
     setFields(next);move('fields');
    }else if(stage==='documents'){
-    if(value==='camera')camera.current?.click();else if(value==='files')picker.current?.click();else if(no(value))move('done');else throw new Error('Tap Take a photo or Choose files.');
+    if(value==='camera')camera.current?.click();else if(value==='files')picker.current?.click();else if(isNo)move('done');else throw unclear('Tap Take a photo or Choose files.');
    }else if(stage==='consent'){
-    if(value==='more'){move('documents');return;}
-    if(no(value)){setFiles([]);move('documents');return;}
-    if(!yes(value))throw new Error('Say yes to read them, or start over.');
+    if(value==='more'||d==='change'){move('documents');return;}
+    if(isNo){setFiles([]);move('documents');return;}
+    if(!isYes)throw unclear('Say yes to read them, or start over.');
     setProgress('');move('reading');await readAndExtract();
    }else if(stage==='results'){
     if(value==='review'&&extractionId){openReviewPage(extractionId);onDone();}else onDone();

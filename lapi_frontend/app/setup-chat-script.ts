@@ -94,7 +94,7 @@ export function prompt(stage:Stage,ctx:{name:string;workspaces:Entity[];current?
   case 'team':return {text:`Nice to meet you, ${me}. Your own workspace, ${ctx.current?.name||`${me}'s workspace`}, is ready for your documents. Would you also like a team workspace, to share collections with other people?`,quick:[{label:'Yes, a team workspace',value:'yes'},{label:'Not now',value:'no'}]};
   case 'team-name':return {text:'What should the team workspace be called? For example: Finance team.',typing:true};
   case 'choose':return {text:`Which workspace do you want to use${me?`, ${me}`:''}?`,quick:ctx.workspaces.map(w=>({label:w.name,value:w.id}))};
-  case 'collection':return {text:`A collection holds related documents in ${ctx.current?.name||'your workspace'}. What should your first one be called? For example: Invoices 2026.`,typing:true};
+  case 'collection':return {text:`A collection holds related documents in ${ctx.current?.name||'your workspace'}. What should your first one be called? For example: Invoices 2026.`,quick:[{label:'Skip for now',value:'skip'}],typing:true};
   case 'type':return {text:`What kind of documents go in ${ctx.collectionName||'it'}? Pick one or type your own.`,quick:[...COLLECTION_TYPES.map(t=>({label:t,value:t})),{label:'Skip',value:'skip'}],typing:true};
   case 'interest':return {text:`What would you like to pull out of these documents first? Say it in your own words and I'll suggest the fields.`,quick:[...interestSuggestions(ctx.collectionType||''),{label:'Skip for now',value:'skip'}],typing:true};
   case 'fields':return {text:`I'd pull out: ${fieldList(ctx.fields||[])}. Shall I go with these, or change anything?`,quick:[{label:'Looks good',value:'yes'},{label:'Change them',value:'change'}],typing:true};
