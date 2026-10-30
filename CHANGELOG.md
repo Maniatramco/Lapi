@@ -2,6 +2,12 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.42 - 30 October 2026
+
+Signing in starts fresh
+
+- `startFresh` (chat-login-session.ts): a full page load to the site root after password sign-in and sign-out; sign-out clears sessionStorage, including before the Keycloak logout redirect.
+
 ## v26.1.16.41 - 30 October 2026
 
 A calmer Agent

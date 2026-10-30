@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.41",
+  "version": "26.1.16.42",
   "releases": [
+    {
+      "version": "26.1.16.42",
+      "date": "2026-10-30",
+      "title": "Signing in starts fresh",
+      "changes": [
+        "Signing out and signing in with a username and password now reload the page, so you get the latest release and a fresh chat. Saved conversations stay in History.",
+        "Signing out also clears the tab's saved chat data, including for company sign-in."
+      ]
+    },
     {
       "version": "26.1.16.41",
       "date": "2026-10-30",
