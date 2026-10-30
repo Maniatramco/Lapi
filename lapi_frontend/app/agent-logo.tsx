@@ -30,15 +30,17 @@ export function AgentLogo({size=24,label='',variant='agent'}:{size?:number;label
   </g>
  </svg>;
  return <svg {...common}>
-  <defs><linearGradient id="lapi-reader-blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3b82f6"/><stop offset="1" stopColor="#1d4ed8"/></linearGradient></defs>
+  <defs><linearGradient id="lapi-reader-blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3b82f6"/><stop offset="1" stopColor="#1d4ed8"/></linearGradient><linearGradient id="lapi-reader-shine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#ffffff" stopOpacity="0"/><stop offset=".5" stopColor="#ffffff" stopOpacity=".35"/><stop offset="1" stopColor="#ffffff" stopOpacity="0"/></linearGradient><clipPath id="lapi-reader-clip"><rect x="6" y="4" width="52" height="56" rx="14"/></clipPath></defs>
   <g className="lapi-reader">
-   <rect x="6" y="4" width="52" height="56" rx="14" fill="url(#lapi-reader-blue)"/>
+   <g className="lapi-reader-tile"><rect x="6" y="4" width="52" height="56" rx="14" fill="url(#lapi-reader-blue)"/><g clipPath="url(#lapi-reader-clip)"><rect className="lapi-reader-sheen" x="18" y="-4" width="22" height="72" fill="url(#lapi-reader-shine)" transform="skewX(-20)"/></g></g>
    <path d="M19 12H38L47 21V49A3 3 0 0 1 44 52H19A3 3 0 0 1 16 49V15A3 3 0 0 1 19 12Z" fill="#ffffff"/>
    <path d="M38 12V21H47Z" fill="#c7d7fb"/>
    <rect className="lapi-reader-line" x="21" y="20" width="12" height="3" rx="1.5" fill="#c7d7fb"/>
    <rect className="lapi-reader-line" x="21" y="28" width="22" height="3" rx="1.5" fill="#c7d7fb"/>
    <rect className="lapi-reader-line" x="21" y="36" width="18" height="3" rx="1.5" fill="#c7d7fb"/>
    <rect className="lapi-reader-line" x="21" y="44" width="22" height="3" rx="1.5" fill="#c7d7fb"/>
+   <circle className="lapi-reader-ring" cx="50" cy="48" r="7" fill="none" stroke="#fb923c" strokeWidth="1.6"/>
+   <g transform="translate(40 14)"><circle className="lapi-reader-trail" r="4.2" fill="#fdba74"/></g>
    <g transform="translate(40 14)"><path className="lapi-reader-spark" d="M0 -6.5 Q1.5 -1.5 6.5 0 Q1.5 1.5 0 6.5 Q-1.5 1.5 -6.5 0 Q-1.5 -1.5 0 -6.5Z" fill="#fb923c"/></g>
   </g>
  </svg>;
