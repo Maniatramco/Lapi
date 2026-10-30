@@ -15,7 +15,7 @@ type Uploaded={id:string;name:string;state:FileState;error:string};
 const STEP_TITLE:Record<Step,string>={dataset:'Choose where it goes',documents:'Add your documents',processing:'Reading your documents',choose:'What would you like to do?',
  ask:'Ask your first question',prompt:'What should Lapi pull out?',extracting:'Pulling out your data',done:'You did it'};
 // Short names for the step rail on wide screens.
-const STEP_RAIL:Record<Step,string>={dataset:'Dataset',documents:'Documents',processing:'Reading',choose:'Ask or extract',ask:'Ask',prompt:'Fields',extracting:'Results',done:'Done'};
+const STEP_RAIL:Record<Step,string>={dataset:'Workspace',documents:'Documents',processing:'Reading',choose:'Ask or extract',ask:'Ask',prompt:'Fields',extracting:'Results',done:'Done'};
 const POLL_MS=3000,POLL_LIMIT_MS=10*60*1000;
 const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
 
@@ -81,13 +81,13 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
  const next=()=>go(steps[Math.min(position+1,steps.length-1)]);
  const back=()=>go(steps[Math.max(position-1,0)]);
 
- const chooseDataset=()=>run('Creating the dataset…',async()=>{
+ const chooseDataset=()=>run('Creating the workspace…',async()=>{
   if(datasetId==='new'){
-   const name=newName.trim();if(!name)throw new Error('Give the dataset a name.');
+   const name=newName.trim();if(!name)throw new Error('Give the workspace a name.');
    const created=await api('/datasets','POST',{name,description:newDescription.trim()});
    await api(`/datasets/${encodeURIComponent(created.id)}/migrate-settings`,'POST',{});  // Workspace Default models.
    setDatasetId(created.id);onChanged();
-  }else if(!datasetId)throw new Error('Choose a dataset.');
+  }else if(!datasetId)throw new Error('Choose a workspace.');
   next();
  });
  const chooseFiles=(next:File[])=>{setFiles(next);if(!mergeTouched)setMerge(mergeByDefault(next));};
@@ -111,7 +111,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
   const known=(catalog.datasets||[]).find((d:Entity)=>d.id===datasetId)||dataset;
   const models=eligibleAgentModels(catalog.models||[],known,currentDevice());
   const model=models.find((m:Entity)=>m.id===known?.default_chat_model_id)?.id||models[0]?.id;
-  if(!model)throw new Error(`This dataset has no chat model for ${currentDevice()==='phone'?'phones':'computers'} yet. Ask an administrator to turn one on in Manage workspace › Enabled models.`);
+  if(!model)throw new Error(`This workspace has no chat model for ${currentDevice()==='phone'?'phones':'computers'} yet. Ask an administrator to turn one on in Settings › Enabled models.`);
   const reply=await api('/dataset-chat/messages','POST',{text:value,dataset_ids:[datasetId],...(readyIds.length?{document_ids:readyIds}:{}),model_id:model});
   setAnswer(reply.message||null);
  });
@@ -182,24 +182,24 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
    <div className="quick-start-body">
 
     {step==='dataset'&&<>
-     <p className="quick-start-lead">{editor?'Documents always go into a dataset: a shared folder with its own models and people.':'Pick a dataset shared with you to ask about.'}</p>
-     {!choices.length&&!canCreateDataset(isAdmin)?<p className="quick-start-empty">No datasets are shared with you yet. Ask an administrator or a dataset owner to give you access.</p>:
-     <div className="quick-start-options" role="radiogroup" aria-label="Datasets">
+     <p className="quick-start-lead">{editor?'Documents always go into a workspace: a shared folder with its own models and people.':'Pick a workspace shared with you to ask about.'}</p>
+     {!choices.length&&!canCreateDataset(isAdmin)?<p className="quick-start-empty">No workspaces are shared with you yet. Ask an administrator or a workspace owner to give you access.</p>:
+     <div className="quick-start-options" role="radiogroup" aria-label="Workspaces">
       {choices.map(d=><label key={d.id} className={datasetId===d.id?'selected':''}><input type="radio" name="qs-dataset" checked={datasetId===d.id} onChange={()=>setDatasetId(d.id)}/>
        <span><strong>{d.name}</strong><small>{d.description||(d.my_access?`Your access: ${d.my_access}`:'')}</small></span></label>)}
       {canCreateDataset(isAdmin)&&<label className={datasetId==='new'?'selected':''}><input type="radio" name="qs-dataset" checked={datasetId==='new'} onChange={()=>setDatasetId('new')}/>
-       <span><strong><Plus size={15}/> New dataset</strong><small>Uses the workspace's default models</small></span></label>}
+       <span><strong><Plus size={15}/> New workspace</strong><small>Uses the workspace's default models</small></span></label>}
      </div>}
      {datasetId==='new'&&<fieldset className="quick-start-new">
-      <legend>New dataset</legend>
+      <legend>New workspace</legend>
       <label className="quick-start-field">Name<input value={newName} maxLength={200} onChange={e=>setNewName(e.target.value)} disabled={busy}/></label>
       <label className="quick-start-field">Description <small>(optional)</small><textarea rows={2} value={newDescription} maxLength={1000} placeholder="What goes in here, for example: supplier invoices for 2026" onChange={e=>setNewDescription(e.target.value)} disabled={busy}/></label>
      </fieldset>}
-     {!editor&&choices.length>0&&consentBox('qs-consent-ask-viewer',aiConsent,setAiConsent,'Let Lapi send my questions and the matching document text to the AI model set up for this dataset.')}
+     {!editor&&choices.length>0&&consentBox('qs-consent-ask-viewer',aiConsent,setAiConsent,'Let Lapi send my questions and the matching document text to the AI model set up for this workspace.')}
     </>}
 
     {step==='documents'&&<>
-     <p className="quick-start-lead">Into <strong>{dataset?.name||'your dataset'}</strong>. Photos of paper documents work too: Lapi reads them.</p>
+     <p className="quick-start-lead">Into <strong>{dataset?.name||'your workspace'}</strong>. Photos of paper documents work too: Lapi reads them.</p>
      <div className="quick-start-pick">
       <button type="button" onClick={()=>camera.current?.click()} disabled={busy}><Camera size={26}/><span>Take a photo</span></button>
       <button type="button" onClick={()=>picker.current?.click()} disabled={busy}><FileUp size={26}/><span>Choose files</span></button>
@@ -219,7 +219,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
       </div>
       {merge&&<p className="quick-start-note">It is saved as "merged-{files[0].name.replace(/\.[^.]+$/,'')}-{files.length}-files", and keeps each original file and page.</p>}
      </fieldset>}
-     {consentBox('qs-consent-upload',uploadConsent,setUploadConsent,'Let Lapi read and index these documents with the AI services set up for this dataset.')}
+     {consentBox('qs-consent-upload',uploadConsent,setUploadConsent,'Let Lapi read and index these documents with the AI services set up for this workspace.')}
      {cloud.length>0&&<p className="quick-start-alt">Your files are in cloud storage? <a href={'#'+encodeURIComponent('Add knowledge')+'/'+encodeURIComponent(cloud[0])} onClick={onClose}>Connect it with the step-by-step guide</a> instead.</p>}
     </>}
 
@@ -233,8 +233,8 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
     </>}
 
     {step==='choose'&&<>
-     <p className="quick-start-lead">{quickExtract?'This uses':'Both use'} the AI models set up for <strong>{dataset?.name||'this dataset'}</strong>.</p>
-     {consentBox('qs-consent-ai',aiConsent,setAiConsent,'Let Lapi send my question or the document text to the AI model set up for this dataset.')}
+     <p className="quick-start-lead">{quickExtract?'This uses':'Both use'} the AI models set up for <strong>{dataset?.name||'this workspace'}</strong>.</p>
+     {consentBox('qs-consent-ai',aiConsent,setAiConsent,'Let Lapi send my question or the document text to the AI model set up for this workspace.')}
      {quickExtract?<div className="quick-start-paths"><button type="button" onClick={startExtract} disabled={busy}><Table2 size={24}/><span><strong>Continue</strong><small>Lapi suggests the fields from your document; you check them, then it extracts.</small></span></button></div>:<div className="quick-start-paths">
       <button type="button" onClick={startAsk} disabled={busy}><MessageSquare size={24}/><span><strong>Ask a question</strong><small>Get an answer with the sources it came from.</small></span></button>
       <button type="button" onClick={startExtract} disabled={busy}><Table2 size={24}/><span><strong>Pull out data</strong><small>Lapi suggests the fields from your document; you check them, then it extracts.</small></span></button>
@@ -242,8 +242,8 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
     </>}
 
     {step==='ask'&&<>
-     <p className="quick-start-lead">Ask anything about <strong>{dataset?.name||'this dataset'}</strong>. Every answer shows where it came from.</p>
-     {!editor&&!aiConsent&&consentBox('qs-consent-ask',aiConsent,setAiConsent,'Let Lapi send my questions and the matching document text to the AI model set up for this dataset.')}
+     <p className="quick-start-lead">Ask anything about <strong>{dataset?.name||'this workspace'}</strong>. Every answer shows where it came from.</p>
+     {!editor&&!aiConsent&&consentBox('qs-consent-ask',aiConsent,setAiConsent,'Let Lapi send my questions and the matching document text to the AI model set up for this workspace.')}
      {!answer&&<div className="quick-start-chips">{SUGGESTED_QUESTIONS.map(q=><button key={q} type="button" onClick={()=>void ask(q)} disabled={busy}>{q}</button>)}</div>}
      <form className="quick-start-ask" onSubmit={e=>{e.preventDefault();void ask(question);}}>
       <textarea aria-label="Your question" rows={2} value={question} placeholder="Type your question…" maxLength={2000} onChange={e=>setQuestion(e.target.value)} disabled={busy}/>
@@ -305,7 +305,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
 
     {step==='done'&&<>
      <div className="quick-start-celebrate"><Sparkles size={34}/></div>
-     <p className="quick-start-lead">{path==='extract'?'You added documents, let Lapi write an extraction prompt and pulled out your first data.':'You added documents and got your first answer with sources.'} Everything is in <strong>{dataset?.name||'your dataset'}</strong>.</p>
+     <p className="quick-start-lead">{path==='extract'?'You added documents, let Lapi write an extraction prompt and pulled out your first data.':'You added documents and got your first answer with sources.'} Everything is in <strong>{dataset?.name||'your workspace'}</strong>.</p>
      <div className="quick-start-next">
       {path==='extract'?<button type="button" onClick={()=>{if(extraction)openReviewPage(extraction.extraction_id||extraction.id);else onNavigate('Extract');onClose();}}><FileSearch size={18}/><span>Check the results in Review</span></button>
        :<button type="button" onClick={()=>{onClose();onNavigate('Home');}}><MessageSquare size={18}/><span>Keep asking on the Dashboard</span></button>}

@@ -25,7 +25,7 @@ test('activity by person puts you first and counts each person\'s work',()=>{
  assert.deepEqual(people.map(p=>[p.label,p.running,p.failed,p.completed]),[['You',1,0,1],['Another user',1,0,0],['Priya Shah',0,1,0]]);
  assert.equal(jobsByPerson([{status:'completed'}])[0].label,'Unknown');
 });
-test('the job table shows who started each job, its dataset, duration and actions',()=>{
+test('the job table shows who started each job, its workspace, duration and actions',()=>{
  const html=renderToStaticMarkup(React.createElement(JobsBoard,{jobs,documents:[{id:'d',name:'quarterly.txt'}],datasets:[{id:'k',name:'Finance'}],busy:false,formatDate:()=>'today',onRetry(){},onCancel(){},empty:null,now}));
  assert.match(html,/aria-label="Filter jobs"/);assert.match(html,/aria-label="Started by"/);assert.match(html,/aria-label="Activity by person"/);
  assert.match(html,/quarterly.txt/);assert.match(html,/Finance · Indexing|Finance/);assert.match(html,/attempt 2/);assert.match(html,/Interrupted/);

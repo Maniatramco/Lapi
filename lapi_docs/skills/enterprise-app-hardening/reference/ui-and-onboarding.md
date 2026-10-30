@@ -62,3 +62,16 @@ Design as built (Quick start details: `quick-start.md`):
 ## Users & passwords additions
 Auditor role option and read-only directory for Auditors; "My sessions" and "Authenticator app" cards
 (`account-security.tsx`); admin buttons "Sign out everywhere" and "Reset authenticator".
+
+## Renaming a concept people see: "dataset" became "workspace" (Lapi, after v26.1.16.42)
+User's words: everyone must understand it, and first sign-in asks them to create one (`first-workspace.tsx`: only when the
+list has loaded and nothing is active; Admins and Contributors create, others are told to ask; "Not now" lasts the session).
+- Visible text only. Code names, API paths, fields, view ids and old links stay. New hash `#Workspaces`; `#Datasets` still works.
+- Reword existing uses of the new word FIRST ("Manage workspace" to "Settings", "workspace Default" to "overall Default").
+- Use a syntax-aware script (TypeScript AST, Python ast), not search and replace. Even so, it broke a code key inside a
+  cite() argument (`state['dataset']`), which only the full backend suite caught: never rewrite subscript keys.
+- Handle the word before punctuation ("datasets."), test regex literals, and text matching on what people type: accept both words.
+- Assistant prompts: tools keep saying dataset, so instruct the model to say workspace to people.
+- On a shared machine: never `docker ps -q | xargs docker rm`; other projects run there. Filter by your own image or name,
+  and cap test runs (`--cpus`, `--memory`, `-n 2`): heavy parallel runs coincided with Docker Desktop failing.
+

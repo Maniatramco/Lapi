@@ -58,18 +58,18 @@ export type Guidance={primary:NextStep;steps:NextStep[];notes:string[]};
 
 const named=(sources:Source[])=>sources.filter(s=>s!=='not_sure');
 const sourceStep=(source:Source):NextStep=>source==='files'
- ?{kind:'upload',label:'Upload files',detail:'Attach files from this device in Lapi Agent; they are indexed into a dataset.'}
+ ?{kind:'upload',label:'Upload files',detail:'Attach files from this device in Lapi Agent; they are indexed into a workspace.'}
  :{kind:'connect',provider:source,label:`Connect ${CONNECTOR_NAMES[source]}`,detail:`Opens Add knowledge with the step-by-step ${CONNECTOR_NAMES[source]} guide.`};
-const ASK:NextStep={kind:'ask',label:'Ask a question',detail:'Ask across your datasets; answers cite their sources.'};
+const ASK:NextStep={kind:'ask',label:'Ask a question',detail:'Ask across your workspaces; answers cite their sources.'};
 const RESEARCH:NextStep={kind:'research',label:'Compare sources',detail:'Ask Lapi to compare details across your documents.'};
-const AGENT:NextStep={kind:'agent',label:'Open Lapi Agent',detail:'Chat with the agent about your datasets or about Lapi.'};
+const AGENT:NextStep={kind:'agent',label:'Open Lapi Agent',detail:'Chat with the agent about your workspaces or about Lapi.'};
 const EXTRACT:NextStep={kind:'extract',label:'Run an extraction',detail:'Pull fields out of documents, then review them side by side.'};
-const CREATE:NextStep={kind:'create-dataset',label:'Create your first dataset',detail:'A dataset holds documents, models and who can see them.'};
+const CREATE:NextStep={kind:'create-dataset',label:'Create your first workspace',detail:'A workspace holds documents, models and who can see them.'};
 const ADD:NextStep={kind:'add-knowledge',label:'Add knowledge',detail:'Choose a storage provider and follow its guide.'};
 // One guided workflow end to end (quick-start.tsx): dataset → documents → reading → a first answer.
 const QUICK:NextStep={kind:'quick-start',label:'Add documents and ask',detail:'2 minutes: add a photo or files, then ask your first question with sources.'};
-const QUICK_FIRST:NextStep={kind:'quick-start',label:'Create a dataset and add documents',detail:'2 minutes: name it, add a photo or files, then ask your first question.'};
-const QUICK_ASK:NextStep={kind:'quick-start',label:'Ask your first question',detail:'Pick a dataset shared with you and get an answer with its sources.'};
+const QUICK_FIRST:NextStep={kind:'quick-start',label:'Create a workspace and add documents',detail:'2 minutes: name it, add a photo or files, then ask your first question.'};
+const QUICK_ASK:NextStep={kind:'quick-start',label:'Ask your first question',detail:'Pick a workspace shared with you and get an answer with its sources.'};
 
 /** One primary action plus up to three one-tap steps, chosen from the answers and what the person may do.
  * The primary action is always the Quick start, so everyone completes one workflow end to end. */
@@ -82,7 +82,7 @@ export function recommendNextSteps(preferences:Pick<Preferences,'goals'|'sources
  if(access.canAddKnowledge){
   if(access.isAdmin&&access.datasetCount===0){
    add(QUICK_FIRST);
-   notes.push('The quick start creates your first dataset: knowledge is always added into a dataset.');
+   notes.push('The quick start creates your first workspace: knowledge is always added into a workspace.');
   }else add(QUICK);
   if(cloud[0])add(sourceStep(cloud[0]));
   add(goalStep(true));
@@ -91,12 +91,12 @@ export function recommendNextSteps(preferences:Pick<Preferences,'goals'|'sources
  }else{
   if(access.datasetCount===0){
    add(AGENT);
-   notes.push('No datasets are shared with you yet. Ask an administrator to give you access to one.');
+   notes.push('No workspaces are shared with you yet. Ask an administrator to give you access to one.');
   }else{
    add(QUICK_ASK);add(goals.includes('research')?RESEARCH:ASK);add(AGENT);
   }
-  for(const source of sources)notes.push(source==='files'?'Ask a dataset owner or administrator to add your files.':`Ask a dataset owner or administrator to connect ${CONNECTOR_NAMES[source]}.`);
-  if(goals.includes('extract'))notes.push('Extracting fields needs Editor access to a dataset. You can ask for it from a dataset owner.');
+  for(const source of sources)notes.push(source==='files'?'Ask a workspace owner or administrator to add your files.':`Ask a workspace owner or administrator to connect ${CONNECTOR_NAMES[source]}.`);
+  if(goals.includes('extract'))notes.push('Extracting fields needs Editor access to a workspace. You can ask for it from a workspace owner.');
  }
  return {primary:steps[0],steps,notes};
 }

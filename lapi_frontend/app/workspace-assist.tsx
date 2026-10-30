@@ -11,6 +11,7 @@ import './mobile.css';
 import './phone-design.css';
 import {QuickStart} from './quick-start';
 import {PhoneStatus} from './phone-status';
+import {FirstWorkspace,needsFirstWorkspace,WORKSPACE_LATER_KEY} from './first-workspace';
 import {attentionItems,openAttention} from './needs-attention';
 
 type Api=(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;
@@ -19,7 +20,7 @@ type Entity=Record<string,any>;
 export const OPEN_SETUP_EVENT='lapi:open-setup';
 const FOCUSABLE='button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 /** Composers and searches, most specific first; the first visible, enabled one gets focus. */
-const FOCUS_TARGETS=['textarea[aria-label="Message Lapi Agent"]','textarea[aria-label="Message Dataset Knowledge Chat"]','#dashboard-ask-input','main input[type="search"]','main input[aria-label^="Search"]','.workspace-page-actions button[aria-label^="Search"]'];
+const FOCUS_TARGETS=['textarea[aria-label="Message Lapi Agent"]','textarea[aria-label="Message Workspace Knowledge Chat"]','#dashboard-ask-input','main input[type="search"]','main input[aria-label^="Search"]','.workspace-page-actions button[aria-label^="Search"]'];
 const visible=(el:Element|null):el is HTMLElement=>Boolean(el&&(el as HTMLElement).getClientRects().length&&!(el as HTMLButtonElement).disabled&&!el.closest('[hidden],[inert]'));
 function findVisible(selectors:string[]){for(const selector of selectors){const match=Array.from(document.querySelectorAll(selector)).find(visible);if(match)return match as HTMLElement;}return null;}
 /** Wait a few frames for a screen to render after navigation. */
@@ -87,7 +88,7 @@ function SetupSheet({initial,access,onSave,onSkip,onAct,onClose}:{initial:Prefer
    {step===1&&<><p className="setup-lead">Choose one or more. Lapi reads copies; your originals are never changed.</p>
     <div className="setup-choices setup-sources" role="group" aria-label="Where your knowledge is">{SOURCES.map(source=><Choice key={source.id} title={source.title} selected={sources.includes(source.id)} onToggle={()=>setSources(current=>toggleSource(current,source.id))}/>)}</div></>}
    {step===2&&<div className="setup-result">
-    <p className="setup-lead">{access.canAddKnowledge?'Based on your answers, start here:':'You can ask questions in the datasets shared with you.'}</p>
+    <p className="setup-lead">{access.canAddKnowledge?'Based on your answers, start here:':'You can ask questions in the workspaces shared with you.'}</p>
     <button type="button" className="setup-primary-step" data-autofocus onClick={()=>onAct(guidance.primary)}>
      <span className="setup-choice-icon" aria-hidden="true">{(()=>{const Icon=STEP_ICON[guidance.primary.kind]||ArrowRight;return <Icon size={20}/>;})()}</span>
      <span className="setup-choice-text"><strong>{guidance.primary.label}</strong><small>{guidance.primary.detail}</small></span><ArrowRight size={18} aria-hidden="true"/>
@@ -118,13 +119,16 @@ function ShortcutsDialog({onClose}:{onClose:()=>void}){
  </div>;
 }
 
-export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigation,onChanged=()=>undefined,agentOnly=false,onSelectDataset,documents=[],jobs=[]}:{api:Api;user:Entity;view:string;datasets:Entity[];onNavigate:(view:string)=>unknown;onOpenNavigation:()=>void;onChanged?:()=>void;agentOnly?:boolean;onSelectDataset?:(id:string)=>void;documents?:Entity[];jobs?:Entity[]}){
+export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigation,onChanged=()=>undefined,agentOnly=false,onSelectDataset,documents=[],jobs=[],workspacesLoaded=false}:{api:Api;user:Entity;view:string;datasets:Entity[];onNavigate:(view:string)=>unknown;onOpenNavigation:()=>void;onChanged?:()=>void;agentOnly?:boolean;onSelectDataset?:(id:string)=>void;documents?:Entity[];jobs?:Entity[];workspacesLoaded?:boolean}){
  const userId=String(user?.id||user?.username||'');
  const access=accessFor(user,datasets);
  const [preferences,setPreferences]=useState<Preferences|null>(null);
  const [sheetOpen,setSheetOpen]=useState(false),[helpOpen,setHelpOpen]=useState(false),[quickOpen,setQuickOpen]=useState(false),[quickExtract,setQuickExtract]=useState(false);
  const [tourDone,setTourDone]=useState(()=>tourSettledFor()===String(user?.id||''));
  const [announcement,setAnnouncement]=useState(''),[mounted,setMounted]=useState(false);
+ const [workspaceLater,setWorkspaceLater]=useState(false);
+ useEffect(()=>{try{setWorkspaceLater(sessionStorage.getItem(WORKSPACE_LATER_KEY)==='1');}catch{}},[]);
+ const firstWorkspace=needsFirstWorkspace(datasets,workspacesLoaded,workspaceLater)&&tourDone;
  const sequence=useRef<ShortcutState>(INITIAL_STATE),own=useRef<HTMLDivElement>(null);
  const say=useCallback((text:string)=>{setAnnouncement('');requestAnimationFrame(()=>setAnnouncement(text));},[]);
  useEffect(()=>setMounted(true),[]);
@@ -142,7 +146,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   window.addEventListener(TOUR_SETTLED_EVENT,settled);return()=>window.removeEventListener(TOUR_SETTLED_EVENT,settled);
  },[user?.id]);
  // Ask first: after the tour, on the Dashboard, until answered or skipped once.
- useEffect(()=>{if(view==='Home'&&tourDone&&shouldAskSetup(preferences))setSheetOpen(true);},[view,tourDone,preferences]);
+ useEffect(()=>{if(view==='Home'&&tourDone&&!firstWorkspace&&shouldAskSetup(preferences))setSheetOpen(true);},[view,tourDone,preferences,firstWorkspace]);
  useEffect(()=>{const open=()=>{setHelpOpen(false);setSheetOpen(true);};window.addEventListener(OPEN_SETUP_EVENT,open);return()=>window.removeEventListener(OPEN_SETUP_EVENT,open);},[]);
  const [quickFiles,setQuickFiles]=useState<File[]>([]);  // documents attached in the agent before a guided start
  useEffect(()=>{const open=(event:Event)=>{setQuickFiles((event as CustomEvent).detail?.files||[]);setHelpOpen(false);setSheetOpen(false);setQuickOpen(true);};window.addEventListener(OPEN_QUICK_START_EVENT,open);return()=>window.removeEventListener(OPEN_QUICK_START_EVENT,open);},[]);
@@ -162,7 +166,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
  },[view]);
  const ask=useCallback(async(text?:string)=>{
   go('Home');
-  const el=await waitFor(['#dashboard-ask-input','textarea[aria-label="Message Dataset Knowledge Chat"]']);
+  const el=await waitFor(['#dashboard-ask-input','textarea[aria-label="Message Workspace Knowledge Chat"]']);
   if(!el||(el as HTMLTextAreaElement).disabled){go('Lapi agent V2');const agent=await waitFor(['textarea[aria-label="Message Lapi Agent"]']);agent?.focus();if(agent&&text)fill(agent,text);return;}
   el.scrollIntoView?.({block:'center',behavior:'smooth'});el.focus();if(text)fill(el,text);
  },[go]);
@@ -177,7 +181,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   setSheetOpen(false);
   switch(step.kind){
    case 'quick-start':setQuickOpen(true);break;
-   case 'create-dataset':go('Datasets');say('Datasets opened. Create your first dataset here.');break;
+   case 'create-dataset':go('Datasets');say('Workspaces opened. Create your first workspace here.');break;
    case 'connect':window.location.hash=addKnowledgeRoute(step.provider);say(`${step.label}: the step-by-step guide is open.`);break;
    case 'add-knowledge':go('Add knowledge');break;
    case 'extract':go('Extract Data');break;
@@ -204,7 +208,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
    if(!command)return;
    switch(command.type){
     case 'escape':if(helpOpen){event.preventDefault();setHelpOpen(false);}return;
-    case 'pending':say('G: press D for Dashboard, A for Lapi Agent, K for Add knowledge, S for Datasets or U for Users & passwords.');return;
+    case 'pending':say('G: press D for Dashboard, A for Lapi Agent, K for Add knowledge, S for Workspaces or U for Users & passwords.');return;
     case 'help':event.preventDefault();setHelpOpen(open=>!open);return;
     case 'denied':event.preventDefault();say(command.message);return;
     case 'go':event.preventDefault();setHelpOpen(false);go(command.view);say(`${command.label} opened.`);return;
@@ -232,7 +236,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
  const launcher=view==='Home'&&userId?<section className="quick-start-launch" aria-label="Quick start">
   <span className="quick-start-launch-icon" aria-hidden="true"><Sparkles size={22}/></span>
   <div><strong>{access.canAddKnowledge?'Add documents, then ask or pull out data':'Ask your first question'}</strong>
-   <small>{access.canAddKnowledge?'A guided 2-minute workflow: photo or files, then an answer with sources or an AI-written extraction.':'Pick a dataset shared with you and get an answer with its sources.'}</small></div>
+   <small>{access.canAddKnowledge?'A guided 2-minute workflow: photo or files, then an answer with sources or an AI-written extraction.':'Pick a workspace shared with you and get an answer with its sources.'}</small></div>
   <button type="button" className="quick-start-launch-button" onClick={()=>setQuickOpen(true)}>Quick start <ArrowRight size={16} aria-hidden="true"/></button>
  </section>:null;
  const card=view==='Home'&&showNextSteps(preferences)&&guidance?<section className="next-steps-card" aria-labelledby="next-steps-title">
@@ -252,6 +256,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
    {access.canAddKnowledge&&<button type="button" className="tab-bar-item" aria-label="Quick Extract" aria-current={quickExtract?'page':undefined} onClick={()=>{setQuickExtract(true);setQuickOpen(true);}}><Table2 size={22} aria-hidden="true"/><span>Quick Extract</span></button>}
    {!agentOnly&&<button type="button" className="tab-bar-item" aria-label="More pages" aria-haspopup="dialog" aria-controls="workspace-navigation" onClick={onOpenNavigation}><Menu size={22} aria-hidden="true"/><span>More</span></button>}
   </nav>
+  {firstWorkspace&&userId&&<FirstWorkspace api={api} username={user?.username} canCreate={Boolean(user?.is_admin||user?.is_contributor)} onCreated={id=>{onSelectDataset?.(id);onChanged();}} onLater={()=>{try{sessionStorage.setItem(WORKSPACE_LATER_KEY,'1');}catch{}setWorkspaceLater(true);}}/>}
   {sheetOpen&&preferences&&<SetupSheet initial={preferences} access={access} onSave={async answers=>{await save(answers);}} onSkip={skip} onAct={step=>void act(step)} onClose={()=>setSheetOpen(false)}/>}
   {helpOpen&&<ShortcutsDialog onClose={()=>setHelpOpen(false)}/>}
   {quickOpen&&<QuickStart onSelectDataset={onSelectDataset} api={api} user={user} datasets={datasets} sources={preferences?.sources||[]} initialFiles={quickFiles} quickExtract={quickExtract} onClose={()=>{setQuickOpen(false);setQuickFiles([]);setQuickExtract(false);}} onChanged={onChanged} onNavigate={target=>go(target)}/>}

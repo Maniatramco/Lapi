@@ -18,11 +18,11 @@ export function onAttention(handler:(scope:AttentionScope)=>void){
 
 /** Turns a stored failure message into the next step a person can take. */
 export function adviceFor(error:string,kind:'failed'|'reindex'):AttentionItem['advice']{
- if(kind==='reindex')return {text:'The dataset’s embedding or OCR mapping changed after this file was indexed. Reindex it so answers use the current models.',view:'Files & processing',adminOnly:true};
+ if(kind==='reindex')return {text:'The workspace’s embedding or OCR mapping changed after this file was indexed. Reindex it so answers use the current models.',view:'Files & processing',adminOnly:true};
  if(/timed? ?out|timeout/i.test(error))return {text:'The model took too long. Increase its Timeout in Model Registration, then retry.',view:'Model Registration',adminOnly:true};
  if(/context|token|too (large|long)/i.test(error))return {text:'The content did not fit the model’s limits. Raise the context or output limit in Model Registration, or process fewer documents, then retry.',view:'Model Registration',adminOnly:true};
  if(/credential|unauthori[sz]ed|forbidden|api key|401|403|permission/i.test(error))return {text:'The model connection was refused. Check its credentials in Model Registration, then retry.',view:'Model Registration',adminOnly:true};
- if(/embedding|mapping|no model|not mapped/i.test(error))return {text:'The dataset is missing a model for this step. Map it in Model Mapping, then retry.',view:'Model Mapping',adminOnly:true};
+ if(/embedding|mapping|no model|not mapped/i.test(error))return {text:'The workspace is missing a model for this step. Map it in Model Mapping, then retry.',view:'Model Mapping',adminOnly:true};
  if(/storage|not found|missing|bucket|object/i.test(error))return {text:'The original file or its storage could not be read. Check Storage, then retry.',view:'Storage',adminOnly:true};
  return {text:'Retry processing. The original file is preserved, so nothing needs to be uploaded again.'};
 }
@@ -33,7 +33,7 @@ const stageName=(name:string)=>({upload:'Upload',extract:'Read text',ocr:'OCR',i
 
 /** Everything that needs a person: failed or cancelled processing, and files whose index is out of date. */
 export function attentionItems(documents:Entity[],jobs:Entity[],datasets:Entity[],scope:AttentionScope={}):AttentionItem[]{
- const datasetName=(id:string)=>datasets.find(d=>d.id===id)?.name||'Unknown dataset';
+ const datasetName=(id:string)=>datasets.find(d=>d.id===id)?.name||'Unknown workspace';
  const latestJob=(docId:string)=>jobs.filter(job=>(job.document_id||job.target_id)===docId).sort((a,b)=>(b.created_at||0)-(a.created_at||0))[0];
  const items:AttentionItem[]=[];
  for(const doc of documents){
@@ -79,7 +79,7 @@ export function NeedsAttentionDialog({items,isAdmin,busy,onClose,onRetry,onNavig
        {item.advice.view&&!adminBlocked&&<button type="button" className={`btn${retryable?'':' primary'}`} onClick={()=>onNavigate(item.advice.view!)}>Open {item.advice.view}</button>}
        {isAdmin&&item.advice.view!=='Files & processing'&&<button type="button" className="btn" onClick={()=>onNavigate('Files & processing')}>Open Files & processing</button>}
        {item.job&&<button type="button" className="btn" onClick={()=>onNavigate('Jobs & activity')}>View in Jobs</button>}
-       <button type="button" className="btn" onClick={()=>onNavigate('Datasets')}>Open dataset</button>
+       <button type="button" className="btn" onClick={()=>onNavigate('Datasets')}>Open workspace</button>
       </div>
      </article>;})}
    </div>

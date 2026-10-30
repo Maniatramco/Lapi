@@ -106,7 +106,7 @@ def model_public(r):
 
 def dataset_config(r):return configuration(r)
 def mapped_model(dataset,id):
-    if not any(mapping['model_id']==id for mapping in dataset_config(dataset).get('mappings',[])):raise HTTPException(404,'Model is not mapped to this dataset.')
+    if not any(mapping['model_id']==id for mapping in dataset_config(dataset).get('mappings',[])):raise HTTPException(404,'Model is not mapped to this workspace.')
     model=model_record(id)
     if not model or model.kind!='model':raise HTTPException(404,'Mapped model not found.')
     return model
@@ -149,7 +149,7 @@ def dataset_public(r,model_lookup=None):
     return core.representation(r)|{'name':r.name,'description':data.get('description',''),'active':data.get('active',True)}|routing_public(r,model_lookup,data)
 
 def require_active(r):
-    if not dataset_config(r).get('active',True):raise HTTPException(409,'Dataset is inactive. Activate it before starting new uploads, indexing, chat, or extraction.')
+    if not dataset_config(r).get('active',True):raise HTTPException(409,'Workspace is inactive. Activate it before starting new uploads, indexing, chat, or extraction.')
 
 def resolve_model(r,capability,model_id=None):
     """Chat/extraction: explicit choice, dataset override, then workspace Default."""
@@ -174,7 +174,7 @@ def resolve_model(r,capability,model_id=None):
         if len(eligible)!=1:raise HTTPException(409,'Map an enabled '+capability+' model and choose a default, or select one of the mapped models.')
         selected=eligible[0].id
     model=next((m for m in eligible if m.id==selected),None)
-    if not model:raise HTTPException(409,'Selected model is not an enabled, capable mapping for this dataset.')
+    if not model:raise HTTPException(409,'Selected model is not an enabled, capable mapping for this workspace.')
     data=model_data(model);profile=owned(data['connection_profile_id'],model.owner,'config_profile');snap=profile_snapshot(profile,data.get('connection_profile_version'))
     snap.update(model_id=model.id,model_name=model.name,model_version=model.version,provider_model=data['provider_model'],capability=capability)
     if capability=='embedding':
@@ -200,7 +200,7 @@ def _embedding_snapshot(r):
     data=dataset_config(r)
     snap=workspace_defaults.embedding_execution();cfg=snap['settings']
     if data.get('embedding_snapshot') and not workspace_defaults.same_space(data['embedding_snapshot'],snap):
-        raise HTTPException(409,'This dataset still uses another embedding model. Re-apply the workspace Default embedding model in Model Registration to reindex it into the one knowledge index.')
+        raise HTTPException(409,'This workspace still uses another embedding model. Re-apply the workspace Default embedding model in Model Registration to reindex it into the one knowledge index.')
     from .lapi_models import cloud_ocr
     vision=cloud_ocr.dataset_snapshot(r)
     if vision:
@@ -220,7 +220,7 @@ def execution_snapshot(r,capability,model_id=None):
 def _execution_snapshot(r,capability,model_id=None):
     # Activity gates new work only; inspecting existing indexes must remain possible.
     require_active(r)
-    if not routing_public(r)['models_complete']:raise HTTPException(409,'Model Mapping requires an enabled Embedding, Chat, and Extraction selection for this dataset before starting new work.')
+    if not routing_public(r)['models_complete']:raise HTTPException(409,'Model Mapping requires an enabled Embedding, Chat, and Extraction selection for this workspace before starting new work.')
     embedding=embedding_snapshot(r)
     if capability=='embedding':return embedding
     model=resolve_model(r,capability,model_id)
@@ -244,9 +244,9 @@ def documents_scope(owner,dataset_id,ids=None):
     if not dataset_id:
         parents={d.parent_id for d in docs}
         if len(parents)==1 and '' not in parents:dataset_id=next(iter(parents))
-        else:raise HTTPException(400,'Choose one dataset. Existing unassigned documents must be assigned to a dataset first.')
+        else:raise HTTPException(400,'Choose one workspace. Existing unassigned documents must be assigned to a workspace first.')
     r=owned(dataset_id,owner,'knowledge_base')
-    if any(d.parent_id!=r.id for d in docs):raise HTTPException(400,'All selected documents must belong to the selected dataset.')
+    if any(d.parent_id!=r.id for d in docs):raise HTTPException(400,'All selected documents must belong to the selected workspace.')
     if not ids:docs=[d for d in rows(owner,'document') if d.parent_id==r.id]
     return r,docs
 
@@ -355,7 +355,7 @@ def validate_model(body,owner,existing=None):
 
 def save_mappings(r,body):
     from . import workspace_defaults
-    if body.expected_version is not None and body.expected_version!=r.version:raise HTTPException(409,'Dataset mappings changed. Refresh and review the saved mappings before applying your draft.')
+    if body.expected_version is not None and body.expected_version!=r.version:raise HTTPException(409,'Workspace mappings changed. Refresh and review the saved mappings before applying your draft.')
     values=body.model_dump(exclude={'expected_version','acknowledge_reindex'});ids=[m['model_id'] for m in values['mappings']]
     if len(ids)!=len(set(ids)):raise HTTPException(400,'Each model can be mapped only once.')
     for id in ids:owned(id,r.owner,'model')
@@ -376,17 +376,17 @@ def save_mappings(r,body):
         if not id:
             # No dataset override: the workspace Default answers or extracts.
             if workspace_model_ready(defaults[capability],capability):continue
-            raise HTTPException(400,'Choose Chat and Extraction models for this dataset, or set workspace Defaults in Model Registration.')
+            raise HTTPException(400,'Choose Chat and Extraction models for this workspace, or set workspace Defaults in Model Registration.')
         workspace=id==defaults[capability] and workspace_model_ready(id,capability)
         if not workspace and (id not in eligible or capability not in eligible[id]['capabilities']):raise HTTPException(400,'The '+capability+' default must be an enabled mapped model with that capability.')
         selected=model_record(id) if workspace else owned(id,r.owner,'model');md=model_data(selected);cfg=profile_snapshot(owned(md['connection_profile_id'],selected.owner,'config_profile'),md.get('connection_profile_version'))['settings']
         try:core.enforce_local_only(cfg)
         except ValueError as exc:raise HTTPException(409,str(exc)) from exc
     selected_ocr=values['ocr_model_id']
-    if selected_ocr=='local':raise HTTPException(400,'Dataset OCR requires a cloud OpenAI or Gemini vision model. Local OCR is not selectable.')
+    if selected_ocr=='local':raise HTTPException(400,'Workspace OCR requires a cloud OpenAI or Gemini vision model. Local OCR is not selectable.')
     if selected_ocr not in (None,'local'):
         workspace_ocr=selected_ocr==defaults['ocr'] and workspace_model_ready(selected_ocr,'ocr')
-        if selected_ocr not in eligible and not workspace_ocr:raise HTTPException(400,'The OCR model must be enabled and mapped to this dataset, or be the workspace OCR Default.')
+        if selected_ocr not in eligible and not workspace_ocr:raise HTTPException(400,'The OCR model must be enabled and mapped to this workspace, or be the workspace OCR Default.')
         selected=model_record(selected_ocr) if workspace_ocr else owned(selected_ocr,r.owner,'model');public=model_public(selected)
         if not public.get('ocr_eligible'):raise HTTPException(400,'Choose an OpenAI or Gemini model ticked for OCR whose Test connection passed, or gpt-4o, gpt-4o-mini or a Gemini extraction model. Embedding models cannot read images.')
         md=model_data(selected);ocr_cfg=profile_snapshot(owned(md['connection_profile_id'],selected.owner,'config_profile'),md.get('connection_profile_version'))['settings']
@@ -401,7 +401,7 @@ def save_mappings(r,body):
     elif requested and requested!=pinned['model_id']:
         candidate=owned(requested,r.owner,'model')
         if candidate.kind!='model' or 'embedding' not in model_data(candidate).get('capabilities',[]) or not workspace_defaults.same_space(workspace_defaults.pin_embedding(candidate),pinned['snapshot']):
-            raise HTTPException(400,'Datasets use the workspace Default embedding model. Choose another Default in Model Registration to change it; the knowledge index is then deleted and rebuilt.')
+            raise HTTPException(400,'Workspaces use the workspace Default embedding model. Choose another Default in Model Registration to change it; the knowledge index is then deleted and rebuilt.')
     embedding=copy.deepcopy(pinned['snapshot'])
     data['embedding_model_id']=pinned['model_id'];data['embedding_snapshot']=embedding
     previous=old.get('embedding_snapshot')
@@ -447,7 +447,7 @@ def install_routes(app,auth,write_profile):
         """Rename or describe a dataset; models, documents, prompts and access are unchanged."""
         access.require_level(owner,id,'owner')
         name=body.name.strip()
-        if not name:raise HTTPException(422,'Enter a dataset name.')
+        if not name:raise HTTPException(422,'Enter a workspace name.')
         with core.document_lock('dataset-'+id):
             r=owned(id,owner,'knowledge_base');r=write_version(r,dataset_config(r)|{'name':name,'description':body.description.strip()})
             with core.Session.begin() as s:s.get(core.Record,id).name=name
@@ -467,7 +467,7 @@ def install_routes(app,auth,write_profile):
         with core.document_lock('dataset-'+id):
             r=owned(id,owner,'knowledge_base')
             actor,owner=owner,r.owner
-            if dataset_config(r).get('mappings'):raise HTTPException(409,'Dataset already has model mappings; update them explicitly.')
+            if dataset_config(r).get('mappings'):raise HTTPException(409,'Workspace already has model mappings; update them explicitly.')
             # With workspace Defaults chosen in Model Registration, a new dataset uses them as they
             # are. Importing the legacy settings would create models owned by the caller (for a
             # Contributor: private copies whose embedding clashes with the workspace Default).
@@ -477,7 +477,7 @@ def install_routes(app,auth,write_profile):
                 return dataset_public(save_mappings(r,MappingInput()))
             # Choosing and registering models is the administrator's job.
             if access.request_actor.get() is not None and not core.is_administrator(actor):
-                raise HTTPException(409,'An administrator needs to choose the Default Chat, Extraction and Embedding models in Model Registration before new datasets can be created.')
+                raise HTTPException(409,'An administrator needs to choose the Default Chat, Extraction and Embedding models in Model Registration before new workspaces can be created.')
             cfg=core.settings()
             generation=cfg.get('oci_model') if cfg['model_provider']=='oci' else cfg['model']
             generation=generation or 'mock-generation'
@@ -495,7 +495,7 @@ def install_routes(app,auth,write_profile):
     @app.post('/api/datasets/{id}/assign-documents')
     def assign(id:str,body:AssignInput,owner=Depends(auth)):
         owned(id,owner,'knowledge_base');docs=[owned(did,owner,'document') for did in body.document_ids]
-        if any(d.parent_id and d.parent_id!=id for d in docs):raise HTTPException(400,'Only unassigned legacy documents can be assigned; moving existing datasets is unsupported.')
+        if any(d.parent_id and d.parent_id!=id for d in docs):raise HTTPException(400,'Only unassigned legacy documents can be assigned; moving existing workspaces is unsupported.')
         with core.Session.begin() as s:
             if s.scalar(select(core.Job).where(core.Job.target_id.in_(body.document_ids),core.Job.status.in_(['queued','running']))):raise HTTPException(409,'Wait for or cancel active jobs before assigning documents.')
             for d in docs:s.get(core.Record,d.id).parent_id=id

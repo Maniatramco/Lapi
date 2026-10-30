@@ -28,7 +28,7 @@ test('a model is offered on phones, computers or both, and keeps at least one',(
  assert.deepEqual(toggleDevice(['phone'],'phone'),['phone']);
 });
 
-test('a workspace Default is named so it cannot be switched off by mistake',()=>{
+test('a overall Default is named so it cannot be switched off by mistake',()=>{
  const defaults={chat_model_id:'b',extraction_model_id:'b',embedding_model_id:'e',ocr_model_id:null};
  assert.deepEqual(defaultRoles(models[2],defaults),['Chat','Extraction']);
  assert.deepEqual(defaultRoles(models[0],defaults),['Embedding']);

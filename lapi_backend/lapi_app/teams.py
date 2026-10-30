@@ -84,7 +84,7 @@ def team_rows(session):
 def _existing_datasets(session, ids):
     found = set(session.scalars(select(relational.Dataset.dataset_id).where(relational.Dataset.dataset_id.in_(list(ids))))) if ids else set()
     if found != set(ids):
-        raise HTTPException(404, 'One or more datasets no longer exist. Nothing changed.')
+        raise HTTPException(404, 'One or more workspaces no longer exist. Nothing changed.')
 
 
 def _team(session, team_id):
@@ -187,7 +187,7 @@ def install(app, auth):
             if found != people:
                 raise HTTPException(404, 'One or more people no longer exist. Nothing changed.')
             if any(core.is_administrator(user_id, session) for user_id in people):
-                raise HTTPException(400, 'Administrators always have access to every dataset.')
+                raise HTTPException(400, 'Administrators always have access to every workspace.')
             for team_id in body.teams:
                 _team(session, team_id)
             grants = {row.user_id: row for row in session.scalars(select(relational.UserDataset).where(relational.UserDataset.dataset_id == id))}

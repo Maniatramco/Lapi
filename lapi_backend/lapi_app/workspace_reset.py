@@ -184,7 +184,7 @@ def install(app,auth):
         access.require_admin(actor)
         if body.confirmation!='RESTORE':raise HTTPException(400,'Type RESTORE to restore this archive.')
         with core.document_lock('workspace-reset'):
-            if catalog()['counts']:raise HTTPException(409,'Archive the current datasets before restoring an earlier workspace.')
+            if catalog()['counts']:raise HTTPException(409,'Archive the current workspaces before restoring an earlier workspace.')
             core.local_store.put_json(FLAG,{'active':True})
             try:return _restore(id)
             except (ValueError,FileNotFoundError):raise HTTPException(400,'Archive is unavailable or failed its integrity check.') from None

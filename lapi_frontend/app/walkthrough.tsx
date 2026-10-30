@@ -68,7 +68,7 @@ const MODELS = [["Chat", "answers questions"], ["Extraction", "fills fields"], [
 function Unify() {
   return <div className="wt-scene wt-unify">
     <div className="wt-panel wt-dataset wt-in-left" {...at(0.2)}>
-      <span className="wt-panel-head"><FolderOpen size={15} aria-hidden="true" />Contracts dataset</span>
+      <span className="wt-panel-head"><FolderOpen size={15} aria-hidden="true" />Contracts workspace</span>
       <ul className="wt-docs">{DOCS.map((doc, i) => <li key={doc.name} className="wt-in-up" {...at(0.8 + i * 0.6)}>
         <span className="wt-doc-name">{doc.ocr ? <ScanText size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}{doc.name}{doc.ocr && <em className="wt-ocr">OCR<i className="wt-scanline" aria-hidden="true" /></em>}</span>
         <span className="wt-bar" aria-hidden="true"><i style={{ ["--d" as string]: `${1.4 + i * 1.3}s` }} /></span>
@@ -76,7 +76,7 @@ function Unify() {
       </li>)}</ul>
     </div>
     <div className="wt-panel wt-models wt-in-right" {...at(4.5)}>
-      <span className="wt-panel-head"><Sparkles size={15} aria-hidden="true" />Workspace models</span>
+      <span className="wt-panel-head"><Sparkles size={15} aria-hidden="true" />Default models</span>
       <ul>{MODELS.map(([name, role], i) => <li key={name} className="wt-in-up" {...at(5.4 + i * 0.9)}><strong>{name}</strong><span>{role}</span><CheckCircle2 size={14} aria-hidden="true" className="wt-tick" style={{ ["--d" as string]: `${5.9 + i * 0.9}s` }} /></li>)}</ul>
     </div>
   </div>;
@@ -143,7 +143,7 @@ function Skills() {
 function Secure({ endCard }: { endCard: ReactNode }) {
   const items = [
     { icon: KeyRound, title: "Single sign-on", text: "Sign in once with Keycloak" },
-    { icon: Users, title: "Access per dataset", text: "Viewer, Editor or Owner roles, checked by OpenFGA" },
+    { icon: Users, title: "Access per workspace", text: "Viewer, Editor or Owner roles, checked by OpenFGA" },
     { icon: Activity, title: "Activity audit", text: "Every change is recorded" },
   ];
   return <div className="wt-scene wt-secure">

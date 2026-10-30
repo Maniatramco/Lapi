@@ -16,7 +16,7 @@ export type Access='admin'|Level|'none';
 
 export const LEVELS:Level[]=['viewer','editor','owner'];
 export const LEVEL_LABEL:Record<Level,string>={viewer:'Viewer',editor:'Editor',owner:'Owner'};
-export const LEVEL_HELP:Record<Level,string>={viewer:'Chat and read results',editor:'Also upload, extract and review',owner:'Also manage the dataset and its members'};
+export const LEVEL_HELP:Record<Level,string>={viewer:'Chat and read results',editor:'Also upload, extract and review',owner:'Also manage the workspace and its members'};
 const RANK:Record<string,number>={none:0,viewer:1,editor:2,owner:3,admin:4};
 
 /** Saved direct grants of a person; older servers sent only dataset_ids (Viewer). */
@@ -116,7 +116,7 @@ export function differenceText(kind:ReturnType<typeof openfgaDifference>){
 
 export function openfgaSummary(status:OpenFgaStatus){
  if(!status.enabled)return {tone:'info',title:'OpenFGA is off',text:'Lapi checks the saved access in its own database.'};
- if(status.reachable===false)return {tone:'error',title:'OpenFGA is not answering',text:'Lapi refuses dataset access until OpenFGA is back. Saved access is kept and reloaded into OpenFGA when it returns.'};
+ if(status.reachable===false)return {tone:'error',title:'OpenFGA is not answering',text:'Lapi refuses workspace access until OpenFGA is back. Saved access is kept and reloaded into OpenFGA when it returns.'};
  if(status.differences)return {tone:'warn',title:`OpenFGA answers differently for ${status.differences} ${status.differences===1?'person':'people'}`,text:'Marked with ! below. Lapi reloads OpenFGA from the saved access when either restarts; saving that person again also fixes it.'};
  return {tone:'ok',title:'OpenFGA agrees with all saved access',text:'Every permission check is answered by OpenFGA, and its answers match what is saved here.'};
 }

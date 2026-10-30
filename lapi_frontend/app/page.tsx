@@ -122,8 +122,8 @@ const sections: { name: View; icon: typeof Shield; group?: string }[] = [
   { name: "Add knowledge", icon: CloudUpload },
 ];
 // Keep saved route identifiers compatible while presenting the product names.
-const viewLabel = (name: View) => name === "Home" ? "Dashboard" : name === "Lapi agent V2" ? "Lapi Agent" : name === "Extract" ? "Review" : name === "Extract Data" ? "Extract" : name;
-const viewRoute = (name: View) => name === "Extract Data" ? "Extract Data" : viewLabel(name);
+const viewLabel = (name: View) => name === "Datasets" ? "Workspaces" : name === "Home" ? "Dashboard" : name === "Lapi agent V2" ? "Lapi Agent" : name === "Extract" ? "Review" : name === "Extract Data" ? "Extract" : name;
+const viewRoute = (name: View) => name === "Extract Data" ? "Extract Data" : name === "Datasets" ? "Workspaces" : viewLabel(name);
 type ReviewReturn = {view: View; datasetId: string; agentTab: string; extractionTab: string};
 const date = (v: string | number) =>
   v
@@ -321,6 +321,7 @@ export default function App() {
   const uploadRevision = useRef(0);
   const [kbs, setKbs] = useState<Entity[]>([]);
   const [kb, setKb] = useState("");
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
   const [jobs, setJobs] = useState<Entity[]>([]);
   const [attention, setAttention] = useState<AttentionScope | null>(null);
   useEffect(() => onAttention(scope => setAttention(scope)), []);
@@ -378,7 +379,7 @@ export default function App() {
       const section=({overview:'workspace summary',jobs:'workflow status',settings:'workspace settings',conversations:'chats',models:'available models',templates:'prompt templates'} as Record<string,string>)[resource]||resource.replaceAll('-',' ');
       const testingModel=path==='/model-registrations/test';
       const planningAgent=path==='/agent-v2/plans'&&method==='POST';
-      const label=path==='/templates/validate'?'Validating prompt JSON…':path.startsWith('/temporary-chat/')?(path==='/temporary-chat/messages'?'Answering from the temporary document…':method==='DELETE'?'Clearing temporary document…':body instanceof FormData?'Reading temporary document…':'Loading temporary document…'):testingModel?'Testing model connection…':path.startsWith('/datasets/')&&path.endsWith('/models')&&method==='PUT'?'Applying dataset model mappings…':`${method==='GET'?'Loading':method==='POST'&&body instanceof FormData?'Uploading':'Saving'} ${section}…`;
+      const label=path==='/templates/validate'?'Validating prompt JSON…':path.startsWith('/temporary-chat/')?(path==='/temporary-chat/messages'?'Answering from the temporary document…':method==='DELETE'?'Clearing temporary document…':body instanceof FormData?'Reading temporary document…':'Loading temporary document…'):testingModel?'Testing model connection…':path.startsWith('/datasets/')&&path.endsWith('/models')&&method==='PUT'?'Applying workspace model mappings…':`${method==='GET'?'Loading':method==='POST'&&body instanceof FormData?'Uploading':'Saving'} ${section}…`;
       if(!quiet)setRequests(previous=>[...previous,{id:requestId,label}]);
       const timeout=AbortSignal.timeout(planningAgent?630000:testingModel?Math.min(630000,(Number((body as Entity)?.timeout)||60)*1000+30000):method==='GET'?30000:120000);
       try {
@@ -481,14 +482,14 @@ export default function App() {
     const list=(value:Entity|Entity[],key:string)=>Array.isArray(value)?value:value[key]||[];
     const tasks:[string,(value:any)=>void][]=[
       ['/documents',value=>{if(revision===uploadRevision.current)setDocs(list(value,'documents'));setDocumentPollError(false);}],
-      ['/datasets',value=>setKbs(list(value,'datasets'))],['/jobs',value=>{if(revision===uploadRevision.current)setJobs(list(value,'jobs'));}],
+      ['/datasets',value=>{setKbs(list(value,'datasets'));setWorkspacesLoaded(true);}],['/jobs',value=>{if(revision===uploadRevision.current)setJobs(list(value,'jobs'));}],
       ['/settings',setSettings],['/templates',value=>setTemplates(list(value,'templates'))],
       ['/extractions',value=>setExtractions(list(value,'extractions'))],
       ['/models',value=>setModels(list(value,'models'))],
     ];
     Promise.allSettled(tasks.map(async([path,update])=>{
       try {const value=await api(path,'GET',undefined,controller.signal,true);if(active)update(value);}
-      catch(error){if(active)setError(error instanceof Error?error.message:'Could not refresh workspace.');}
+      catch(error){if(active)setError(error instanceof Error?error.message:'Could not refresh.');}
     })).finally(()=>{if(active)setLoading(false);});
     return () => {
       active = false;
@@ -601,7 +602,7 @@ export default function App() {
     let route: string;
     try { route = decodeURIComponent(hash.slice(1)); } catch { route = "Home"; }
     if (["connections","services & migration"].includes(route.toLowerCase())) {route="Storage";window.history.replaceState(null,"","#Storage");}
-    if (route.toLowerCase()==="onboard dataset") {route="Datasets";window.history.replaceState(null,"","#Datasets");}
+    if (["onboard dataset","workspaces","datasets"].includes(route.toLowerCase())) {route="Datasets";window.history.replaceState(null,"","#Workspaces");}
     if (["dashboard","home"].includes(route.toLowerCase())) {route="Home";window.history.replaceState(null,"","#Dashboard");}
     if (["setup","api documentation","adp documentation","index inspector"].includes(route.toLowerCase())) {
       route = "Home";
@@ -671,7 +672,7 @@ export default function App() {
   const chooseTemplate = (id: string) => setTemplateId(id);
   const extract = () =>
     run(async () => {
-      if (!kb || !selectedExtractModel) throw new Error("Choose a dataset and an eligible extraction model.");
+      if (!kb || !selectedExtractModel) throw new Error("Choose a workspace and an eligible extraction model.");
       if (!scope.length || !templateId)
         throw new Error("Select at least one document and a template.");
       if (extractionNeedsConsent && !externalExtract)
@@ -709,13 +710,13 @@ export default function App() {
         ))
       ) : (
         <p className="small muted">
-          {kb ? "Add documents to this dataset first." : "Choose a dataset to see its documents."}
+          {kb ? "Add documents to this workspace first." : "Choose a workspace to see its documents."}
         </p>
       )}
     </div>
   );
-  const externalNotice = (model: Entity | undefined) => `I approve sending this extraction request and selected document content to ${modelLabel(model)} (${model?.provider || 'model provider'}), using the dataset’s configured embedding and retrieval providers. External API usage is billed separately.`;
-  const datasetSelect = (label: string) => <select aria-label={label} value={kb} onChange={e => changeDataset(e.target.value)}><option value="">Choose a dataset</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>;
+  const externalNotice = (model: Entity | undefined) => `I approve sending this extraction request and selected document content to ${modelLabel(model)} (${model?.provider || 'model provider'}), using the workspace’s configured embedding and retrieval providers. External API usage is billed separately.`;
+  const datasetSelect = (label: string) => <select aria-label={label} value={kb} onChange={e => changeDataset(e.target.value)}><option value="">Choose a workspace</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>;
   const configureDataset = () => { navigate("Model Mapping"); };
 
   if (!authChecked)
@@ -728,7 +729,7 @@ export default function App() {
     return (
       <SignInLayout>
           <h1 id="login-heading" className="screen-heading">Welcome back</h1>
-          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : keycloak && providers.length > 0 ? "Choose how you want to sign in." : keycloak ? "Sign in with your work account." : "Sign in to your workspace."}</p>
+          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : keycloak && providers.length > 0 ? "Choose how you want to sign in." : keycloak ? "Sign in with your work account." : "Sign in to Lapi."}</p>
           {setupRequired && <div className="login-setup-notice" role="status">No administrator exists yet. Create one on the server with <code>lapi_local_use/lapi_scripts/create-admin.sh</code>, then sign in here.</div>}
           {error && <div className="login-error" role="alert"><AlertCircle size={18} aria-hidden="true" /><span>{error}</span></div>}
           {keycloak && providers.length > 0 && <div className="login-providers">
@@ -793,7 +794,7 @@ export default function App() {
   return (
     <>
       {drawerOpen && <div className="navigation-backdrop" aria-hidden="true" onClick={() => setMobile(false)} />}
-      <aside id="workspace-navigation" ref={navigationRef} className={`sidebar ${view === 'Lapi agent V2' || view === 'Home' ? 'agent-navigation-drawer' : ''} ${drawerOpen ? "open" : ""}`} role={drawerOpen ? "dialog" : undefined} aria-modal={drawerOpen ? true : undefined} aria-label="Workspace navigation" inert={navigationIsDrawer && !drawerOpen}>
+      <aside id="workspace-navigation" ref={navigationRef} className={`sidebar ${view === 'Lapi agent V2' || view === 'Home' ? 'agent-navigation-drawer' : ''} ${drawerOpen ? "open" : ""}`} role={drawerOpen ? "dialog" : undefined} aria-modal={drawerOpen ? true : undefined} aria-label="App navigation" inert={navigationIsDrawer && !drawerOpen}>
         <button title="Close navigation"
           className="btn icon mobile-close"
           onClick={() => setMobile(false)}
@@ -813,7 +814,7 @@ export default function App() {
         <div className="nav-footer">
           <div className="row" style={{ marginBottom: 9 }}>
             <Server size={14} />
-            <span>Private workspace</span>
+            <span>Private</span>
           </div>
           Originals protected. Insights grounded.
         </div>
@@ -831,7 +832,7 @@ export default function App() {
             >
               <Menu size={17} />
             </button>
-            <img className="header-logo" src="/lapi-mark.svg" alt="Lapi" width={40} height={40} /><span className="crumb-workspace">Workspace</span>
+            <img className="header-logo" src="/lapi-mark.svg" alt="Lapi" width={40} height={40} /><span className="crumb-workspace">Lapi</span>
             <ChevronRight size={13} />
             <h1 className="workspace-title">{viewLabel(view)}</h1>
           </div>
@@ -843,8 +844,8 @@ export default function App() {
                 className="btn icon"
                 onClick={reload}
                 disabled={loading}
-                aria-label="Refresh workspace"
-                title="Refresh workspace"
+                aria-label="Refresh"
+                title="Refresh"
               >
                 <RefreshCw
                   size={14}
@@ -854,7 +855,7 @@ export default function App() {
             </div>}
             <span className="pill">
               <span className="dot" />
-              Private workspace
+              Private
             </span>
             <div className="avatar" title={user.username}>
               {(user.username || "A").slice(0, 2).toUpperCase()}
@@ -895,7 +896,7 @@ export default function App() {
               </button>
             </Notice>
           )}
-          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs}/>
+          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs} workspacesLoaded={workspacesLoaded}/>
           {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin||user.is_contributor)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
           {view === "About" && <AboutLapi/>}
           <WalkthroughGate api={api} active={view === "Home"} userId={user.id as string | undefined}/>
@@ -905,7 +906,7 @@ export default function App() {
           {view === "Token usage" && (user.is_admin?<TokenUsageAdmin api={api}/>:<div className="panel" role="alert">Administrator access is required to view token usage.</div>)}
           {view === "Access map" && (user.is_admin||(user as {is_auditor?:boolean}).is_auditor?<AccessMap api={api}/>:<div className="panel" role="alert">Administrator or Auditor access is required to view the access map.</div>)}
           {view === "Users & passwords" && <UserManagement api={api} keycloak={keycloak} user={user as {id:string;username:string;is_admin?:boolean;is_auditor?:boolean;sign_in?:string}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
-          {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This dataset is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
+          {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This workspace is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
           {view === "Datasets" && <DatasetWorkspace directorySearch={directorySearch} onClearDirectorySearch={()=>setDirectorySearch('')} onDirectoryVisibilityChange={setDatasetDirectoryVisible} canManage={Boolean(user.is_admin||user.is_contributor)} datasets={kbs} models={models} documents={docs}
             storageKey={`lapi-new-dataset:${user.id}`} defaults={selectedDataset} onSelect={changeDataset} onCreated={d=>{setKbs(current=>[...current.filter(item=>item.id!==d.id),d]);changeDataset(d.id);}}
             api={api} reload={reload} notify={notify} onUse={navigate}/>
@@ -930,7 +931,7 @@ export default function App() {
                     Select a prompt template and documents. Review extracted values and
                     their evidence.
                   </p>
-                  <Field label="Dataset">{datasetSelect("Extraction dataset")}</Field>
+                  <Field label="Workspace">{datasetSelect("Extraction workspace")}</Field>
                   <ModelPicker dataset={selectedDataset} capability="extraction" value={extractModelId} onChange={setExtractModelId} onConfigure={configureDataset} />
                   <Field label="Prompt template">
                     <select
@@ -977,15 +978,15 @@ export default function App() {
           )}
           {view === "Model Registration" && <ModelRegistration models={models} settings={settings} api={api} run={run} busy={busy}
             onSaved={model => { setModels(current => current.some(m => m.id === model.id) ? current.map(m => m.id === model.id ? model : m) : [model, ...current]); notify("Model saved. New runs use the updated connection; re-apply an edited Default embedding model to rebuild the knowledge index."); reload(); }}
-            onDefaultsChanged={() => { notify("Workspace Default saved."); reload(); }}
+            onDefaultsChanged={() => { notify("Overall Default saved."); reload(); }}
             onMapping={() => navigate("Model Mapping")} />}
           {view === "Enabled models" && <EnabledModels models={models} api={api} onRegistration={() => navigate("Model Registration")}
             onChanged={model => { setModels(current => current.map(m => m.id === model.id ? model : m)); notify(`${model.name} is ${model.enabled === false ? "off" : "on"}.`); reload(); }} />}
           {view === "Model Mapping" && <section className="panel model-mapping-screen">
             <MappingOverview datasets={kbs} selected={selectedDataset?.id || ""} busy={busy} onSelect={changeDataset} />
-            <div className="field mapping-dataset-select"><label htmlFor="mapping-dataset">Dataset</label><select id="mapping-dataset" value={selectedDataset?.id || ""} onChange={e => changeDataset(e.target.value)} disabled={busy}><option value="">Choose a dataset</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}{d.active === false ? " · Inactive" : ""}</option>)}</select></div>
-            {selectedDataset ? <DatasetMappings key={selectedDataset.id} dataset={selectedDataset} models={models} api={api} run={run} busy={busy} reload={reload} notify={notify} onConnections={() => navigate("Model Registration")} /> : <p className="muted">Choose a dataset to configure its Embedding, Chat, Extraction, and OCR models.</p>}
-            {!kbs.length && <button className="btn" onClick={() => navigate("Datasets")}>Open Datasets to create one</button>}
+            <div className="field mapping-dataset-select"><label htmlFor="mapping-dataset">Workspace</label><select id="mapping-dataset" value={selectedDataset?.id || ""} onChange={e => changeDataset(e.target.value)} disabled={busy}><option value="">Choose a workspace</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}{d.active === false ? " · Inactive" : ""}</option>)}</select></div>
+            {selectedDataset ? <DatasetMappings key={selectedDataset.id} dataset={selectedDataset} models={models} api={api} run={run} busy={busy} reload={reload} notify={notify} onConnections={() => navigate("Model Registration")} /> : <p className="muted">Choose a workspace to configure its Embedding, Chat, Extraction, and OCR models.</p>}
+            {!kbs.length && <button className="btn" onClick={() => navigate("Datasets")}>Open Workspaces to create one</button>}
           </section>}
           {view === "Storage" && user.is_admin && <StorageConfiguration api={api} connections={<ConnectionSettings api={api} onChanged={reload} onModels={()=>navigate("Model Registration")}/>} onChanged={reload} onFreshStart={()=>{changeDataset('');setExtraction(null);setReviewReturn(null);Object.keys(sessionStorage).filter(key=>key.startsWith('lapi-agent-v2:')||key.startsWith('lapi-review-return-')).forEach(key=>sessionStorage.removeItem(key));}}/>}
         </main>

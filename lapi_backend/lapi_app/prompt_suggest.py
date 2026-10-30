@@ -148,7 +148,7 @@ def install(app, auth):
         for document_id in body.document_ids:
             document = access.get_record(document_id, owner, 'document')
             if document.parent_id != dataset.id:
-                raise HTTPException(400, 'Choose documents from this dataset.')
+                raise HTTPException(400, 'Choose documents from this workspace.')
             if document.status != 'ready':
                 raise HTTPException(409, 'Wait until the documents are read, then try again.')
         text = excerpt(body.document_ids)
@@ -183,7 +183,7 @@ def install(app, auth):
         for document_id in body.document_ids:
             document = access.get_record(document_id, owner, 'document')
             if document.parent_id != dataset.id:
-                raise HTTPException(400, 'Choose documents from this dataset.')
+                raise HTTPException(400, 'Choose documents from this workspace.')
             if document.status != 'ready':
                 raise HTTPException(409, 'Wait until the documents are read, then try again.')
             documents.append(document)

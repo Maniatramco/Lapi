@@ -49,10 +49,10 @@ export function AdminDocuments({api,onChanged,onReview}:{api:Api;onChanged:()=>v
     const result=await api(`/extractions/${detail.id}/rerun`,'POST',{source_version:detail.version,template_id:detail.template_id,display_name:`${detail.name} · new run`.slice(0,200),idempotency_key:key,allow_external:consent});
     const failed=result.calls?.find((call:Entity)=>call.status==='failed');
     if(failed)throw new Error(failed.error||'Re-extraction could not be submitted. Inspect Jobs & activity.');
-    setNotice('New extraction accepted using current dataset models. Outdated source indexes are rebuilt first. Earlier results are retained.');
+    setNotice('New extraction accepted using current workspace models. Outdated source indexes are rebuilt first. Earlier results are retained.');
    }else{
     await api(`/admin/documents/${row.id}/retry`,'POST',{allow_external:consent});
-    setNotice(`Indexing queued for ${row.name} using the current dataset embedding and OCR models.`);
+    setNotice(`Indexing queued for ${row.name} using the current workspace embedding and OCR models.`);
    }
    setOperation(null);onChanged();await load(true);
   }catch(e){setError(e instanceof Error?e.message:'Operation failed. Retry after checking service health.');await load(true);}finally{setBusy(false);}
@@ -60,7 +60,7 @@ export function AdminDocuments({api,onChanged,onReview}:{api:Api;onChanged:()=>v
  const row=data.items.find((item:Entity)=>item.id===selected);
  return <div className="admin-documents">
   <div className="file-toolbar"><SummaryTiles label="File summary" tiles={[
-   {label:'Files',value:data.total??data.items.length,detail:'across your datasets',tone:''},
+   {label:'Files',value:data.total??data.items.length,detail:'across your workspaces',tone:''},
    {label:'Indexed',value:data.items.filter((i:Entity)=>i.status==='ready'&&!i.requires_reindex).length,detail:'on this page',tone:'ok'},
    {label:'Need attention',value:data.items.filter((i:Entity)=>['failed','cancelled'].includes(i.status)||i.requires_reindex).length,detail:'failed or reindex, on this page',tone:'error',attention:{}},
    {label:'With extractions',value:data.items.filter((i:Entity)=>i.extractions?.length>0).length,detail:'on this page',tone:'info'},
@@ -75,20 +75,20 @@ export function AdminDocuments({api,onChanged,onReview}:{api:Api;onChanged:()=>v
     <p>{operation.detail.note}</p>
     <p><strong>{operation.detail.affected.extractions}</strong> extraction runs · <strong>{operation.detail.affected.conversations}</strong> chats · <strong>{operation.detail.affected.workflows}</strong> workflows · <strong>{operation.detail.affected.jobs}</strong> processing jobs</p>
     {operation.detail.cleanup_stage!=='planned'&&<p>Previous cleanup paused at {operation.detail.cleanup_stage}. This action resumes the remaining cleanup.</p>}
-    <p className="muted">Active dataset processing must finish before deletion can proceed. This action cannot be undone.</p>
+    <p className="muted">Active workspace processing must finish before deletion can proceed. This action cannot be undone.</p>
     <label>Type the exact filename to confirm<input autoComplete="off" value={confirmation} disabled={busy} onChange={e=>setConfirmation(e.target.value)}/></label>
    </>:<>
-    <p>{operation.kind==='extract'?'Creates a separate result with the saved prompt and current dataset extraction model. It rebuilds outdated source indexes using the current embedding and OCR mappings.':'Reads the unchanged original again and rebuilds its index using the dataset’s current embedding and OCR mappings.'}</p>
+    <p>{operation.kind==='extract'?'Creates a separate result with the saved prompt and current workspace extraction model. It rebuilds outdated source indexes using the current embedding and OCR mappings.':'Reads the unchanged original again and rebuilds its index using the workspace’s current embedding and OCR mappings.'}</p>
     <label className="file-consent"><input type="checkbox" checked={consent} disabled={busy} onChange={e=>setConsent(e.target.checked)}/> Allow document content to be sent to the configured cloud models for this operation.</label>
    </>}
    <div className="file-operation-actions"><button className="btn" disabled={busy} onClick={()=>setOperation(null)}>Cancel</button><button className={`btn ${operation.kind==='delete'?'danger':'primary'}`} disabled={busy||(operation.kind==='delete'?confirmation!==operation.row.name:!consent)} onClick={()=>void submit()}>{busy?'Working…':operation.kind==='delete'?'Delete permanently':operation.kind==='extract'?'Start new extraction':'Retry indexing'}</button></div>
   </section>}
   <section className="panel file-catalog" aria-busy={loading}>
-   <div className="file-filters"><label className="file-search"><Search size={17}/><input aria-label="Search files" placeholder="Search filename, dataset or document ID" value={search} onChange={e=>{setSearch(e.target.value);setOffset(0);}}/></label><label>Dataset<select aria-label="Filter files by dataset" value={dataset} onChange={e=>{setDataset(e.target.value);setOffset(0);}}><option value="">All datasets</option>{data.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><span className="muted small">{data.total} files</span></div>
+   <div className="file-filters"><label className="file-search"><Search size={17}/><input aria-label="Search files" placeholder="Search filename, workspace or document ID" value={search} onChange={e=>{setSearch(e.target.value);setOffset(0);}}/></label><label>Workspace<select aria-label="Filter files by workspace" value={dataset} onChange={e=>{setDataset(e.target.value);setOffset(0);}}><option value="">All workspaces</option>{data.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label><span className="muted small">{data.total} files</span></div>
    <p className="file-table-hint">Scroll across the table for statuses and actions.</p>
-   <div className="file-table-scroll"><table><thead><tr><th>File / dataset</th><th>Source storage</th><th>Index</th><th>OCR</th><th>Extractions</th><th>Actions</th></tr></thead><tbody>
+   <div className="file-table-scroll"><table><thead><tr><th>File / workspace</th><th>Source storage</th><th>Index</th><th>OCR</th><th>Extractions</th><th>Actions</th></tr></thead><tbody>
     {data.items.map((item:Entity)=><tr key={item.id} className={selected===item.id?'file-selected':''}>
-     <td><button className="file-title" onClick={()=>setSelected(selected===item.id?'':item.id)}><FileText size={17}/><span>{item.name}</span></button><div className="muted small">{item.dataset_name}{item.dataset_deleted?' · archived dataset':''} · v{item.version}</div><div className="muted small">{(item.size/1024).toFixed(1)} KB · {stamp(item.created_at)}</div></td>
+     <td><button className="file-title" onClick={()=>setSelected(selected===item.id?'':item.id)}><FileText size={17}/><span>{item.name}</span></button><div className="muted small">{item.dataset_name}{item.dataset_deleted?' · archived workspace':''} · v{item.version}</div><div className="muted small">{(item.size/1024).toFixed(1)} KB · {stamp(item.created_at)}</div></td>
      <td><State value={item.storage.status}/><div className="muted small">{item.storage.provider==='oci'?'OCI · '+item.storage.bucket:'Local storage'}</div></td>
      <td><State value={item.status}/>{item.requires_reindex&&item.status==='ready'&&<div className="small">New mappings · reindex needed</div>}{item.index_job&&<div className="muted small">{item.index_job.stage} · {item.index_job.progress}%</div>}</td>
      <td>{item.ocr?<><span>{item.ocr.ocr_page_count} pages</span><div className="muted small">{item.ocr.model}</div></>:<span className="muted small">{item.status==='ready'?'Native text':'Not completed'}</span>}</td>
@@ -96,7 +96,7 @@ export function AdminDocuments({api,onChanged,onReview}:{api:Api;onChanged:()=>v
      <td><div className="file-row-actions"><button className="btn" disabled={busy||active(item.status)||item.status==='deleting'||item.storage.status!=='present'||item.dataset_deleted} onClick={()=>void open('index',item)}><RefreshCw size={14}/>{item.status==='failed'?'Retry index':'Reindex'}</button><button className="btn" disabled={busy} onClick={()=>setSelected(selected===item.id?'':item.id)}>Details</button><button className="btn danger" disabled={busy} onClick={()=>void open('delete',item)}><Trash2 size={14}/>{item.status==='deleting'?'Retry deletion':'Delete'}</button></div></td>
     </tr>)}
    </tbody></table></div>
-   {!data.items.length&&<div className="empty"><FileText size={28}/><h3>{loading?'Loading files…':'No files found'}</h3><p>Upload documents to a dataset, or adjust your filters.</p></div>}
+   {!data.items.length&&<div className="empty"><FileText size={28}/><h3>{loading?'Loading files…':'No files found'}</h3><p>Upload documents to a workspace, or adjust your filters.</p></div>}
    <div className="file-pagination"><span className="muted small">{data.total?`${offset+1}–${Math.min(offset+25,data.total)} of ${data.total}`:'0 files'}</span><button className="btn" disabled={!offset||loading} onClick={()=>setOffset(Math.max(0,offset-25))}>Previous</button><button className="btn" disabled={offset+25>=data.total||loading} onClick={()=>setOffset(offset+25)}>Next</button></div>
   </section>
   {row&&<section className="panel file-details"><div className="file-operation-heading"><h3 className="file-name">{row.name}</h3><button className="btn icon" aria-label="Close file details" onClick={()=>setSelected('')}><X size={18}/></button></div><dl><dt>Document ID</dt><dd>{row.id}</dd><dt>Object key</dt><dd>{row.storage.key}</dd><dt>Current state</dt><dd>{row.error||row.index_notice||'No processing error reported.'}</dd></dl>

@@ -43,7 +43,7 @@ def install(app, auth, main):
             dataset_access.require_level(owner,dataset.id,'editor')
             template=routing.owned(body.template_id,owner,'template')
             if template.parent_id and template.parent_id!=dataset.id:
-                raise HTTPException(400,'Choose a prompt template belonging to the selected dataset.')
+                raise HTTPException(400,'Choose a prompt template belonging to the selected workspace.')
             snapshot=routing.execution_snapshot(dataset,'extraction')
             main.external_check(body.allow_external,cfg=snapshot['settings'])
             if any(doc.status!='ready' for doc in docs):

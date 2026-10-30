@@ -9,7 +9,7 @@ const AFTER:GuidePart={title:'Finish in Lapi',steps:[
  'Open folders and tick the files you want, up to 20 at a time. Files marked "Unsupported file type" cannot be imported; PDF, DOCX, TXT, JSON, spreadsheets (XLSX, CSV, TSV) and images (PNG, JPG, WEBP) can.',
  'Tick `Everyone who can access … may read these copies`, then click `Vectorize`.',
  'Wait until each file shows `Ready to ask`, then click `Ask about these documents`. You can leave the page meanwhile; it keeps going.',
- 'Images and scanned pages are read with OCR. Their dataset needs an OCR model: register `gpt-4o-mini` (OpenAI) or a Gemini model for Extraction and select it as the dataset\'s OCR model in Dataset Model Mapping.',
+ 'Images and scanned pages are read with OCR. Their workspace needs an OCR model: register `gpt-4o-mini` (OpenAI) or a Gemini model for Extraction and select it as the workspace\'s OCR model in Workspace Model Mapping.',
 ]};
 
 export const CONNECTOR_GUIDES:Record<string,ConnectorGuide>={

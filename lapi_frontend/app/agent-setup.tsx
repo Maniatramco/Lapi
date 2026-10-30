@@ -5,8 +5,8 @@ import {useRef} from 'react';
 import './agent-setup.css';
 type Entity=Record<string,any>;
 type Api=(path:string,method?:string,body?:unknown)=>Promise<any>;
-type Tab='Skills'|'Dataset instructions'|'Model guides'|'My memory';
-const TABS:Tab[]=['Skills','Dataset instructions','Model guides','My memory'];
+type Tab='Skills'|'Workspace instructions'|'Model guides'|'My memory';
+const TABS:Tab[]=['Skills','Workspace instructions','Model guides','My memory'];
 const blankSkill={id:'',name:'',description:'',instructions:'',allowed_tools:[] as string[],output_format:'',scope:'personal',dataset_id:'',applies_to:{} as Record<string,string[]>};
 /** "When it applies" fields: comma-separated words the agent matches against requests and document names. */
 const APPLIES:[string,string,string][]=[['document_types','Document types','invoice, purchase order'],['domains','Domains','finance, legal'],['keywords','Keywords','overdue, renewal'],['documents','Specific documents','*-msa.pdf, Acme contract']];
@@ -20,7 +20,7 @@ export function AgentSetup({api,datasets,selectedDataset,isAdmin,onNotify}:{api:
   <div className="agent-setup-tabs" role="tablist" aria-label="Agent setup">{TABS.map(name=><button key={name} role="tab" aria-selected={tab===name} className={`btn${tab===name?' primary':''}`} onClick={()=>{setTab(name);setError('');}}>{name}</button>)}</div>
   {error&&<p role="alert" className="agent-setup-error">{error}</p>}
   {tab==='Skills'&&<Skills api={api} datasets={datasets} selectedDataset={selectedDataset} isAdmin={isAdmin} onError={setError} onNotify={onNotify}/>}
-  {tab==='Dataset instructions'&&<Instructions api={api} datasets={datasets} selectedDataset={selectedDataset} isAdmin={isAdmin} onError={setError} onNotify={onNotify}/>}
+  {tab==='Workspace instructions'&&<Instructions api={api} datasets={datasets} selectedDataset={selectedDataset} isAdmin={isAdmin} onError={setError} onNotify={onNotify}/>}
   {tab==='Model guides'&&<ModelGuides api={api} isAdmin={isAdmin} onError={setError} onNotify={onNotify}/>}
   {tab==='My memory'&&<Memory api={api} onError={setError} onNotify={onNotify}/>}
  </div>;
@@ -44,8 +44,8 @@ function Skills({api,datasets,selectedDataset,isAdmin,onError,onNotify}:{api:Api
    <span className="agent-setup-actions"><input ref={fileInput} type="file" hidden accept=".md,.txt,.markdown" onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void upload(file);}}/><button className="btn" disabled={busy} onClick={()=>fileInput.current?.click()}><Upload size={16}/>Upload SKILL.md</button><button className="btn primary" onClick={()=>setDraft({...blankSkill,dataset_id:selectedDataset})}><Plus size={16}/>New skill</button></span></div>
   {draft&&<form className="agent-setup-card" onSubmit={e=>{e.preventDefault();void save();}}>
    <div className="agent-setup-row"><label>Name<input value={draft.name} required maxLength={40} pattern="[a-z0-9][a-z0-9 -]{1,39}" placeholder="contract-risks" onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
-    <label>Shared with<select value={draft.scope} onChange={e=>setDraft({...draft,scope:e.target.value})}><option value="personal">Only me</option>{isAdmin&&<option value="dataset">One dataset</option>}{isAdmin&&<option value="workspace">Everyone</option>}</select></label>
-    {draft.scope==='dataset'&&<label>Dataset<select value={draft.dataset_id} onChange={e=>setDraft({...draft,dataset_id:e.target.value})}><option value="">Choose…</option>{datasets.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}</div>
+    <label>Shared with<select value={draft.scope} onChange={e=>setDraft({...draft,scope:e.target.value})}><option value="personal">Only me</option>{isAdmin&&<option value="dataset">One workspace</option>}{isAdmin&&<option value="workspace">Everyone</option>}</select></label>
+    {draft.scope==='dataset'&&<label>Workspace<select value={draft.dataset_id} onChange={e=>setDraft({...draft,dataset_id:e.target.value})}><option value="">Choose…</option>{datasets.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}</div>
    <label>When to use it<input value={draft.description} required maxLength={300} placeholder="Summarise contract risks: termination, liability, renewal" onChange={e=>setDraft({...draft,description:e.target.value})}/></label>
    <label>Steps<textarea rows={7} value={draft.instructions} required maxLength={8000} placeholder={'1. Find the termination and renewal clauses.\n2. …'} onChange={e=>setDraft({...draft,instructions:e.target.value})}/></label>
    <label>Answer format (optional)<input value={draft.output_format} maxLength={500} placeholder="A table of risks with clause and severity" onChange={e=>setDraft({...draft,output_format:e.target.value})}/></label>
@@ -53,7 +53,7 @@ function Skills({api,datasets,selectedDataset,isAdmin,onError,onNotify}:{api:Api
    <div className="agent-setup-actions"><button className="btn primary" disabled={busy}><Save size={16}/>Save skill</button><button type="button" className="btn" onClick={()=>setDraft(null)}><X size={16}/>Cancel</button></div>
   </form>}
   <ul className="agent-setup-list">{skills.map(skill=><li key={skill.id} className="agent-setup-card">
-   <div className="agent-setup-row spread"><strong><Sparkles size={15}/> {skill.name}</strong><span className="small muted">{skill.source==='builtin'?'Built-in':skill.scope==='personal'?'Only me':skill.scope==='dataset'?'Dataset':'Everyone'}</span></div>
+   <div className="agent-setup-row spread"><strong><Sparkles size={15}/> {skill.name}</strong><span className="small muted">{skill.source==='builtin'?'Built-in':skill.scope==='personal'?'Only me':skill.scope==='dataset'?'Workspace':'Everyone'}</span></div>
    <p>{skill.description}</p>
    {Object.values(skill.applies_to||{}).some((t:any)=>t?.length)&&<p className="agent-setup-chips" aria-label="When it applies">{APPLIES.flatMap(([key,label])=>(skill.applies_to?.[key]||[]).map((term:string)=><span key={key+term} className="agent-chip" title={label}>{term}</span>))}</p>}
    <div className="agent-setup-actions">{skill.editable&&<button className="btn" onClick={()=>setDraft({...skill,applies_to:skill.applies_to||{}})}>Edit</button>}{skill.source!=='builtin'&&<a className="btn" href={`/api/skills/${encodeURIComponent(skill.id)}/download`} download><Download size={15}/>Download</a>}{skill.editable&&<button className="btn" aria-label={`Remove ${skill.name}`} onClick={()=>void remove(skill)}><Trash2 size={15}/></button>}</div>
@@ -66,16 +66,16 @@ function Instructions({api,datasets,selectedDataset,isAdmin,onError,onNotify}:{a
  useEffect(()=>{if(!dataset)return;setWarnings([]);
   api(`/datasets/${dataset}/instructions`).then(r=>{setCurrent(r);setText(r.text||'');}).catch(e=>onError(e.message));
   api(`/datasets/${dataset}/instructions/versions`).then(r=>setVersions(r.versions||[])).catch(()=>setVersions([]));},[api,dataset,onError]);
- const save=async()=>{try{const r=await api(`/datasets/${dataset}/instructions`,'PUT',{text,expected_version:current?.version??null});setCurrent(r);setWarnings(r.warnings||[]);onNotify('Dataset instructions saved.');
+ const save=async()=>{try{const r=await api(`/datasets/${dataset}/instructions`,'PUT',{text,expected_version:current?.version??null});setCurrent(r);setWarnings(r.warnings||[]);onNotify('Workspace instructions saved.');
   setVersions((await api(`/datasets/${dataset}/instructions/versions`)).versions||[]);}catch(e){onError(e instanceof Error?e.message:'Could not save.');}};
  const bytes=new TextEncoder().encode(text).length;
- return <section aria-label="Dataset instructions" className="agent-setup-card">
-  <p className="muted">Instructions tell the agent how to answer for this dataset: terms, which fields matter, preferred format. They never switch off citations or confirmation. In chat, <code>/instructions</code> shows them and <code>/optimize</code> drafts better ones.</p>
-  <label>Dataset<select value={dataset} onChange={e=>setDataset(e.target.value)}>{datasets.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+ return <section aria-label="Workspace instructions" className="agent-setup-card">
+  <p className="muted">Instructions tell the agent how to answer for this workspace: terms, which fields matter, preferred format. They never switch off citations or confirmation. In chat, <code>/instructions</code> shows them and <code>/optimize</code> drafts better ones.</p>
+  <label>Workspace<select value={dataset} onChange={e=>setDataset(e.target.value)}>{datasets.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
   <label>Instructions {current?.version?<span className="small muted">· version {current.version}</span>:null}<textarea rows={10} value={text} readOnly={!isAdmin} maxLength={4096} onChange={e=>setText(e.target.value)} placeholder="Answer in short bullet points. Amounts are in INR. 'Vendor' means the supplier field."/></label>
   <p className={`small ${bytes>4096?'agent-setup-error':'muted'}`}>{bytes} / 4096 bytes</p>
   {warnings.length>0&&<p role="status" className="agent-setup-warning">Saved, but check this: {warnings.join('; ')}.</p>}
-  {isAdmin?<div className="agent-setup-actions"><button className="btn primary" disabled={bytes>4096||text===(current?.text||'')} onClick={()=>void save()}><Save size={16}/>Save instructions</button></div>:<p className="small muted">Only an administrator can change dataset instructions.</p>}
+  {isAdmin?<div className="agent-setup-actions"><button className="btn primary" disabled={bytes>4096||text===(current?.text||'')} onClick={()=>void save()}><Save size={16}/>Save instructions</button></div>:<p className="small muted">Only an administrator can change workspace instructions.</p>}
   {versions.length>1&&<details><summary>Earlier versions · {versions.length-1}</summary>{versions.slice(1).map(v=><div key={v.version} className="agent-setup-version"><div className="small muted">Version {v.version}{v.summary?` · ${v.summary}`:''}</div><pre>{v.text||'(empty)'}</pre>{isAdmin&&<button className="btn" onClick={()=>setText(v.text||'')}>Restore into editor</button>}</div>)}</details>}
  </section>;
 }
@@ -103,7 +103,7 @@ function Memory({api,onError,onNotify}:{api:Api;onError:(m:string)=>void;onNotif
  return <section aria-label="My memory" className="agent-setup-card">
   <div className="agent-setup-row spread"><p className="muted"><Brain size={15}/> The agent keeps a short private note about how you like answers and can look up your earlier questions. Facts are always re-read from your sources. History is kept for {memory.retention_days} days.</p>
    <label className="agent-setup-toggle"><input type="checkbox" checked={memory.enabled} onChange={e=>void update({enabled:e.target.checked},e.target.checked?'Memory turned on.':'Memory turned off.')}/> Memory on</label></div>
-  <label>Memory note<textarea rows={4} value={note} maxLength={memory.note_limit} onChange={e=>setNote(e.target.value)} placeholder="Prefers tables. Works mostly with the Invoices dataset."/></label>
+  <label>Memory note<textarea rows={4} value={note} maxLength={memory.note_limit} onChange={e=>setNote(e.target.value)} placeholder="Prefers tables. Works mostly with the Invoices workspace."/></label>
   <div className="agent-setup-actions"><button className="btn primary" disabled={note===(memory.note||'')} onClick={()=>void update({note},'Memory note saved.')}><Save size={16}/>Save note</button><button className="btn" onClick={clear}><Trash2 size={15}/>Clear memory</button></div>
   <details><summary>Recent questions · {memory.history_count}</summary><ul className="agent-setup-history">{memory.history.map((h:Entity,i:number)=><li key={i}><span className="small muted">{new Date(h.asked_at*1000).toLocaleString()}</span><div>{h.question}</div>{h.answer&&<div className="small muted">{h.answer}</div>}</li>)}</ul></details>
  </section>;

@@ -26,7 +26,7 @@ async function preview(page:Page){
   if(path==='/api/runtime-connections')return json({});
   return json([]);
  });
- await page.goto('/#Dashboard');await expect(page.getByRole('heading',{level:1,name:'Dashboard',exact:true})).toBeVisible();await expect(page.getByLabel('Refresh workspace',{exact:true})).toBeEnabled();
+ await page.goto('/#Dashboard');await expect(page.getByRole('heading',{level:1,name:'Dashboard',exact:true})).toBeVisible();await expect(page.getByLabel('Refresh',{exact:true})).toBeEnabled();
  return sent;
 }
 
@@ -35,26 +35,26 @@ async function overview(page:Page){const restore=page.getByRole('button',{name:'
 
 test('including knowledge keeps three panels without sending, and explicit expansion preserves drafts and conversation',async({page})=>{
  await page.setViewportSize({width:1440,height:1000});const sent=await preview(page);
- const chat=page.getByRole('region',{name:'Dataset knowledge workspace chat',exact:true});
+ const chat=page.getByRole('region',{name:'Workspace knowledge chat',exact:true});
  await expect(page.getByRole('heading',{level:1,name:/^Good (morning|afternoon|evening), Preview user$/})).toBeVisible();await expect(chat).toBeHidden();
- await page.getByRole('button',{name:'Add Dataset Knowledge',exact:true}).click();
+ await page.getByRole('button',{name:'Add Workspace Knowledge',exact:true}).click();
  await page.getByRole('button',{name:'Include selected knowledge',exact:true}).click();
  const before=await chat.boundingBox();
- await expect(page.getByRole('region',{name:'Onboarded datasets',exact:true})).toBeVisible();
- await expect(page.getByLabel('Dataset sources',{exact:true})).toBeVisible();
- await expect(page.getByLabel('Message Dataset Knowledge Chat',{exact:true})).toBeFocused();
+ await expect(page.getByRole('region',{name:'Onboarded workspaces',exact:true})).toBeVisible();
+ await expect(page.getByLabel('Workspace sources',{exact:true})).toBeVisible();
+ await expect(page.getByLabel('Message Workspace Knowledge Chat',{exact:true})).toBeFocused();
  expect((await chat.boundingBox())!.height).toBeGreaterThan(500);expect(sent).toEqual([]);
- await page.getByRole('button',{name:'Expand Dataset Knowledge Chat',exact:true}).click();
+ await page.getByRole('button',{name:'Expand Workspace Knowledge Chat',exact:true}).click();
  expect((await chat.boundingBox())!.width).toBeGreaterThan(before!.width+100);
- const composer=page.getByLabel('Message Dataset Knowledge Chat',{exact:true});await composer.fill('Preserve this draft');
- await page.getByRole('button',{name:'Show sources',exact:true}).click();await expect(page.getByLabel('Dataset sources',{exact:true})).toBeVisible();
+ const composer=page.getByLabel('Message Workspace Knowledge Chat',{exact:true});await composer.fill('Preserve this draft');
+ await page.getByRole('button',{name:'Show sources',exact:true}).click();await expect(page.getByLabel('Workspace sources',{exact:true})).toBeVisible();
  await expect(composer).toHaveValue('Preserve this draft');await page.getByRole('button',{name:'Hide sources',exact:true}).click();
- await overview(page);await expect(page.getByRole('region',{name:'Onboarded datasets',exact:true})).toBeVisible();await expect(composer).toHaveValue('Preserve this draft');
- await page.getByRole('button',{name:'Expand Dataset Knowledge Chat',exact:true}).click();await expect(composer).toHaveValue('Preserve this draft');
- await page.getByLabel('Send dataset chat question',{exact:true}).click();await expect.poll(()=>sent.length).toBe(1);
+ await overview(page);await expect(page.getByRole('region',{name:'Onboarded workspaces',exact:true})).toBeVisible();await expect(composer).toHaveValue('Preserve this draft');
+ await page.getByRole('button',{name:'Expand Workspace Knowledge Chat',exact:true}).click();await expect(composer).toHaveValue('Preserve this draft');
+ await page.getByLabel('Send workspace chat question',{exact:true}).click();await expect.poll(()=>sent.length).toBe(1);
  expect(sent[0].dataset_ids).toEqual(['finance','policy']);expect(sent[0].document_ids).toHaveLength(25);
  await expect(page.getByText('Synthetic UI scope verification only.',{exact:true})).toBeVisible();
- await overview(page);await page.getByRole('button',{name:'Expand Dataset Knowledge Chat',exact:true}).click();
+ await overview(page);await page.getByRole('button',{name:'Expand Workspace Knowledge Chat',exact:true}).click();
  await expect(page.getByText('Synthetic UI scope verification only.',{exact:true})).toBeVisible();expect(sent).toHaveLength(1);
  await page.setViewportSize({width:390,height:844});await expect(composer).toBeInViewport();
  const bounds=await page.locator('.dataset-knowledge-chat .agent-v2-composer').boundingBox(),footer=await page.getByRole('contentinfo',{name:'Application status',exact:true}).boundingBox();
@@ -63,7 +63,7 @@ test('including knowledge keeps three panels without sending, and explicit expan
 
 test('sticky knowledge action survives source scrolling, source collapse and page scrolling',async({page})=>{
  await preview(page);await page.setViewportSize({width:1440,height:1000});
- const action=page.getByRole('button',{name:'Add Dataset Knowledge',exact:true});
+ const action=page.getByRole('button',{name:'Add Workspace Knowledge',exact:true});
  await page.getByRole('button',{name:'Ask Lapi about Finance',exact:true}).click();await overview(page);
  const sourceContent=page.locator('#notebook-source-content');await sourceContent.evaluate(element=>element.scrollTop=element.scrollHeight);
  const composer=await page.locator('.dataset-knowledge-chat .agent-v2-composer').boundingBox(),footer=await page.getByRole('contentinfo',{name:'Application status',exact:true}).boundingBox();expect(composer!.y+composer!.height).toBeLessThanOrEqual(footer!.y);
@@ -76,48 +76,48 @@ test('sticky knowledge action survives source scrolling, source collapse and pag
 test('multi-select and drag/drop preserve exclusions and send the exact combined chat scope',async({page})=>{
  await page.setViewportSize({width:1440,height:1000});const sent=await preview(page);
  await page.getByRole('button',{name:'Ask Lapi about Policies',exact:true}).click();await overview(page);
- await page.getByRole('checkbox',{name:'Include dataset Finance in knowledge',exact:true}).click();await overview(page);
- await expect(page.getByRole('checkbox',{name:'Include dataset Policies in knowledge',exact:true})).toBeChecked();
- await expect(page.getByRole('checkbox',{name:'Include dataset Finance in knowledge',exact:true})).toBeChecked();
+ await page.getByRole('checkbox',{name:'Include workspace Finance in knowledge',exact:true}).click();await overview(page);
+ await expect(page.getByRole('checkbox',{name:'Include workspace Policies in knowledge',exact:true})).toBeChecked();
+ await expect(page.getByRole('checkbox',{name:'Include workspace Finance in knowledge',exact:true})).toBeChecked();
  await page.getByRole('checkbox',{name:'Include source finance-evidence-02.txt',exact:true}).uncheck();
  await page.getByRole('button',{name:'Ask Lapi about Finance',exact:true}).click();await overview(page);
  await page.getByRole('checkbox',{name:'Include source finance-evidence-02.txt',exact:true}).uncheck();
  const tile=page.locator('.dashboard-dataset-tile').filter({has:page.getByRole('button',{name:'Ask Lapi about Policies',exact:true})});
- await tile.dragTo(page.getByLabel('Dataset sources',{exact:true}));await overview(page);
- await expect(page.getByRole('checkbox',{name:'Include dataset Policies in knowledge',exact:true})).toBeChecked();
+ await tile.dragTo(page.getByLabel('Workspace sources',{exact:true}));await overview(page);
+ await expect(page.getByRole('checkbox',{name:'Include workspace Policies in knowledge',exact:true})).toBeChecked();
  await expect(page.getByRole('checkbox',{name:'Include source finance-evidence-02.txt',exact:true})).toHaveCount(0);
  await expect(page.getByRole('checkbox',{name:'Include source retention-policy.txt',exact:true})).toBeChecked();
  await expect(page.getByRole('checkbox',{name:'Include source old-policy.txt',exact:true})).toHaveCount(0);
  await expect(page.getByRole('checkbox',{name:'Include source unassigned.txt',exact:true})).toHaveCount(0);
- await expect(page.getByLabel('Dataset chat model',{exact:true})).toBeEnabled();
- await page.getByLabel('Message Dataset Knowledge Chat',{exact:true}).fill('Compare the included knowledge');await page.getByLabel('Send dataset chat question',{exact:true}).click();
+ await expect(page.getByLabel('Workspace chat model',{exact:true})).toBeEnabled();
+ await page.getByLabel('Message Workspace Knowledge Chat',{exact:true}).fill('Compare the included knowledge');await page.getByLabel('Send workspace chat question',{exact:true}).click();
  await expect.poll(()=>sent.length).toBe(1);expect(sent[0].dataset_ids).toEqual(['finance','policy']);expect(sent[0].document_ids).toHaveLength(24);expect(sent[0].document_ids).toContain('policy-1');expect(sent[0].document_ids).not.toContain('finance-1');expect(sent[0].document_ids).not.toContain('private');expect(sent[0].document_ids).not.toContain('stale');
  await expect(page.getByText('Synthetic UI scope verification only.',{exact:true})).toBeVisible();
- await expect(page.getByLabel('New dataset chat',{exact:true})).toBeEnabled();await page.getByLabel('New dataset chat',{exact:true}).click();
+ await expect(page.getByLabel('New workspace chat',{exact:true})).toBeEnabled();await page.getByLabel('New workspace chat',{exact:true}).click();
  if(process.env.LAPI_KNOWLEDGE_DESKTOP_SCREENSHOT)await page.screenshot({path:process.env.LAPI_KNOWLEDGE_DESKTOP_SCREENSHOT,fullPage:true});
 });
 
 test('picker supports multiple datasets and empty selection never broadens scope',async({page})=>{
  await preview(page);await page.getByRole('button',{name:'Ask Lapi about Policies',exact:true}).click();await overview(page);
- await page.getByRole('button',{name:'Add Dataset Knowledge',exact:true}).click();
- const dialog=page.getByRole('dialog');await dialog.getByRole('checkbox',{name:'Include dataset Finance',exact:true}).check();
+ await page.getByRole('button',{name:'Add Workspace Knowledge',exact:true}).click();
+ const dialog=page.getByRole('dialog');await dialog.getByRole('checkbox',{name:'Include workspace Finance',exact:true}).check();
  await dialog.getByRole('button',{name:'Include selected knowledge',exact:true}).click();await overview(page);
- await expect(page.getByRole('checkbox',{name:'Include dataset Finance in knowledge',exact:true})).toBeChecked();
- await page.getByRole('checkbox',{name:'Include dataset Finance in knowledge',exact:true}).click();await overview(page);await page.getByRole('checkbox',{name:'Include dataset Policies in knowledge',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Choose knowledge for this chat',exact:true})).toBeVisible();await expect(page.getByLabel('Message Dataset Knowledge Chat',{exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:'Add Dataset Knowledge',exact:true})).toBeEnabled();
+ await expect(page.getByRole('checkbox',{name:'Include workspace Finance in knowledge',exact:true})).toBeChecked();
+ await page.getByRole('checkbox',{name:'Include workspace Finance in knowledge',exact:true}).click();await overview(page);await page.getByRole('checkbox',{name:'Include workspace Policies in knowledge',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Choose knowledge for this chat',exact:true})).toBeVisible();await expect(page.getByLabel('Message Workspace Knowledge Chat',{exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Add Workspace Knowledge',exact:true})).toBeEnabled();
 });
 
 test('About and footer show the same version and prior feature history; mobile controls fit',async({page})=>{
  await page.setViewportSize({width:1440,height:1100});await preview(page);await page.getByRole('link',{name:`About Lapi, application version v${applicationVersion.version}`,exact:true}).click();
  await expect(page.getByRole('heading',{level:1,name:'About',exact:true})).toBeVisible();await expect(page.getByLabel(`Current application version v${applicationVersion.version}`,{exact:true})).toBeVisible();
- const history=page.getByRole('region',{name:"What's included in each version"});await expect(history.getByText('v26.1.0.0',{exact:true})).toBeVisible();await history.locator('summary').filter({hasText:'v26.1.1.0'}).click();await expect(page.getByText('Drag dataset cards into Sources to include their accessible indexed files, preserving other selected sources.',{exact:true})).toBeVisible();
+ const history=page.getByRole('region',{name:"What's included in each version"});await expect(history.getByText('v26.1.0.0',{exact:true})).toBeVisible();await history.locator('summary').filter({hasText:'v26.1.1.0'}).click();await expect(page.getByText('Drag workspace cards into Sources to include their accessible indexed files, preserving other selected sources.',{exact:true})).toBeVisible();
  if(process.env.LAPI_ABOUT_SCREENSHOT)await page.screenshot({path:process.env.LAPI_ABOUT_SCREENSHOT,fullPage:true});
- await page.setViewportSize({width:390,height:844});await page.goto('/#Dashboard');await expect(page.getByRole('button',{name:'Datasets (3)',exact:true})).toBeHidden();await page.getByRole('button',{name:'Ask Lapi about Policies',exact:true}).click();await overview(page);
- await page.getByRole('button',{name:'Datasets (3)',exact:true}).click();
- await page.getByRole('checkbox',{name:'Include dataset Finance in knowledge',exact:true}).click();await overview(page);
- await expect(page.getByRole('button',{name:'Add Dataset Knowledge',exact:true})).toBeInViewport();
- await page.getByRole('button',{name:'Add Dataset Knowledge',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await page.setViewportSize({width:390,height:844});await page.goto('/#Dashboard');await expect(page.getByRole('button',{name:'Workspaces (3)',exact:true})).toBeHidden();await page.getByRole('button',{name:'Ask Lapi about Policies',exact:true}).click();await overview(page);
+ await page.getByRole('button',{name:'Workspaces (3)',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Include workspace Finance in knowledge',exact:true}).click();await overview(page);
+ await expect(page.getByRole('button',{name:'Add Workspace Knowledge',exact:true})).toBeInViewport();
+ await page.getByRole('button',{name:'Add Workspace Knowledge',exact:true}).click();await expect(page.getByRole('dialog')).toBeVisible();await page.getByRole('button',{name:'Cancel',exact:true}).click();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  if(process.env.LAPI_KNOWLEDGE_MOBILE_SCREENSHOT)await page.screenshot({path:process.env.LAPI_KNOWLEDGE_MOBILE_SCREENSHOT,fullPage:true});
 });

@@ -4,7 +4,7 @@ export const GO_TARGETS:GoTarget[]=[
  {key:'d',view:'Home',label:'Dashboard'},
  {key:'a',view:'Lapi agent V2',label:'Lapi Agent'},
  {key:'k',view:'Add knowledge',label:'Add knowledge',needsAddKnowledge:true},
- {key:'s',view:'Datasets',label:'Datasets'},
+ {key:'s',view:'Datasets',label:'Workspaces'},
  {key:'u',view:'Users & passwords',label:'Users & passwords'},
 ];
 /** Rows of the "Keyboard shortcuts" dialog. */
@@ -54,7 +54,7 @@ export function resolveShortcut(event:KeyEventLike,state:ShortcutState,access:Sh
   const target=GO_TARGETS.find(t=>t.key===key);
   if(!target)return {state:idle,command:null};
   if(target.admin&&!access.isAdmin)return {state:idle,command:{type:'denied',message:`${target.label} is for administrators.`}};
-  if(target.needsAddKnowledge&&!access.canAddKnowledge)return {state:idle,command:{type:'denied',message:'Adding knowledge needs Editor access to a dataset. Ask a dataset owner or administrator.'}};
+  if(target.needsAddKnowledge&&!access.canAddKnowledge)return {state:idle,command:{type:'denied',message:'Adding knowledge needs Editor access to a workspace. Ask a workspace owner or administrator.'}};
   return {state:idle,command:{type:'go',view:target.view,label:target.label}};
  }
  if(event.repeat)return {state:idle,command:null};

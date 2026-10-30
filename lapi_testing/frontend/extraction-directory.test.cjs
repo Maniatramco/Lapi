@@ -14,15 +14,15 @@ function compile(name,overrides={}){
 const {ExtractionDirectory,matchingExtractions}=compile('extraction-directory.tsx');
 const runs=[{id:'extract-a',dataset_id:'dataset-a',template_id:'schema',name:'merged.pdf',status:'ready',version:2,created_at:2,review_status:'reviewed',merge:{filename:'merged.pdf',sources:[{name:'one.pdf'},{name:'two.pdf'}]},profile_count:2},
  {id:'extract-b',dataset_id:'dataset-b',template_id:'schema',name:'merged.pdf',status:'failed',version:1,created_at:3}];
-test('review directory filters by dataset, exact extraction ID, source filename and status',()=>{
+test('review directory filters by workspace, exact extraction ID, source filename and status',()=>{
  assert.deepEqual(matchingExtractions(runs,'dataset-a','','',[]).map(e=>e.id),['extract-a']);
  assert.deepEqual(matchingExtractions(runs,'','extract-b','',[]).map(e=>e.id),['extract-b']);
  assert.deepEqual(matchingExtractions(runs,'','two.pdf','ready',[]).map(e=>e.id),['extract-a']);
  assert.equal(matchingExtractions(runs,'dataset-a','extract-b','',[]).length,0);
 });
-test('review directory displays dataset identity, complete extraction ID, merged filename and version',()=>{
+test('review directory displays workspace identity, complete extraction ID, merged filename and version',()=>{
  const html=renderToStaticMarkup(React.createElement(ExtractionDirectory,{datasets:[{id:'dataset-a',name:'Resume QA'}],templates:[{id:'schema',name:'Profile schema'}],extractions:runs,documents:[],selectedDataset:'dataset-a',selectedId:'extract-a',onDatasetChange(){},onOpen(){}}));
- for(const text of ['Resume QA','extract-a','merged.pdf','v2','2 merged files','2 profiles / items','Extraction dataset filter','Search extractions','Actions','Reviewed'])assert.ok(html.includes(text),text);
+ for(const text of ['Resume QA','extract-a','merged.pdf','v2','2 merged files','2 profiles / items','Extraction workspace filter','Search extractions','Actions','Reviewed'])assert.ok(html.includes(text),text);
  assert.ok(!html.includes('extract-b'));
  assert.ok(!html.includes('Search extraction column'));assert.match(html,/type="search"/);
 });
@@ -52,12 +52,12 @@ test('extract actions keep review available while preventing a second run on a q
  assert.match(html,/aria-label="Review extraction queued-run"/);
  const review=html.match(/<button[^>]*aria-label="Review extraction queued-run"[^>]*>/)[0];assert.ok(!review.includes('disabled'));
 });
-test('Manage workspace model links preserve admin-only visibility',()=>{
+test('Settings model links preserve admin-only visibility',()=>{
  const {WorkspaceNavigation}=compile('workspace-navigation.tsx',{'./agent-logo':compile('agent-logo.tsx',{'./agent-logo.css':{}})});
  const props={view:'Extract',onNavigate(){},adminItems:[],adminOpen:true,onAdminToggle(){}};
  const member=renderToStaticMarkup(React.createElement(WorkspaceNavigation,{...props,isAdmin:false})),admin=renderToStaticMarkup(React.createElement(WorkspaceNavigation,{...props,isAdmin:true}));
- for(const label of ['Dashboard','Lapi Agent','Onboard','Dataset','Prompt','Extract'])assert.ok(member.includes('aria-label="'+label+'"'));
- assert.ok(!member.includes('aria-label="Onboard dataset"'));assert.ok(!admin.includes('aria-label="Onboard dataset"'));
+ for(const label of ['Dashboard','Lapi Agent','Onboard','Workspaces','Prompt','Extract'])assert.ok(member.includes('aria-label="'+label+'"'));
+ assert.ok(!member.includes('aria-label="Onboard workspace"'));assert.ok(!admin.includes('aria-label="Onboard workspace"'));
  assert.ok(!member.includes('aria-label="Model Registration"'));assert.ok(!member.includes('aria-label="Model Mapping"'));
  assert.ok(admin.includes('aria-label="Model Registration"'));assert.ok(admin.includes('aria-label="Model Mapping"'));
  assert.ok(!admin.includes('aria-label="Model"'));assert.ok(!admin.includes('id="model-navigation"'));

@@ -119,7 +119,7 @@ def authorize(actor, dataset_id):
     # Connecting storage and importing from it needs Editor access to the dataset.
     dataset = access.get_record(dataset_id, actor, 'knowledge_base', level='editor')
     if routing.dataset_config(dataset).get('active') is False:
-        raise HTTPException(409, 'Activate the dataset before using its source connections.')
+        raise HTTPException(409, 'Activate the workspace before using its source connections.')
     return dataset
 
 
@@ -285,7 +285,7 @@ def install(app, auth, api):
                 if not cfg['enabled']:
                     raise HTTPException(409, 'This connection is disabled.')
                 if not body.publish_to_dataset:
-                    raise HTTPException(409, 'Confirm that imported copies may be read by authorized users of this dataset.')
+                    raise HTTPException(409, 'Confirm that imported copies may be read by authorized users of this workspace.')
                 dataset = authorize(actor, cfg['dataset_id'])
                 snapshot = routing.execution_snapshot(dataset, 'embedding')
                 api.external_check(body.allow_external, True, snapshot['settings'])
@@ -365,7 +365,7 @@ def install(app, auth, api):
             api.external_check(body.allow_external, True, routing.execution_snapshot(dataset, 'embedding')['settings'])
             records = [access.get_record(document_id, actor, 'document') for document_id in dict.fromkeys(body.document_ids)]
             if any(record.parent_id != cfg['dataset_id'] for record in records):
-                raise HTTPException(400, 'Choose documents imported into this connection\'s dataset.')
+                raise HTTPException(400, 'Choose documents imported into this connection\'s workspace.')
             indexed = [record for record in records if record.status == 'ready']
             if indexed:
                 try:

@@ -7,7 +7,7 @@ export function answerPhase(message: Entity | null | undefined): string {
   if (/Answering or routing|Understanding/i.test(running)) return "Understanding your question";
   if (/Generating|Repairing|Writing/i.test(running)) return "Writing the answer";
   if (/Validating|Saving|Checking citation/i.test(running)) return "Checking the answer against its sources";
-  if (/Resolving|Checking accessible/i.test(running)) return "Checking dataset access";
+  if (/Resolving|Checking accessible/i.test(running)) return "Checking workspace access";
   return "Searching your knowledge";
 }
 

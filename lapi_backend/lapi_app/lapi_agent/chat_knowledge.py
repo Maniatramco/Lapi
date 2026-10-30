@@ -19,7 +19,7 @@ class PublishedKnowledge:
         self.actor=actor;self.dataset_id=dataset_id;self.documents=set(document_ids or [])
         with core.Session() as session:
             datasets=access.dataset_ids(actor,session)
-            if dataset_id and dataset_id not in datasets:raise HTTPException(404,'Dataset access removed.')
+            if dataset_id and dataset_id not in datasets:raise HTTPException(404,'Workspace access removed.')
             models=access.visible_models(datasets,session)
             records=list(session.scalars(select(core.Record).where(core.Record.kind.in_(knowledge.KINDS))))
             self.records={r.id:r for r in records if (r.kind not in ('agent_plan','agent_onboarding') or r.owner==actor and r.parent_id in datasets)
@@ -27,7 +27,7 @@ class PublishedKnowledge:
                 and access.allowed(r,actor,session,datasets,models)
                 and (not dataset_id or r.kind=='model' or (r.id if r.kind=='knowledge_base' else r.parent_id) in ('',dataset_id))}
         if any(id not in self.records or self.records[id].kind!='document' or self.records[id].parent_id!=dataset_id for id in self.documents):
-            raise HTTPException(400,'Selected document is outside the authorized dataset.')
+            raise HTTPException(400,'Selected document is outside the authorized workspace.')
         self.snapshot=knowledge.embedding_snapshot(actor,dataset_id)
         knowledge.require_active(self.snapshot['knowledge_collection'])
         self.index=knowledge.index_status()
@@ -84,7 +84,7 @@ class PublishedKnowledge:
         for p in points:
             expected=self.manifest['points'][p['id']]
             if p['payload'].get('content_digest')!=expected['content_digest'] or knowledge.digest({k:v for k,v in p['payload'].items() if k!='content_digest'})!=expected['content_digest']:
-                raise HTTPException(409,'Knowledge verification failed. Republish the affected dataset before answering.')
+                raise HTTPException(409,'Knowledge verification failed. Republish the affected workspace before answering.')
         return points
 
     def search(self,query,source_types,limit=5,root_ids=None,require_rerank=False,progress=None):

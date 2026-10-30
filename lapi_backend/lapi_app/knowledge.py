@@ -155,7 +155,7 @@ def eligible(actor, dataset_id='', document_ids=None):
     selected = set(document_ids or [])
     for id in selected:
         doc = access.get_record(id, actor, 'document')
-        if not dataset_id or doc.parent_id != dataset_id: raise HTTPException(400, 'Selected document is outside the selected dataset.')
+        if not dataset_id or doc.parent_id != dataset_id: raise HTTPException(400, 'Selected document is outside the selected workspace.')
     with core.Session() as session:
         datasets = access.dataset_ids(actor, session)
         records = session.scalars(select(core.Record).where(core.Record.kind.in_(KINDS))).all()

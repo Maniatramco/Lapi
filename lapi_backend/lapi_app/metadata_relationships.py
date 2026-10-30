@@ -12,12 +12,12 @@ TYPES = ('Dataset', 'Document', 'Extraction', 'Prompt', 'Review', 'Model')
 def build(actor, dataset_ids):
     selected = set(dataset_ids)
     if len(selected) > 100:
-        raise HTTPException(422, 'Choose up to 100 datasets for a relationship view.')
+        raise HTTPException(422, 'Choose up to 100 workspaces for a relationship view.')
     nodes, edges, warnings = {}, {}, set()
     with core.Session() as session:
         allowed = access.dataset_ids(actor, session)
         if not selected <= allowed:
-            raise HTTPException(404, 'Dataset metadata is no longer accessible.')
+            raise HTTPException(404, 'Workspace metadata is no longer accessible.')
         model_ids = set(session.scalars(select(relational.DatasetModel.model_id).where(
             relational.DatasetModel.dataset_id.in_(allowed), relational.DatasetModel.enabled == True)))
         records = {r.id: r for r in session.scalars(select(core.Record).where(
@@ -76,7 +76,7 @@ def build(actor, dataset_ids):
     configs = {}
     for id in sorted(selected):
         record = records.get(id)
-        if not record: raise HTTPException(404, 'Dataset metadata is no longer accessible.')
+        if not record: raise HTTPException(404, 'Workspace metadata is no longer accessible.')
         data = payload(record); configs[id] = data
         node('dataset:'+id, 'Dataset', record.name, [id], 'inactive' if data.get('active') is False else record.status,
              record.version, {'Dataset ID': id, 'Description': data.get('description', ''), 'Access': 'Authorized dataset'})
@@ -128,7 +128,7 @@ def build(actor, dataset_ids):
     # Recheck grants after source reads before publishing the graph response.
     with core.Session() as session:
         if not selected <= access.dataset_ids(actor, session):
-            raise HTTPException(404, 'Dataset metadata is no longer accessible.')
+            raise HTTPException(404, 'Workspace metadata is no longer accessible.')
     for item in [*nodes.values(), *edges.values()]: item['dataset_ids'] = sorted(item['dataset_ids'])
     return sorted(nodes.values(), key=lambda n: (TYPES.index(n['type']), n['label'].casefold(), n['id'])), list(edges.values()), sorted(warnings)
 

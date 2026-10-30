@@ -21,7 +21,7 @@ test('answers are cleaned to known values in question order; "Not sure yet" excl
  assert.deepEqual(toggleGoal(['research'],'ask'),['ask','research']);assert.deepEqual(toggleGoal(['ask'],'ask'),[]);
 });
 
-test('access: administrators and dataset Editors or Owners can add knowledge, Viewers cannot',()=>{
+test('access: administrators and workspace Editors or Owners can add knowledge, Viewers cannot',()=>{
  assert.deepEqual(accessFor({is_admin:true},[]),{isAdmin:true,canAddKnowledge:true,datasetCount:0});
  assert.equal(accessFor({},[{my_access:'viewer'},{my_access:'editor'}]).canAddKnowledge,true);
  assert.equal(accessFor({},[{my_access:'owner'}]).canAddKnowledge,true);
@@ -55,21 +55,21 @@ test('people who can add knowledge start with the quick start, then their source
 
 test('an administrator with no datasets creates one inside the quick start',()=>{
  const first=recommendNextSteps({goals:['knowledge_base'],sources:['oci_object']},{isAdmin:true,canAddKnowledge:true,datasetCount:0});
- assert.equal(first.primary.kind,'quick-start');assert.equal(first.primary.label,'Create a dataset and add documents');
+ assert.equal(first.primary.kind,'quick-start');assert.equal(first.primary.label,'Create a workspace and add documents');
  assert.deepEqual(first.steps.map(s=>s.kind),['quick-start','connect','ask']);assert.equal(first.steps[1].provider,'oci_object');
- assert.match(first.notes[0],/creates your first dataset/);
+ assert.match(first.notes[0],/creates your first workspace/);
 });
 
-test('Viewers are guided to ask in shared datasets and to ask an owner to connect their sources',()=>{
+test('Viewers are guided to ask in shared workspaces and to ask an owner to connect their sources',()=>{
  const guide=recommendNextSteps({goals:['ask','extract'],sources:['google_drive','files','not_sure']},viewer);
  assert.equal(guide.primary.kind,'quick-start');assert.equal(guide.primary.label,'Ask your first question');
  assert.ok(guide.steps.every(s=>!['connect','upload','add-knowledge','extract','create-dataset'].includes(s.kind)));
  assert.ok(guide.steps.some(s=>s.kind==='agent'));
- assert.ok(guide.notes.includes('Ask a dataset owner or administrator to connect Google Drive.'));
- assert.ok(guide.notes.includes('Ask a dataset owner or administrator to add your files.'));
+ assert.ok(guide.notes.includes('Ask a workspace owner or administrator to connect Google Drive.'));
+ assert.ok(guide.notes.includes('Ask a workspace owner or administrator to add your files.'));
  assert.ok(guide.notes.some(n=>/Editor access/.test(n)));
  const none=recommendNextSteps({goals:[],sources:[]},{isAdmin:false,canAddKnowledge:false,datasetCount:0});
- assert.equal(none.primary.kind,'agent');assert.match(none.notes[0],/No datasets are shared with you/);
+ assert.equal(none.primary.kind,'agent');assert.match(none.notes[0],/No workspaces are shared with you/);
  assert.equal(recommendNextSteps({goals:['research'],sources:[]},viewer).steps[1].kind,'research');
 });
 

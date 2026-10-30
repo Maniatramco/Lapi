@@ -17,7 +17,7 @@ export const SCENES: readonly Scene[] = [
   { id: "connect", title: "Connect", seconds: 10,
     caption: "Use Add knowledge to upload files, or connect cloud storage, Google Drive and SharePoint. A step-by-step guide helps with each one." },
   { id: "unify", title: "Unify", seconds: 12,
-    caption: "Documents go into datasets. Lapi reads them, even scans and photos, and indexes them with the models your administrator chose." },
+    caption: "Documents go into workspaces. Lapi reads them, even scans and photos, and indexes them with the models your administrator chose." },
   { id: "ask", title: "Ask", seconds: 12,
     caption: "Ask the Lapi Agent in plain language. Every answer shows its sources. Press the question mark key to see keyboard shortcuts." },
   { id: "extract", title: "Extract & review", seconds: 10,
@@ -25,7 +25,7 @@ export const SCENES: readonly Scene[] = [
   { id: "skills", title: "Skills", seconds: 9,
     caption: "Teach the agent with skills: a short playbook for a kind of document, written or uploaded once. It uses them whenever they fit." },
   { id: "secure", title: "Secure by design", seconds: 9,
-    caption: "Single sign-on, access per dataset and an activity log keep it safe. You're ready: start with Quick start on your Dashboard." },
+    caption: "Single sign-on, access per workspace and an activity log keep it safe. You're ready: start with Quick start on your Dashboard." },
 ];
 
 export const MOBILE_SCENES: readonly Scene[] = [
@@ -34,7 +34,7 @@ export const MOBILE_SCENES: readonly Scene[] = [
   { id: "connect", title: "Add", seconds: 10,
     caption: "Tap Add at the bottom. Take a photo of a paper document, or pick files. Several pages can be merged into one." },
   { id: "unify", title: "Read", seconds: 12,
-    caption: "Lapi reads every page, even photos and scans, and keeps them in your dataset, using the models your administrator chose." },
+    caption: "Lapi reads every page, even photos and scans, and keeps them in your workspace, using the models your administrator chose." },
   { id: "ask", title: "Ask", seconds: 12,
     caption: "Ask in plain language, right from your phone. Every answer shows its sources, so you can check them." },
   { id: "extract", title: "Extract", seconds: 10,

@@ -13,7 +13,7 @@ def require_admin(actor):
     # Trusted internal CLI calls and synthetic dependency overrides have no
     # authenticated HTTP actor. Every normal API request sets it in auth().
     if request_actor.get() is not None and not core.is_administrator(actor):
-        raise HTTPException(403, 'Only the administrator can manage dataset and model configuration.')
+        raise HTTPException(403, 'Only the administrator can manage workspace and model configuration.')
 
 
 RANK = {'viewer': 1, 'editor': 2, 'owner': 3}
@@ -50,7 +50,7 @@ def manages_datasets(actor, session=None):
 def require_contributor(actor):
     """Creating, deleting and restoring datasets: Administrators and Contributors."""
     if request_actor.get() is not None and not manages_datasets(actor):
-        raise HTTPException(403, 'Only administrators and contributors can create, delete or restore datasets.')
+        raise HTTPException(403, 'Only administrators and contributors can create, delete or restore workspaces.')
 
 
 def _saved_levels(actor, session):
@@ -100,9 +100,9 @@ def require_level(actor, dataset_id, needed):
         return
     level = level_for(actor, dataset_id)
     if level is None:
-        raise HTTPException(404, 'Not found or dataset access removed.')
+        raise HTTPException(404, 'Not found or workspace access removed.')
     if RANK[level] < RANK[needed]:
-        raise HTTPException(403, f'This needs {LABEL[needed]} access to the dataset; you have {LABEL[level]} access. Ask the dataset owner or an administrator.')
+        raise HTTPException(403, f'This needs {LABEL[needed]} access to the workspace; you have {LABEL[level]} access. Ask the workspace owner or an administrator.')
 
 
 def record_dataset(record):
@@ -172,7 +172,7 @@ def get_record(id, actor, kind=None, level='viewer'):
     with core.Session() as session:
         record = session.get(core.Record, id)
         if not record or (kind and record.kind != kind) or not allowed(record, actor, session):
-            raise HTTPException(404, 'Not found or dataset access removed.')
+            raise HTTPException(404, 'Not found or workspace access removed.')
     if level != 'viewer' and (dataset_id := record_dataset(record)):
         require_level(actor, dataset_id, level)
     return record

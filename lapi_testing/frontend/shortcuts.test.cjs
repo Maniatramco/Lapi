@@ -57,6 +57,6 @@ test('never while typing or with modifier keys',()=>{
 
 test('the help list and navigation tooltips describe every shortcut',()=>{
  const actions=SHORTCUT_LIST.map(item=>item.action);
- for(const expected of ['Show keyboard shortcuts','Search, or type in the chat','Go to Dashboard','Go to Lapi Agent','Go to Add knowledge','Go to Datasets','Go to Users & passwords','New chat in Lapi Agent','Close a dialog'])assert.ok(actions.includes(expected),expected);
+ for(const expected of ['Show keyboard shortcuts','Search, or type in the chat','Go to Dashboard','Go to Lapi Agent','Go to Add knowledge','Go to Workspaces','Go to Users & passwords','New chat in Lapi Agent','Close a dialog'])assert.ok(actions.includes(expected),expected);
  assert.equal(shortcutHint('Home'),' (G then D)');assert.equal(shortcutHint('Users & passwords'),' (G then U)');assert.equal(shortcutHint('Access map'),'');
 });

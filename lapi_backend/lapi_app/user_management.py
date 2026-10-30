@@ -302,15 +302,15 @@ def install(app, auth):
     @router.put('/api/users/{user_id}/datasets')
     def map_datasets(user_id: str, body: DatasetAssignments, owner=Depends(administrator)):
         ids=set(body.dataset_ids)
-        if len(ids)!=len(body.dataset_ids):raise HTTPException(400,'Dataset IDs must be unique.')
+        if len(ids)!=len(body.dataset_ids):raise HTTPException(400,'Workspace IDs must be unique.')
         with core.document_lock('administrator-auth'), core.document_lock('dataset-access'), account_audit(owner):
             with core.Session.begin() as session:
                 require_administrator(owner,session)
                 if not session.get(core.User,user_id):raise HTTPException(404,'User not found.')
-                if core.is_administrator(user_id,session):raise HTTPException(400,'Administrators always have access to every dataset.')
+                if core.is_administrator(user_id,session):raise HTTPException(400,'Administrators always have access to every workspace.')
                 found=set(session.scalars(select(relational.Dataset.dataset_id).where(relational.Dataset.dataset_id.in_(ids))))
-                if found!=ids:raise HTTPException(404,'One or more datasets no longer exist. No assignments changed.')
-                if set(body.levels)-ids:raise HTTPException(400,'Levels can only be set for datasets in dataset_ids.')
+                if found!=ids:raise HTTPException(404,'One or more workspaces no longer exist. No assignments changed.')
+                if set(body.levels)-ids:raise HTTPException(400,'Levels can only be set for workspaces in dataset_ids.')
                 existing={grant.dataset_id:grant for grant in session.scalars(select(relational.UserDataset).where(relational.UserDataset.user_id==user_id))}
                 for id,grant in existing.items():
                     if grant.enabled!=(id in ids):grant.enabled=id in ids

@@ -10,7 +10,7 @@ test('malformed shortcuts reopen choices and cannot be sent as knowledge questio
  assert.equal(agentMention('@\\',2).query,'');
  assert.equal(insertAgentCommand('@\\',{start:0,end:2},'@Upload'),'@Upload ');
  for(const text of ['?','...','\\'])assert.ok(agentInputIssue(text));
- for(const text of ['@Onboard','@onboard new dataset','@Upload files','@Extract','@ReExtract','email upload@example.com','Describe @Extract','can you list douccments names','8192?'])assert.equal(agentInputIssue(text),'');
+ for(const text of ['@Onboard','@onboard new workspace','@Upload files','@Extract','@ReExtract','email upload@example.com','Describe @Extract','can you list douccments names','8192?'])assert.equal(agentInputIssue(text),'');
 });
 test('slash is the command key and earlier @ commands keep working',()=>{
  const {agentInputIssue}=compiled.exports;

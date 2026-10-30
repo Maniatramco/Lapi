@@ -11,6 +11,6 @@ test('the live status line says what Lapi is doing in plain words',()=>{
  assert.equal(answerPhase(at('Searching unified knowledge')),'Searching your knowledge');
  assert.equal(answerPhase(at('Generating answer')),'Writing the answer');
  assert.equal(answerPhase(at('Validating citations')),'Checking the answer against its sources');
- assert.equal(answerPhase(at('Checking accessible datasets')),'Checking dataset access');
+ assert.equal(answerPhase(at('Checking accessible workspaces')),'Checking workspace access');
  assert.deepEqual(answerProgress(at('Generating answer',['Answering or routing','Searching'])),{done:2,total:3});
 });
