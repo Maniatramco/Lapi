@@ -1,6 +1,6 @@
 /* One-line status on phones; the floating progress card stays out of the way there. */
 .phone-status{display:none}
-@media (max-width: 640px) {
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
  .phone-status{display:flex;flex-direction:column;gap:6px;margin:0 0 8px}
  .phone-status>*{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;min-height:44px;padding:0 12px;border:1px solid #e3e9f4;border-radius:14px;background:#fff;color:#14213d;font:inherit;font-size:14px;font-weight:600;text-align:left}
  .phone-status>* span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

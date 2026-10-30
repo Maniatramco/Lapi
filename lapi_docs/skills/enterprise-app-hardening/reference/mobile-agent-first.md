@@ -90,4 +90,8 @@ User decision: no Dashboard on phones for anyone, admins included. Phones land o
   `GET /api/documents/{id}/row-context` (`workbook_context.row_context`, shared with the agent tool).
 - Preview tip: to exercise real chat components against a stand-in API, `POST /agent-v2/plans` needs `calls`,
   `document_ids` and `planner`; `/reply` is SSE with `event: done`.
+- Foldables and tablets count as phones: `deviceFor(width, touch)` is phone below 640 px, or on a touch screen up to
+  1100 px; the phone style sheets use `(max-width: 640px), (pointer: coarse) and (max-width: 1100px)`. A narrow window on
+  a computer stays a computer. Use `currentDevice()` rather than reading window width. Wider sizes keep the drawer menu
+  and a 760 px reading column. A touch laptop under 1100 px also counts as a phone.
 

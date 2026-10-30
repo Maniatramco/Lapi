@@ -18,7 +18,7 @@
 .enabled-models-devices button:disabled{cursor:not-allowed}
 .enabled-models-devices button[aria-pressed=true]:disabled{opacity:1}
 .enabled-models-devices button:focus-visible{outline:3px solid #315de7;outline-offset:2px}
-@media (max-width:640px){.enabled-models-devices button{min-height:44px}}
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {.enabled-models-devices button{min-height:44px}}
 .enabled-models-switch{position:relative;flex:none;width:56px;height:44px;padding:0;border:0;background:none;cursor:pointer}
 .enabled-models-switch>span{position:absolute;left:4px;top:8px;width:48px;height:28px;border-radius:14px;background:#cbd5e1;transition:background .15s}
 .enabled-models-switch>span::after{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.3);transition:transform .15s}

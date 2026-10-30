@@ -1,6 +1,6 @@
 /* Phone design D: answer-first and one-handed. Loaded after mobile.css; phones only (up to 640px).
    Colours: ink #14213d, muted #4d5a75 (5.9:1 on white), Lapi blue #2563eb, warning orange on #fff7ed. */
-@media (max-width: 640px) {
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
   /* Tab bar: Agent and Quick Extract, plus More for people with other screens. */
   body[data-tab-bar=on] .mobile-tab-bar { align-items: center; background: rgba(255,255,255,.96); border-top-color: #e3e9f4; }
   html body .tab-bar-item { color: #5b6782; font-size: 11px; font-weight: 600; gap: 3px; }
@@ -74,4 +74,15 @@
   html body .shell .review-save-footer .review-actions { display: flex; gap: 8px; width: 100%; margin-left: 0; }
   html body .shell .review-save-footer .review-actions .btn { flex: 1 1 auto; min-height: 52px !important; border-radius: 16px; font-size: 15px; }
   html body .shell .review-save-footer .review-actions .btn.primary { flex-grow: 2; }
+
+  /* Wider touch screens (foldables, tablets): the same layout with a drawer for the menu and a readable column. */
+  html body .sidebar { transform: translateX(-100%); visibility: hidden; width: 260px; }
+  html body .sidebar.open { transform: translateX(0); visibility: visible; }
+  html body .shell { margin-left: 0; }
+  html body .menu-toggle, html body .mobile-close { display: inline-flex; }
+  html body .shell .agent-v2, html body .shell .review-workspace, html body .shell .enabled-models, html body .phone-status { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; }
+  body[data-tab-bar=on] .mobile-tab-bar { justify-content: center; }
+  html body .tab-bar-item { flex: 0 1 180px; }
+  html body .quick-start:not(.is-enlarged) { max-width: 720px; margin-left: auto; margin-right: auto; }
+  html body .citation-panel { max-width: 720px; margin-left: auto; margin-right: auto; }
 }

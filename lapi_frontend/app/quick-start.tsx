@@ -5,7 +5,7 @@ import "./quick-start.css";
 import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,columnMapping,columnValue,defaultDatasetName,extractionStages,howBadge,howChosen,initialChoices,isSpreadsheet,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,recordCount,resultRows,sourceName,stepsFor,uploadable,
  type Field,type FieldType,type FileState,type Path,type Step,type TablePlan} from "./quick-start-flow";
 import {eligibleAgentModels} from "./agent-document-selection";
-import {deviceFor} from "./screens-client";
+import {currentDevice} from "./screens-client";
 import {openDatasetEditor} from "./manage-dataset";
 
 type Entity=Record<string,any>;
@@ -109,9 +109,9 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
   setQuestion(value);setAnswer(null);
   const catalog=await api('/dataset-chat/catalog','GET',undefined,undefined,true);
   const known=(catalog.datasets||[]).find((d:Entity)=>d.id===datasetId)||dataset;
-  const models=eligibleAgentModels(catalog.models||[],known,deviceFor(window.innerWidth));
+  const models=eligibleAgentModels(catalog.models||[],known,currentDevice());
   const model=models.find((m:Entity)=>m.id===known?.default_chat_model_id)?.id||models[0]?.id;
-  if(!model)throw new Error(`This dataset has no chat model for ${deviceFor(window.innerWidth)==='phone'?'phones':'computers'} yet. Ask an administrator to turn one on in Manage workspace › Enabled models.`);
+  if(!model)throw new Error(`This dataset has no chat model for ${currentDevice()==='phone'?'phones':'computers'} yet. Ask an administrator to turn one on in Manage workspace › Enabled models.`);
   const reply=await api('/dataset-chat/messages','POST',{text:value,dataset_ids:[datasetId],...(readyIds.length?{document_ids:readyIds}:{}),model_id:model});
   setAnswer(reply.message||null);
  });

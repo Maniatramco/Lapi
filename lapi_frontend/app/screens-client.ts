@@ -3,8 +3,15 @@
 export type Device='phone'|'computer';
 export type ScreenState={device:Device;screens:string[];views:string[];core:string[];administrator:boolean};
 
-/** Phones are narrower than 640 px, the same breakpoint as the app's phone layout. */
-export const deviceFor=(width:number):Device=>width<640?'phone':'computer';
+/** Phones are narrower than 640 px. Foldables and tablets count as phones too: touch screens up to 1100 px.
+ * A narrow window on a computer stays a computer. Matches PHONE_LAYOUT in the phone style sheets. */
+export const deviceFor=(width:number,touch=false):Device=>width<640||(touch&&width<=1100)?'phone':'computer';
+export const PHONE_LAYOUT='(max-width: 640px), (pointer: coarse) and (max-width: 1100px)';
+/** This window's device; 'computer' where there is no window. */
+export function currentDevice():Device{
+ if(typeof window==='undefined')return 'computer';
+ return deviceFor(window.innerWidth,Boolean(window.matchMedia?.('(pointer: coarse)').matches));
+}
 
 /** Views that never need a grant: the Dashboard and Lapi Agent (Quick start is a dialog on them). */
 export const CORE_VIEWS=['Home','Lapi agent V2'];

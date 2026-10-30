@@ -90,7 +90,7 @@
 .quick-start-primary{width:100%;min-height:54px;border:0;border-radius:14px;background:#fb923c;color:#14213d;font:inherit;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 10px 24px rgba(251,146,60,.3)}
 .quick-start-primary:hover:not(:disabled){background:#fdba74}
 .quick-start-primary:disabled{background:#e2e8f0;color:#64748b;box-shadow:none;cursor:default}
-@media(max-width:640px){
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
  .quick-start-backdrop{padding:0;place-items:stretch}
  .quick-start{width:100%;max-height:none;height:100%;border-radius:0}
  .quick-start-head{padding:calc(10px + env(safe-area-inset-top)) 16px 16px}
@@ -109,7 +109,7 @@
 .quick-start-launch strong{font-size:16px}.quick-start-launch small{color:#dbeafe;font-size:13.5px;line-height:1.4}
 .quick-start-launch-button{display:inline-flex;align-items:center;gap:6px;min-height:46px;padding:0 18px;border:0;border-radius:12px;background:#fb923c;color:#14213d;font:inherit;font-weight:800;cursor:pointer;flex:none;box-shadow:0 8px 18px rgba(251,146,60,.35)}
 .quick-start-launch-button:hover{background:#fdba74}
-@media(max-width:640px){.quick-start-launch{flex-wrap:wrap}.quick-start-launch-button{width:100%;justify-content:center}}
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {.quick-start-launch{flex-wrap:wrap}.quick-start-launch-button{width:100%;justify-content:center}}
 
 /* Step rail: only on wide screens, where the Quick start is a two-column panel. */
 .quick-start-rail{display:none}
@@ -149,7 +149,7 @@ body:has(.quick-start) .operation-popup{display:none}
 .quick-start-icons{display:flex;gap:8px}
 .quick-start-backdrop:has(.is-enlarged){padding:0}
 .quick-start.is-enlarged{width:100%;height:100%;max-height:none;border-radius:0}
-@media(max-width:640px){.quick-start-enlarge{display:none}}
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {.quick-start-enlarge{display:none}}
 
 /* New dataset fields, the merge choice and the extraction workflow. */
 .quick-start-new,.quick-start-merge{display:grid;gap:12px;margin:0;padding:14px;border:1px solid var(--blue-line);border-radius:16px;background:#f5f8ff;min-width:0}

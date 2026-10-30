@@ -20,7 +20,7 @@ import { AboutLapi } from "./about-lapi";
 import { WalkthroughGate } from "./walkthrough";
 import { WorkspaceAssist } from "./workspace-assist";
 import { OPEN_REVIEW_EVENT } from "./quick-start-flow";
-import {phoneRedirect, deviceFor, viewAllowed, agentOnly, type ScreenState } from "./screens-client";
+import {phoneRedirect, currentDevice, viewAllowed, agentOnly, type ScreenState } from "./screens-client";
 import { useDevice } from "./use-device";
 import { OperationProgress, extractionProgressJob } from "./operation-progress";
 import "./workspace-flow.css";
@@ -237,11 +237,11 @@ export default function App() {
   const [screens, setScreens] = useState<ScreenState | null>(null);
   useEffect(() => {
     if (!user) { setScreens(null); return; }
-    let stopped = false, device = deviceFor(window.innerWidth);
+    let stopped = false, device = currentDevice();
     const read = () => fetch(`/api/me/screens?device=${device}`, { credentials: "include" }).then(r => r.ok ? r.json() : null).then(state => { if (!stopped && state) setScreens(state); }).catch(() => undefined);
     void read();
     const timer = window.setInterval(() => void read(), 60000);
-    const resized = () => { const next = deviceFor(window.innerWidth); if (next !== device) { device = next; void read(); } };
+    const resized = () => { const next = currentDevice(); if (next !== device) { device = next; void read(); } };
     window.addEventListener("resize", resized);
     return () => { stopped = true; window.clearInterval(timer); window.removeEventListener("resize", resized); };
   }, [user?.id]);
@@ -281,7 +281,7 @@ export default function App() {
   useEffect(() => { setMobile(false); }, [view]);
   useEffect(() => { if (user && phoneRedirect(view, device)) { navigate("Lapi agent V2"); return; } if (user && screens && !allowedView(view)) navigate(device === "phone" ? "Lapi agent V2" : "Home"); }, [view, screens, user?.id, device]);
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 960px)");
+    const media = window.matchMedia("(max-width: 960px), (pointer: coarse) and (max-width: 1100px)");
     const sync = () => {
       setCompactNavigation(media.matches);
       if (!media.matches) setMobile(false);

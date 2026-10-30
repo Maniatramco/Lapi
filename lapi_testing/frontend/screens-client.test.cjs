@@ -7,6 +7,8 @@ const phone={device:'phone',screens:[],views:[],core:['home','agent','quick-star
 
 test('phones are under 640 px; the agent always shows, the Dashboard never does; other views need a grant',()=>{
  assert.equal(deviceFor(375),'phone');assert.equal(deviceFor(640),'computer');
+ // Foldables and tablets are phones; a narrow window on a computer is not.
+ assert.equal(deviceFor(884,true),'phone');assert.equal(deviceFor(1100,true),'phone');assert.equal(deviceFor(1101,true),'computer');assert.equal(deviceFor(884,false),'computer');
  assert.equal(viewAllowed('Lapi agent V2',phone,false),true);assert.equal(viewAllowed('Home',phone,false),false);
  for(const view of CORE_VIEWS)assert.equal(viewAllowed(view,{...phone,device:'computer'},false),true);
  assert.equal(viewAllowed('Datasets',phone,false),false);

@@ -1,7 +1,7 @@
 /* Phones (up to 640px): compact, one-handed layouts. Desktop and tablet layouts are untouched.
    Loaded after the screen styles; the button standard in buttons.css uses !important, so the
    tap-target overrides below repeat its selectors with one more element of specificity. */
-@media (max-width: 640px) {
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
   :root { --text-small: .8125rem; --text-caption: .8125rem; }
 
   /* Readable text: nothing below 13px for body content. */
@@ -90,7 +90,7 @@
 }
 
 /* Agent-first Dashboard on phones; the agent-only phone version hides the navigation drawer. */
-@media (max-width: 640px) {
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
  .shell[data-agent-only=true] .menu-toggle{display:none}
  body .shell .agent-v2 .agent-v2-chips{padding:4px 8px 6px;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
  .agent-chip{flex:none;min-height:36px}

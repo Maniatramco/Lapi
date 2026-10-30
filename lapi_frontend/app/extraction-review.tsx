@@ -1,5 +1,6 @@
 "use client";
 import {recordStep} from "./answer-reading";
+import {currentDevice} from "./screens-client";
 import {ActionButton} from "./action-button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, Minus, Plus, ExternalLink, FileText } from "lucide-react";
@@ -44,7 +45,7 @@ export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirt
   const [draft,setDraft]=useState(JSON.stringify(e.result??{},null,2)),[selected,setSelected]=useState("");
   const [saving,setSaving]=useState(false),[error,setError]=useState(""),[preview,setPreview]=useState<Entity|null>(null);
   const [sourceDocument,setSourceDocument]=useState('');
-  const firstProfile=e.table_rows||(e.merge_records&&typeof window!=='undefined'&&window.innerWidth<640)?'0':'all';
+  const firstProfile=e.table_rows||(e.merge_records&&currentDevice()==='phone')?'0':'all';
   const [profile,setProfile]=useState(firstProfile);
   const swipe=useRef<{x:number;y:number}|null>(null);
   const [pane,setPane]=useState('fields');
