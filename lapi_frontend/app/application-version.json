@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.39",
+  "version": "26.1.16.40",
   "releases": [
+    {
+      "version": "26.1.16.40",
+      "date": "2026-10-30",
+      "title": "Foldables and tablets get the phone layout",
+      "changes": [
+        "Touch screens up to 1100 pixels wide, such as foldables and tablets, now open on Lapi Agent with the Agent and Quick Extract tabs, and use the models offered on phones.",
+        "Computers without touch keep their layout, even in a narrow window."
+      ]
+    },
     {
       "version": "26.1.16.39",
       "date": "2026-10-30",

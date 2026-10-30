@@ -2,6 +2,12 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.40 - 30 October 2026
+
+Foldables and tablets get the phone layout
+
+- `deviceFor(width, touch)` and `currentDevice()`: phone below 640 px, or on a touch screen up to 1100 px. Phone style sheets use `(max-width: 640px), (pointer: coarse) and (max-width: 1100px)`. Wider sizes keep the drawer menu and a 760 px reading column.
+
 ## v26.1.16.39 - 30 October 2026
 
 Phones: Agent and Quick Extract
