@@ -1,6 +1,17 @@
 {
-  "version": "26.1.16.44",
+  "version": "26.1.16.45",
   "releases": [
+    {
+      "version": "26.1.16.45",
+      "date": "2026-10-31",
+      "title": "Private workspaces and a calmer phone",
+      "changes": [
+        "Your personal workspace is yours alone: nobody else sees it, whatever their role. Administrators and contributors open only the collections they created or were given.",
+        "On phones the top row holds just the workspace name, a dot for files that need you, and your account. Chat greets you by name with three big starters, and the collection chip opens the chat options.",
+        "Quick Extract shows what it found as figures first. The tab bar floats above the screen edge.",
+        "Your question in chat keeps its own width on the right."
+      ]
+    },
     {
       "version": "26.1.16.44",
       "date": "2026-10-30",

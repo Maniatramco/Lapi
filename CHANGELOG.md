@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.45 - 31 October 2026
+
+Private workspaces and a calmer phone
+
+- `dataset_access.py`: `dataset_ids` and `dataset_levels` no longer grant every collection to administrators and contributors over HTTP; the creator is Owner unless a disabled `UserDataset` row says they were removed. Trusted internal calls (no request actor) are unchanged.
+- `workspaces.py`: `visible` skips other people's personal workspaces; only administrators are Owner of the Organization workspace, and opening it grants them its collections. Administrators can be workspace and collection members like anyone else (`all_datasets` is always false).
+- Phone layout: single top row (`topbar-attention`, account menu), greeting by first name, `agent-v2-starters`, `agent-v2-scope-chip` and the options sheet replacing `agent-v2-context` and the model picker, `quick-start-figures`, floating `mobile-tab-bar`.
+- `chat-design.css`: the question bubble is `width:fit-content` inside a full-width request row.
+
 ## v26.1.16.44 - 30 October 2026
 
 Workspaces hold collections
