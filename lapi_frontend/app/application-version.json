@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.45",
+  "version": "26.1.16.46",
   "releases": [
+    {
+      "version": "26.1.16.46",
+      "date": "2026-10-31",
+      "title": "Lapi sets you up in a chat",
+      "changes": [
+        "At first sign-in Lapi asks what to call you, offers a team workspace, asks which workspace to use and creates your first collection with its type, from your answers, typed, tapped or spoken.",
+        "Your personal workspace and the greeting use the name you gave.",
+        "Quick Extract on phones opens straight on your documents, with a scan-style photo tile, the collection as a chip you can change, a reading ring and fields as chips."
+      ]
+    },
     {
       "version": "26.1.16.45",
       "date": "2026-10-31",

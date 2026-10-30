@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.46 - 31 October 2026
+
+Lapi sets you up in a chat
+
+- `setup-chat.tsx`, `setup-chat-script.ts`: first sign-in is a scripted chat (no model call): name, team workspace, which workspace, first collection and type; answers typed, tapped or spoken (browser speech recognition). Shown when the person has no name yet or the workspace gate would ask; the gate dialogs remain for team members and later use.
+- `preferences.py`: `name` (free text, 60 chars; omitted on save keeps it). `display_name` on `/api/auth/me` and sign-in. `workspaces.rename_personal` renames the personal workspace while it still has its default name; `_display` prefers the given name.
+- Quick start on phones: starts on documents for Quick Extract and creates the collection at upload; `quick-start-scope` chip, scan-style pick tiles, `quick-start-ring`, `quick-start-field-chips`.
+
 ## v26.1.16.45 - 31 October 2026
 
 Private workspaces and a calmer phone
