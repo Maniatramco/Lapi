@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.37 - 30 October 2026
+
+Choose and switch models from a phone
+
+- `PUT /api/model-registrations/{id}/enabled` (administrators): turns a registered model on or off by writing a new model version with only `enabled` changed; `guard_disable` keeps a workspace Default on (409), archived registrations are refused.
+- Enabled models screen (`enabled-models.tsx`, Manage workspace, all screen sizes; admin-only `models` screen): one switch per model, uses and Default roles shown, Default switches locked with the reason.
+- Phones: the chat composer's Agent Model picker has its own labelled full-width row, with a hint when no chat model is on.
+
 ## v26.1.16.36 - 30 October 2026
 
 A phone design that puts the answer first (phones only, up to 640px; computers unchanged)

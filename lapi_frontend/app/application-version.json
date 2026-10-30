@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.36",
+  "version": "26.1.16.37",
   "releases": [
+    {
+      "version": "26.1.16.37",
+      "date": "2026-10-30",
+      "title": "Choose and switch models from a phone",
+      "changes": [
+        "Administrators have a new Enabled models screen under Manage workspace, on phones and computers: one switch per registered model to offer it for chat and new work or not, without editing its connection. A workspace Default stays on until another Default is chosen.",
+        "On phones, the chat box shows the Agent Model picker on its own labelled row. It lists only models that are on and says where to turn one on when none is."
+      ]
+    },
     {
       "version": "26.1.16.36",
       "date": "2026-10-30",
