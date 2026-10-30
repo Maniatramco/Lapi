@@ -1,7 +1,7 @@
 "use client";
 import {ActionButton} from "./action-button";
 import {useCallback, useEffect, useLayoutEffect, useRef, useState,type DragEvent} from 'react';
-import {Database,History,Square, Plus, CheckCircle2, Loader2, Mic, ArrowUp, ArrowDown,X,FileText,UploadCloud,Eraser,RotateCcw} from 'lucide-react';
+import {Info,Database,History,Square, Plus, CheckCircle2, Loader2, Mic, ArrowUp, ArrowDown,X,FileText,UploadCloud,Eraser,RotateCcw} from 'lucide-react';
 import {isFileDrag,mergeAgentAttachments,attachmentSize,attachmentKey,isJsonAttachment} from './agent-attachments';
 import {readPromptUpload,type PromptUpload} from './prompt-upload';
 import {PromptUploadPreview} from './prompt-upload-preview';
@@ -81,6 +81,9 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  const composerContainer=useRef<HTMLDivElement>(null);
  const composerHighlight=useRef<HTMLDivElement>(null);
  const thread=useRef<HTMLDivElement>(null);const followBottom=useRef(true);const [showLatest,setShowLatest]=useState(false);
+ // Phones and tablets: connections, version and privacy stay out of the chat until asked for.
+ const [infoOpen,setInfoOpen]=useState(false);
+ useEffect(()=>{if(typeof document==='undefined')return;if(infoOpen)document.body.dataset.chatInfo='on';else delete document.body.dataset.chatInfo;return()=>{delete document.body.dataset.chatInfo;};},[infoOpen]);
  const lock=useRef(false); const mounted=useRef(true); const recognition=useRef<any>(null);
  const onJobsRef=useRef(onJobs); onJobsRef.current=onJobs;
  const onVisibleJobsRef=useRef(onVisibleJobs); onVisibleJobsRef.current=onVisibleJobs;
@@ -440,10 +443,12 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
   <header className="agent-v2-context">
    <label>Workspace<select aria-label="Agent workspace" value={dataset} disabled={attachmentsBlocked||(!catalogLoaded.current&&catalogLoading)} onChange={e=>{if(e.target.value===dataset)return;retrySubmittedPrompt.current='';retryPlanId.current='';setPromptProgress(null);setDataset(e.target.value);sessionStorage.setItem(key+'-dataset',e.target.value);setSavedPromptId('');setDocuments([]);setMentionClosed(true);cancelPrompt();setPromptAttachment(null);setPromptNotice('');}}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading workspaces…':catalogError?'Workspaces unavailable':'General chat'):'General chat'}</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
    {dataset&&<AgentDocumentFilter key={dataset} documents={readyDocuments} selected={documents} onChange={setDocuments} disabled={Boolean(working)||onboardingBusy||plans.some(active)}/>}
+   <button type="button" className="btn icon agent-v2-info" aria-label="About this chat" aria-expanded={infoOpen} title="Privacy, connections and version" onClick={()=>setInfoOpen(open=>!open)}><Info size={18}/></button>
    <button className="btn icon" aria-label="Agent chat history" title="Chat history" disabled={Boolean(working)||onboardingBusy||plans.some(active)} onClick={()=>void api('/conversations','GET',undefined,undefined,true).then(result=>{setHistory(result);setHistoryOpen(!historyOpen);}).catch(e=>setError(e.message))}><History size={18}/></button>
    <button className="btn icon" aria-label="New agent conversation" title="New conversation" disabled={Boolean(working)||onboardingBusy||plans.some(active)||!scopeReady} onClick={clearConversation}><Plus size={18}/></button>
    <button className="btn agent-v2-clear-chat" aria-label="Clear agent chat" title="Clear the current chat. Saved chats remain in history." disabled={Boolean(working)||onboardingBusy||plans.some(active)||!scopeReady||(!plans.length&&!pendingRequest)} onClick={clearConversation}><Eraser size={16}/><span>Clear chat</span></button>
   </header>
+  {infoOpen&&<div className="agent-v2-info-panel"><p>Chat uses your configured model and indexed knowledge directly. Onboarding, upload, extraction and re-extraction ask for external processing approval before sending files. Workflow requests and results are saved in Lapi.</p><p>Browser speech recognition may send audio to its speech service; voice is optional and text remains available.</p></div>}
   {historyOpen&&<div className="agent-v2-history"><strong>Saved chats · shared with Lapi Agent</strong><ActionButton className="text-button" onClick={()=>setHistoryOpen(false)} label="Close" action="close"/>{history.length?history.map(c=><button className="text-button" key={c.id} onClick={()=>void api(`/conversations/${c.id}`,'GET',undefined,undefined,true).then(conversation=>{restoreConversation(conversation);sessionStorage.setItem(key+'-conversation',c.id);sessionStorage.removeItem(key);sessionStorage.removeItem(key+'-history');setHistoryOpen(false);setError('');}).catch(e=>setError(e.message))}>{c.title||c.name}</button>):<p>No saved chats yet.</p>}</div>}
   <div ref={thread} className="agent-v2-thread" aria-label="Agent conversation" tabIndex={0} onScroll={event=>{const area=event.currentTarget;const bottom=area.scrollHeight-area.scrollTop-area.clientHeight<64;followBottom.current=bottom;setShowLatest(!bottom);}}>
    {onboardingOpen&&catalog.can_onboard_datasets&&<AgentOnboarding initialDocuments={documentFiles} initialPrompt={promptAttachment||undefined} onReview={onReview} api={api} models={catalog.models} defaults={datasetConfig} storageKey={key+'-onboarding'} onBusy={setOnboardingBusy} onReady={()=>{onWorkspaceChanged?.();void loadCatalog().catch(e=>setError(e.message));}} onEdit={id=>setManaging(id)} onUse={id=>{setDataset(id);setDocuments([]);setSavedPromptId('');rememberAssistantDataset(sessionStorage,username,id);setOnboardingOpen(false);sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}} onClose={completed=>{setOnboardingOpen(false);if(completed){sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}}}/>}

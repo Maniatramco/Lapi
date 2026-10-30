@@ -99,3 +99,4 @@ body .shell .workspace .agent-v2-compose-box:focus-within{border-color:#6397ce;b
 .agent-reading-headline{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}.agent-reading-headline span{font-size:13px;font-weight:600;color:#4d5a75}.agent-reading-headline strong{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.15;color:#14213d;overflow-wrap:anywhere}
 .agent-reading summary{min-height:32px;display:flex;align-items:center;cursor:pointer;font-weight:700;color:#1e3a8a}.agent-reading ul{margin:6px 0 2px;padding-left:18px;line-height:1.5}
 .agent-v2:not(:has(.agent-v2-exchange)) .agent-v2-latest{display:none}
+.agent-v2 .agent-v2-info,.agent-v2 .agent-v2-info-panel{display:none !important}
