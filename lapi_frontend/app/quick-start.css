@@ -190,4 +190,4 @@ body:has(.quick-start) .operation-popup{display:none}
 .quick-start-mapping li[data-how=you] .quick-start-mapping-badge{background:#f1f5f9;color:#334155}
 
 /* Results first as figures: one number per card. */
-.quick-start-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 12px}.quick-start-figures>div{display:flex;flex-direction:column;gap:2px;min-width:0;padding:12px;border:1px solid #e3e9f4;border-radius:16px;background:#f5f7fb}.quick-start-figures strong{font-size:26px;font-weight:800;line-height:1.1;letter-spacing:-.02em;color:#14213d;overflow-wrap:anywhere}.quick-start-figures span{font-size:13px;color:#4d5a75}
+.quick-start-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 12px}.quick-start-figures>div{display:flex;flex-direction:column;gap:2px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:16px;background:#f5f7fb}.quick-start-figures strong{font-size:26px;font-weight:800;line-height:1.1;letter-spacing:-.02em;color:var(--ink);overflow-wrap:anywhere}.quick-start-figures span{font-size:13px;color:var(--muted)}
