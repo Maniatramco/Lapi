@@ -5,9 +5,10 @@ compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerO
 const {deviceFor,viewAllowed,agentOnly,TRAINING_CARDS,CORE_VIEWS}=compiled.exports;
 const phone={device:'phone',screens:[],views:[],core:['home','agent','quick-start'],administrator:false};
 
-test('phones are under 640 px; the Dashboard and the agent always show; other views need a grant',()=>{
+test('phones are under 640 px; the agent always shows, the Dashboard never does; other views need a grant',()=>{
  assert.equal(deviceFor(375),'phone');assert.equal(deviceFor(640),'computer');
- for(const view of CORE_VIEWS)assert.equal(viewAllowed(view,phone,false),true);
+ assert.equal(viewAllowed('Lapi agent V2',phone,false),true);assert.equal(viewAllowed('Home',phone,false),false);
+ for(const view of CORE_VIEWS)assert.equal(viewAllowed(view,{...phone,device:'computer'},false),true);
  assert.equal(viewAllowed('Datasets',phone,false),false);
  assert.equal(viewAllowed('Datasets',{...phone,views:['Datasets']},false),true);
  assert.equal(viewAllowed('Datasets',phone,true),true);

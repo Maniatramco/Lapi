@@ -142,6 +142,7 @@ NOTES = {
     'DELETE /api/admin/documents/{id}': 'Administrator only: confirm exact filename, expected_version and expected_impact from deletion-preview. Block active dataset work; permanently clean up this document and related artifacts/results. Partial failures remain quarantined and deletion can resume. Retain content-free terminal queue audit rows.',
     'POST /api/admin/documents/{id}/retry': 'Administrator only: queue fresh indexing using current dataset embedding/OCR models, with explicit external transmission consent. Use the existing extraction rerun endpoint to create new structured results.',
     'GET /api/documents/{id}': 'Read document metadata, processing status, and dataset/index compatibility.',
+    'GET /api/documents/{id}/row-context': 'Read one spreadsheet row with its notes, the images and files attached to it and the matching rows of linked sheets.',
     'GET /api/documents/{id}/preview': 'Read a JSON text preview containing text, chunks, and document metadata. Before processing finishes, the text explains that it is not available yet. Use /source to view supported original files.',
     'GET /api/documents/{id}/download': 'Download the original uploaded file with a download filename.',
     'GET /api/documents/{id}/source': 'Return an original PDF, UTF-8 TXT, or JSON file inline for source viewing. DOCX inline viewing is rejected with 415; download DOCX to inspect its original layout.',

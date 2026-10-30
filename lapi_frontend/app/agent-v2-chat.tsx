@@ -1,4 +1,5 @@
 "use client";
+import {answerReadings} from "./answer-reading";
 import {useState} from 'react';
 import {Copy,FileText,Save} from 'lucide-react';
 import './agent-setup.css';
@@ -90,6 +91,10 @@ export function AgentChatAnswer({message,api,onError,onReview,onRecovery,onFollo
  return <div className="agent-v2-chat-answer" data-streaming={message.status==='streaming'}>
   {message.plan?.length>0&&<ol className="agent-plan" aria-label="Plan">{message.plan.map((step:Entity,index:number)=><li key={index} data-status={step.status}>{step.status==='done'?'✓':step.status==='skipped'?'–':'○'} {step.text}</li>)}</ol>}
   {message.status==='streaming'&&!answerText&&<p className="agent-thinking" role="status" aria-live="polite"><span className="agent-thinking-mark" aria-hidden="true"><i/><i/><i/></span><span className="agent-thinking-text">{answerPhase(message)}…</span></p>}
+  {message.status!=='streaming'&&answerReadings(message.citations).map(reading=><div className="agent-reading" key={reading.source}>
+   {reading.headline&&<div className="agent-reading-headline"><span>{reading.headline.label}</span><strong>{reading.headline.value}</strong></div>}
+   <details><summary>How I read your question</summary><ul>{reading.lines.map(line=><li key={line}>{line}</li>)}</ul></details>
+  </div>)}
   <AgentAnswerText text={answerText} citations={message.citations||[]} onCitation={openCitation} extractionIds={extractionIds} onReview={onReview}/>
   {message.charts?.length>0&&<div className="answer-charts">{message.charts.map((chart:Entity,index:number)=><AnswerChartView key={index} chart={chart as any} onSource={n=>{const source=(message.citations||[]).find((s:Entity)=>s.index===n);if(source)openCitation(source);}}/>)}</div>}
   <AnswerTokenUsage usage={message.token_usage} status={message.status}/>

@@ -9,13 +9,20 @@ export const deviceFor=(width:number):Device=>width<640?'phone':'computer';
 /** Views that never need a grant: the Dashboard and Lapi Agent (Quick start is a dialog on them). */
 export const CORE_VIEWS=['Home','Lapi agent V2'];
 
+/** Quick Extract hands its result to Review, so phones can always open it. */
+const PHONE_VIEWS=['Lapi agent V2','Extract','Review','Extraction Review'];
+/** Phones have no Dashboard for anyone: they open on Lapi Agent. */
+export const phoneRedirect=(view:string,device:Device)=>device==='phone'&&view==='Home';
+
 /** Whether a view may be shown. Administrators always may; before the state has loaded, everything may. */
 export function viewAllowed(view:string,state:ScreenState|null,isAdmin:boolean):boolean{
+ if(state?.device==='phone'&&view==='Home')return false;
  if(isAdmin||!state)return true;
+ if(state.device==='phone'&&PHONE_VIEWS.includes(view))return true;
  return CORE_VIEWS.includes(view)||state.views.includes(view);
 }
 
-/** The phone shows only Dashboard, Agent and Quick start: no "More" menu, no drawer. */
+/** The phone shows only Agent and Quick Extract: no "More" menu, no drawer. */
 export const agentOnly=(state:ScreenState|null,isAdmin:boolean)=>Boolean(state&&state.device==='phone'&&!isAdmin&&state.views.length===0);
 
 export type TrainingAction='ask'|'attach'|'quick-start'|'none';

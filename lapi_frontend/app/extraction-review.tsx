@@ -1,4 +1,5 @@
 "use client";
+import {recordStep} from "./answer-reading";
 import {ActionButton} from "./action-button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, Minus, Plus, ExternalLink, FileText } from "lucide-react";
@@ -43,10 +44,12 @@ export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirt
   const [draft,setDraft]=useState(JSON.stringify(e.result??{},null,2)),[selected,setSelected]=useState("");
   const [saving,setSaving]=useState(false),[error,setError]=useState(""),[preview,setPreview]=useState<Entity|null>(null);
   const [sourceDocument,setSourceDocument]=useState('');
-  const [profile,setProfile]=useState(e.table_rows?'0':'all');
+  const firstProfile=e.table_rows||(e.merge_records&&typeof window!=='undefined'&&window.innerWidth<640)?'0':'all';
+  const [profile,setProfile]=useState(firstProfile);
+  const swipe=useRef<{x:number;y:number}|null>(null);
   const [pane,setPane]=useState('fields');
   const locked=e.review_status==='reviewed'||e.review_locked===true;
-  useEffect(()=>{setProfile(e.table_rows?'0':'all');setSelected('');},[e.id]);
+  useEffect(()=>{setProfile(firstProfile);setSelected('');},[e.id]);
   const generation=useRef(0);
   const savedCallback=useRef(onSaved);savedCallback.current=onSaved;
   const job=extractionProgressJob(e,jobs);
@@ -81,6 +84,7 @@ export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirt
   useEffect(()=>{onDirty(dirty);return()=>onDirty(false);},[dirty,onDirty]);
   useEffect(()=>{if(!dirty)return;const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn);},[dirty]);
   useEffect(()=>{const current=++generation.current;setPreview(null);if(document&&e.status==='ready')api(`${sourceBase}/preview`,'GET',undefined,undefined,true).then(value=>{if(current===generation.current)setPreview(value);}).catch(err=>{if(current===generation.current)setPreview({error:err.message});});return()=>{generation.current++;};},[sourceBase,e.status,api]);
+  const step=(delta:number)=>{if(!parsed?.records)return;const next=recordStep(profile,parsed.records.length,delta);if(next===null)return;setProfile(next);const key=Object.keys(parsed.records[Number(next)]?.fields||{})[0];setSelected(key?`/records/${next}/fields/${key}`:'');};
   const reload=async()=>{if(dirty&&!window.confirm("Discard unsaved changes and reload the latest saved values?"))return;setError("");try{onSaved(await api(`/extractions/${e.id}`));}catch(err){setError((err as Error).message);}};
   const save=async()=>{if(saving||locked||parsed===undefined)return;setSaving(true);setError("");try{const result=JSON.parse(draft);onSaved(await api(`/extractions/${e.id}`,"PATCH",{result,version:e.version}));}catch(err){setError((err as Error).message);}finally{setSaving(false);}};
   const page=originalAsset?origin?.source_page:origin?.page;
@@ -95,8 +99,9 @@ export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirt
     {e.mock&&<p className="upload-notice">MOCK TEST OUTPUT · Synthetic development data. Review against the original.</p>}
     {(error||e.error)&&<p className="review-error" role="alert"><AlertCircle size={18}/>{error||e.error}</p>}
     {e.status!=="ready" ? <div role="status">{job&&<JobProgress job={job}/>}<p>Extraction {e.status}. Results appear here automatically when processing completes.</p><ActionButton className="btn" onClick={reload} label="Check status" action="status"/>{e.status==='failed'&&<ActionButton className="btn" disabled={saving} onClick={async()=>{setSaving(true);try{onSaved(await api(`/extractions/${e.id}/resume`,'POST',{version:e.version,template_id:e.template_id,allow_external:false}));setError('');}catch(error){setError((error as Error).message);}finally{setSaving(false);}}} label="Resume with latest saved prompt" action="retry"/>}</div> : <><div className="review-pane-tabs"><button className="btn" aria-pressed={pane==='fields'} onClick={()=>setPane('fields')}>Extracted fields</button><button className="btn" aria-pressed={pane==='source'} onClick={()=>setPane('source')}>Original document</button></div><div className="review-split" data-pane={pane}>
-      <section className="review-values" aria-label="Extracted fields"><div className="review-panel-heading"><h3>Extracted results</h3><div className="review-field-legend"><span><i className="legend-selected"/>Selected</span><span><i className="legend-modified"/>Modified value</span></div></div><div className="review-values-scroll">
+      <section className="review-values" aria-label="Extracted fields" onTouchStart={event=>{const t=event.touches[0];swipe.current={x:t.clientX,y:t.clientY};}} onTouchEnd={event=>{const start=swipe.current,t=event.changedTouches[0];swipe.current=null;if(start&&Math.abs(t.clientX-start.x)>70&&Math.abs(t.clientY-start.y)<40)step(t.clientX<start.x?1:-1);}}><div className="review-panel-heading"><h3>Extracted results</h3><div className="review-field-legend"><span><i className="legend-selected"/>Selected</span><span><i className="legend-modified"/>Modified value</span></div></div><div className="review-values-scroll">
         {(e.merge_records||e.table_rows)&&parsed?.records&&<label className="review-profile-picker">Profile / item<select aria-label="Review profile" value={profile} onChange={event=>{setProfile(event.target.value);setSelected(event.target.value==='all'?'':`/records/${event.target.value}/fields/full_name`);}}><option value="all">All {parsed.records.length} profiles / items</option>{parsed.records.map((r:Entity,i:number)=><option key={i} value={i}>{r.fields?.full_name||r.fields?.name||`Item ${i+1}`} — {r.source_filename}</option>)}</select></label>}
+        {(e.merge_records||e.table_rows)&&parsed?.records?.length>1&&<div className="review-record-pager" role="group" aria-label="Move between records"><button type="button" className="btn" disabled={recordStep(profile,parsed.records.length,-1)===null} onClick={()=>step(-1)}>Previous</button><strong aria-live="polite">{profile==='all'?`All ${parsed.records.length.toLocaleString()} records`:`Record ${(Number(profile)+1).toLocaleString()} of ${parsed.records.length.toLocaleString()}`}</strong><button type="button" className="btn" disabled={recordStep(profile,parsed.records.length,1)===null} onClick={()=>step(1)}>Next</button></div>}
         <div className="review-field-columns"><span>FIELD</span><span>VALUE</span></div>
         {entries.map(({path,value},index)=><div key={path}>{(e.merge_records||e.table_rows)&&path.match(/^\/records\/(\d+)\//)?.[1]!==entries[index-1]?.path.match(/^\/records\/(\d+)\//)?.[1]&&<h4>Record {Number(path.split('/')[2])+1} · {parsed.records[Number(path.split('/')[2])]?.source_filename}</h4>}<div className={`review-field ${selected===path?"selected":""} ${savedValues.get(path)!==JSON.stringify(value)?'modified':''}`} key={path}>
           <button title={`Show source for ${path}`} className="field-source" onClick={()=>{setSourceDocument('');setSelected(path);}} aria-label={`Show source for ${path}`} aria-pressed={selected===path}>{((e.merge_records||e.table_rows)?path.replace(/^\/records\/\d+\/fields/, ''):path).slice(1).replace(/_/g," ").replace(/\//g," › ")||"Result"}</button>

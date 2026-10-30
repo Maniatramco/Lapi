@@ -659,7 +659,9 @@ class AgentTools(Tools):
         if result.get('join'): data['join'] = result['join']
         label = 'Calculated from ' + name + ' · sheet ' + result['sheet']
         n = self.cite(label, json.dumps({k: data[k] for k in ('sheet', 'columns', 'rows', 'matched_rows')}, ensure_ascii=False, default=str),
-                      key='table:' + did + ':' + json.dumps(spec, sort_keys=True, default=str), kind='knowledge', document_id=did, section='Sheet: ' + result['sheet'])
+                      key='table:' + did + ':' + json.dumps(spec, sort_keys=True, default=str), kind='knowledge', document_id=did, section='Sheet: ' + result['sheet'], sheet=result['sheet'], rows=result['row_numbers'][:20],
+                      reading={'filters': filters or [], 'metrics': metrics or [], 'group_by': spec['group_by'], 'join': result.get('join'),
+                               'matched_rows': result['matched_rows'], 'columns': result['columns'], 'rows': result['rows'][:1] if len(result['rows']) == 1 else []})
         note = 'Exact values calculated from the stored spreadsheet (' + str(result['matched_rows']) + ' matching rows).'
         if result.get('join'):
             note += (' Joined ' + result['join']['on'] + ': ' + str(result['join']['matched_rows']) + ' rows matched, '
@@ -707,62 +709,16 @@ class AgentTools(Tools):
 
     def v2_row_context(self, document, sheet='', row=0, item='', match=''):
         """One row with everything connected to it: notes, attached items and linked rows."""
-        import io as _io
-        import pyarrow.parquet as pq
-        from .. import core, spreadsheet, workbook
+        from .. import workbook_context
         did, name, sheets, book = self._workbook(document)
-        read = lambda entry: pq.read_table(_io.BytesIO(core.store.get(entry['key']))).to_pylist()
-        same = lambda value, wanted: spreadsheet._display(value).strip().lower() == wanted
-        entry = next((s for s in sheets if s['name'].lower() == sheet.strip().lower()), sheets[0]) if sheet else sheets[0]
-        found_item = next((i for i in book.get('items', []) if i['id'] == item), None) if item else None
-        if item and not found_item:
-            raise HTTPException(422, 'No item ' + repr(item) + ' in ' + repr(name) + '. Use workbook_map to list items.')
-        if found_item:
-            target = next((l for l in found_item.get('links', []) if l.get('row')), None)
-            if not target:
-                data = {'document': name, 'item': {'id': found_item['id'], 'kind': found_item['kind'], 'where': workbook.where(found_item),
-                                                   'content': workbook.item_summary(found_item)}, 'row': None}
-                n = self.cite(found_item['id'] + ' in ' + name, json.dumps(data, ensure_ascii=False, default=str), key='item:' + did + ':' + item,
-                              kind='knowledge', document_id=did)
-                return envelope(data, [n], note='This item is not linked to a single row.')
-            entry = next((s for s in sheets if s['name'] == target['sheet']), entry); row = target['row']
-        table = read(entry)
-        if match and not row:
-            wanted = match.strip().lower()
-            for candidate in [entry] + [s for s in sheets if s is not entry]:
-                rows = table if candidate is entry else read(candidate)
-                hit = next((r for r in rows if any(same(v, wanted) for k, v in r.items() if k != '__row')), None)
-                if hit:
-                    entry, table, row = candidate, rows, hit['__row']; break
-            if not row:
-                raise HTTPException(422, 'No row of ' + repr(name) + ' has a cell equal to ' + repr(match) + '. Use query_table with "contains" to search.')
-        values = next((r for r in table if r.get('__row') == row), None)
-        if values is None:
-            raise HTTPException(422, 'Sheet ' + repr(entry['name']) + ' has no data row ' + str(row) + '.')
-        saved = next((s for s in book.get('sheets', []) if s['name'] == entry['name']), {})
-        attached = []
-        for i in book.get('items', []):
-            for l in i.get('links', []):
-                if l['sheet'] == entry['name'] and l.get('row') == row:
-                    attached.append({'id': i['id'], 'kind': i['kind'], 'where': workbook.where(i), 'how': l['how'], 'strength': l['strength'],
-                                     'content': workbook.item_summary(i)[:1500], **({'agrees': l['agrees']} if l.get('agrees') else {}),
-                                     **({'differs': l['differs']} if l.get('differs') else {})})
-        linked = []
-        for link in book.get('links', []):
-            if link.get('kind') == 'key' and link['from'] == entry['name']:
-                key = spreadsheet._display(values.get(link['from_column'])).strip().lower()
-                other = next((s for s in sheets if s['name'] == link['to']), None)
-                if key and other:
-                    hit = next((r for r in read(other) if same(r.get(link['to_column']), key)), None)
-                    if hit:
-                        linked.append({'sheet': other['name'], 'row': hit['__row'], 'through': link['from_column'] + ' = ' + link['to'] + '.' + link['to_column'],
-                                       'strength': link['strength'], 'values': {k: spreadsheet._display(v) for k, v in hit.items() if k != '__row'}})
-        data = {'document': name, 'sheet': entry['name'], 'row': row,
-                'values': {k: spreadsheet._display(v) for k, v in values.items() if k != '__row'},
-                'notes': (saved.get('row_notes') or {}).get(str(row), []), 'attached': attached, 'linked_rows': linked}
-        n = self.cite(name + ' · ' + entry['name'] + ' row ' + str(row), json.dumps(data, ensure_ascii=False, default=str)[:20000],
-                      key='row:' + did + ':' + entry['name'] + ':' + str(row), kind='knowledge', document_id=did,
-                      section='Sheet: ' + entry['name'] + ' · row ' + str(row))
+        data = workbook_context.row_context(did, name, sheets, book, sheet, row, item, match)
+        if data.get('row') is None:
+            n = self.cite(item + ' in ' + name, json.dumps(data, ensure_ascii=False, default=str), key='item:' + did + ':' + item,
+                          kind='knowledge', document_id=did)
+            return envelope(data, [n], note='This item is not linked to a single row.')
+        n = self.cite(name + ' · ' + data['sheet'] + ' row ' + str(data['row']), json.dumps(data, ensure_ascii=False, default=str)[:20000],
+                      key='row:' + did + ':' + data['sheet'] + ':' + str(data['row']), kind='knowledge', document_id=did,
+                      section='Sheet: ' + data['sheet'] + ' · row ' + str(data['row']), sheet=data['sheet'], rows=[data['row']])
         return envelope(data, [n], note='Values are from the stored table; attached image text is OCR (check it against the original). Say how each item is connected.')
 
     def v2_aggregate_results(self, operation, field='', group_by='', filters=None, extraction=''):

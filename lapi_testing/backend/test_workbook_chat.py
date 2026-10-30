@@ -65,3 +65,21 @@ def test_a_receipt_that_disagrees_is_shown_to_the_agent(system, monkeypatch):
     plan(s, d, text='Does the receipt match the transaction?')
     receipt = next(a for a in outputs(seen, 'row_context')[0]['data']['attached'] if a['kind'] == 'image')
     assert receipt['differs']['item'] == [254.37] and receipt['differs']['row']['Amount'] == 245.37
+
+
+def test_a_citation_can_open_its_row_and_carries_how_the_question_was_read(system, monkeypatch):
+    s = system; d = setup(s, monkeypatch)
+    document = next(x for x in s.api.get('/api/documents').json() if x['name'] == 'ledger.xlsx')
+    url = '/api/documents/' + document['id'] + '/row-context'
+    row = s.api.get(url, params={'sheet': 'Transactions', 'row': 3})
+    assert row.status_code == 200, row.text
+    data = row.json()
+    assert data['values']['Transaction ID'] == 'TXN-2' and data['linked_rows'][0]['values']['Country'] == 'India'
+    assert any(a['kind'] == 'image' for a in data['attached'])
+    assert s.api.get(url, params={'sheet': 'Transactions', 'row': 9999}).status_code == 422
+    seen = scripted(monkeypatch,
+        tool('query_table', document='ledger.xlsx', sheet='Transactions', filters=[{'column': 'Status', 'op': '=', 'value': 'Overdue'}], metrics=[{'op': 'count'}]),
+        *[{'text': 'One is overdue [1].', 'calls': []}] * 3)
+    reply = plan(s, d, text='How many are overdue?')
+    tools_output = outputs(seen, 'query_table')[0]
+    assert tools_output['data']['matched_rows'] >= 1

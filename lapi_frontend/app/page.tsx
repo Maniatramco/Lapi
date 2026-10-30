@@ -20,7 +20,8 @@ import { AboutLapi } from "./about-lapi";
 import { WalkthroughGate } from "./walkthrough";
 import { WorkspaceAssist } from "./workspace-assist";
 import { OPEN_REVIEW_EVENT } from "./quick-start-flow";
-import { deviceFor, viewAllowed, agentOnly, type ScreenState } from "./screens-client";
+import {phoneRedirect, deviceFor, viewAllowed, agentOnly, type ScreenState } from "./screens-client";
+import { useDevice } from "./use-device";
 import { OperationProgress, extractionProgressJob } from "./operation-progress";
 import "./workspace-flow.css";
 import { DatasetWorkspace, DatasetMappings, ModelPicker, eligibleModels, modelLabel } from "./dataset-workspace";
@@ -244,7 +245,8 @@ export default function App() {
     window.addEventListener("resize", resized);
     return () => { stopped = true; window.clearInterval(timer); window.removeEventListener("resize", resized); };
   }, [user?.id]);
-  const allowedView = (name: string) => viewAllowed(name, screens, Boolean(user?.is_admin));
+  const device = useDevice();
+  const allowedView = (name: string) => !phoneRedirect(name, device) && viewAllowed(name, screens, Boolean(user?.is_admin));
   const phoneAgentOnly = agentOnly(screens, Boolean(user?.is_admin));
   const [authChecked, setAuthChecked] = useState(false);
   const [csrf, setCsrf] = useState("");
@@ -277,7 +279,7 @@ export default function App() {
   const navigationIsDrawer = compactNavigation || view === 'Lapi agent V2' || view === 'Home';
   const drawerOpen = mobile && navigationIsDrawer;
   useEffect(() => { setMobile(false); }, [view]);
-  useEffect(() => { if (user && screens && !allowedView(view)) navigate("Home"); }, [view, screens, user?.id]);
+  useEffect(() => { if (user && phoneRedirect(view, device)) { navigate("Lapi agent V2"); return; } if (user && screens && !allowedView(view)) navigate(device === "phone" ? "Lapi agent V2" : "Home"); }, [view, screens, user?.id, device]);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 960px)");
     const sync = () => {
@@ -894,7 +896,7 @@ export default function App() {
               </button>
             </Notice>
           )}
-          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs} datasetId={dashboardDatasetId||kb}/>
+          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs}/>
           {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin||user.is_contributor)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
           {view === "About" && <AboutLapi/>}
           <WalkthroughGate api={api} active={view === "Home"} userId={user.id as string | undefined}/>

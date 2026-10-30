@@ -72,3 +72,22 @@ columns, Review), then built as phone-only CSS plus one component, so desktop is
   device, else the first offered model. Like screens, this is a product choice enforced in the app.
 - Test harness gotcha: the component tests' stand-in React does not call lazy `useState(() => …)`
   initialisers and finds effects by order or source text; give hooks plain initial values.
+
+## Phones: Agent and Quick Extract only (Lapi, after v26.1.16.38; replaces the phone Home above)
+User decision: no Dashboard on phones for anyone, admins included. Phones land on Lapi Agent.
+- `phoneRedirect` + `viewAllowed` in screens-client.ts; page.tsx also checks `useDevice()` directly so the
+  menu hides Dashboard even before /api/me/screens answers. Review is always allowed on phones because
+  Quick Extract hands its result there. Tabs: Agent, Quick Extract (More only when not agent-only).
+- Quick Extract = QuickStart with `quickExtract` prop: path preset to extract; the choose step keeps only the
+  AI consent and Continue (never drop the consent gate).
+- `phone-status.tsx`: one-line attention / reading / extracting rows; the floating progress card is hidden on phones.
+- Composer: one row of attach, model name, voice, send; starter chips and footer hide once a conversation exists.
+- Review: paging with Previous / Next and swipe (`recordStep`), page scrolls as one, filters hidden. It moves
+  between records but there is NO per-record approval in the data model: Reviewed locks the whole run.
+- Answers: `citation.reading` is written by query_table from the calculation that ran (`answerReadings`), so
+  the headline number and "How I read your question" never rely on the model's wording. A citation with
+  `sheet` + `rows` (or section `Sheet: X · row N`) opens Source / Row / Attached / Linked tabs through
+  `GET /api/documents/{id}/row-context` (`workbook_context.row_context`, shared with the agent tool).
+- Preview tip: to exercise real chat components against a stand-in API, `POST /agent-v2/plans` needs `calls`,
+  `document_ids` and `planner`; `/reply` is SSE with `event: done`.
+

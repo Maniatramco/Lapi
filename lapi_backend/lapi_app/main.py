@@ -372,6 +372,13 @@ def preview(id:str,owner=Depends(auth)):
     info={'page_count':original_pdf_page_count(store.get(r.ref))} if r.name.lower().endswith('.pdf') else {}
     try:data=store.json('documents/'+id+'/chunks.json');return {'text':'\n\n'.join(c['text'] for c in data['chunks']),'chunks':data['chunks'],'document':representation(r),**info}
     except FileNotFoundError:return {'text':'Text is not available until processing completes.','chunks':[],'document':representation(r),**info}
+@app.get('/api/documents/{id}/row-context')
+def row_context(id:str,sheet:str='',row:int=0,owner=Depends(auth)):
+    from . import spreadsheet,workbook,workbook_context
+    r=get_record(id,owner,'document')
+    sheets=spreadsheet.tables(store,id)
+    if not sheets:raise HTTPException(422,repr(r.name)+' is not a spreadsheet, or it has not been read yet.')
+    return workbook_context.row_context(id,r.name,sheets,workbook.load(store,id) or {},sheet,row)
 @app.get('/api/documents/{id}/download')
 def download(id:str,owner=Depends(auth)):
     from urllib.parse import quote

@@ -83,3 +83,4 @@
 .extraction-directory .extract-search-clear:hover{background:#eaf1fd;color:#0667ef}.extraction-directory .extract-search-clear:focus-visible{outline:2px solid #0667ef;outline-offset:1px}
 @media(max-width:560px){.extraction-directory .extract-list-toolbar{grid-template-columns:minmax(0,1fr);gap:9px}.extraction-directory .extract-search input{font-size:16px}}
 @media(prefers-reduced-motion:reduce){.extraction-directory .extract-search{transition:none}}
+.review-record-pager{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;margin:0 0 10px}.review-record-pager strong{text-align:center;font-size:14px}.review-record-pager .btn{min-height:40px}

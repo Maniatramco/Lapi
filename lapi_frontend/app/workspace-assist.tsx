@@ -1,7 +1,7 @@
 "use client";
 import {useCallback,useEffect,useId,useRef,useState,type KeyboardEvent as ReactKeyboardEvent,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
-import {ArrowRight,Check,CheckSquare,CloudUpload,Database,FileSearch,Home,Keyboard,Menu,Plus,MessageSquare,Search,Sparkles,Table2,Users,X} from 'lucide-react';
+import {ArrowRight,Check,CloudUpload,Database,FileSearch,Keyboard,Menu,MessageSquare,Search,Sparkles,Table2,Users,X} from 'lucide-react';
 import {AgentLogo} from './agent-logo';
 import {TOUR_SETTLED_EVENT,tourSettledFor} from './walkthrough';
 import {GOALS,SOURCES,accessFor,addKnowledgeRoute,cleanPreferences,recommendNextSteps,shouldAskSetup,showNextSteps,toggleGoal,toggleSource,type Goal,type NextStep,type Preferences,type Source} from './setup-guide';
@@ -10,8 +10,7 @@ import './workspace-assist.css';
 import './mobile.css';
 import './phone-design.css';
 import {QuickStart} from './quick-start';
-import {openAgentTraining} from './agent-training';
-import {PhoneHome} from './phone-home';
+import {PhoneStatus} from './phone-status';
 import {attentionItems,openAttention} from './needs-attention';
 
 type Api=(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;
@@ -119,11 +118,11 @@ function ShortcutsDialog({onClose}:{onClose:()=>void}){
  </div>;
 }
 
-export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigation,onChanged=()=>undefined,agentOnly=false,onSelectDataset,documents=[],jobs=[],datasetId}:{api:Api;user:Entity;view:string;datasets:Entity[];onNavigate:(view:string)=>unknown;onOpenNavigation:()=>void;onChanged?:()=>void;agentOnly?:boolean;onSelectDataset?:(id:string)=>void;documents?:Entity[];jobs?:Entity[];datasetId?:string}){
+export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigation,onChanged=()=>undefined,agentOnly=false,onSelectDataset,documents=[],jobs=[]}:{api:Api;user:Entity;view:string;datasets:Entity[];onNavigate:(view:string)=>unknown;onOpenNavigation:()=>void;onChanged?:()=>void;agentOnly?:boolean;onSelectDataset?:(id:string)=>void;documents?:Entity[];jobs?:Entity[]}){
  const userId=String(user?.id||user?.username||'');
  const access=accessFor(user,datasets);
  const [preferences,setPreferences]=useState<Preferences|null>(null);
- const [sheetOpen,setSheetOpen]=useState(false),[helpOpen,setHelpOpen]=useState(false),[quickOpen,setQuickOpen]=useState(false);
+ const [sheetOpen,setSheetOpen]=useState(false),[helpOpen,setHelpOpen]=useState(false),[quickOpen,setQuickOpen]=useState(false),[quickExtract,setQuickExtract]=useState(false);
  const [tourDone,setTourDone]=useState(()=>tourSettledFor()===String(user?.id||''));
  const [announcement,setAnnouncement]=useState(''),[mounted,setMounted]=useState(false);
  const sequence=useRef<ShortcutState>(INITIAL_STATE),own=useRef<HTMLDivElement>(null);
@@ -166,12 +165,6 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   const el=await waitFor(['#dashboard-ask-input','textarea[aria-label="Message Dataset Knowledge Chat"]']);
   if(!el||(el as HTMLTextAreaElement).disabled){go('Lapi agent V2');const agent=await waitFor(['textarea[aria-label="Message Lapi Agent"]']);agent?.focus();if(agent&&text)fill(agent,text);return;}
   el.scrollIntoView?.({block:'center',behavior:'smooth'});el.focus();if(text)fill(el,text);
- },[go]);
- // Phone Home: questions go to Lapi Agent, typed in for the person to send.
- const askAgent=useCallback(async(text?:string)=>{
-  go('Lapi agent V2');
-  const el=await waitFor(['textarea[aria-label="Message Lapi Agent"]']);
-  if(!el)return;el.focus();if(text)fill(el,text);
  },[go]);
  const newChat=useCallback(async()=>{
   go('Lapi agent V2');
@@ -242,15 +235,6 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
    <small>{access.canAddKnowledge?'A guided 2-minute workflow: photo or files, then an answer with sources or an AI-written extraction.':'Pick a dataset shared with you and get an answer with its sources.'}</small></div>
   <button type="button" className="quick-start-launch-button" onClick={()=>setQuickOpen(true)}>Quick start <ArrowRight size={16} aria-hidden="true"/></button>
  </section>:null;
- // Phones: the Dashboard opens with the agent as the front door.
- const hero=view==='Home'&&userId?<section className="agent-hero" aria-label="Lapi Agent">
-  <span className="agent-hero-mark"><AgentLogo size={34}/></span>
-  <div><strong>Lapi Agent</strong><small>Ask, add documents, pull out data and chart it, all in one conversation.</small></div>
-  <div className="agent-hero-actions">
-   <button type="button" className="agent-hero-primary" onClick={()=>go('Lapi agent V2')}><MessageSquare size={17} aria-hidden="true"/> Ask Lapi Agent</button>
-   <button type="button" className="agent-hero-secondary" onClick={()=>{go('Lapi agent V2');window.setTimeout(openAgentTraining,300);}}>How it works</button>
-  </div>
- </section>:null;
  const card=view==='Home'&&showNextSteps(preferences)&&guidance?<section className="next-steps-card" aria-labelledby="next-steps-title">
   <header><div><h2 id="next-steps-title">Your next steps</h2><p>{goalNames.length||sourceNames.length?[goalNames.length?`For: ${goalNames.join(', ')}`:'',sourceNames.length?`Knowledge in: ${sourceNames.join(', ')}`:''].filter(Boolean).join(' · '):'Suggested for your access'}</p></div>
    <button type="button" className="btn icon next-steps-hide" aria-label="Hide next steps" title="Hide next steps" onClick={dismissCard}><X size={16}/></button></header>
@@ -259,24 +243,19 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
   <button type="button" className="text-button next-steps-change" onClick={()=>setSheetOpen(true)}>Change my answers</button>
  </section>:null;
 
- // The chosen dataset, or the only active one.
- const activeDatasets=datasets.filter(d=>d.active!==false),home=activeDatasets.find(d=>d.id===datasetId)||(activeDatasets.length===1?activeDatasets[0]:undefined);
- const phoneHome=view==='Home'&&userId?<PhoneHome datasetName={home?.name||''} datasetId={home?.id} documents={documents} jobs={jobs}
-  attention={attentionItems(documents,jobs,datasets).length} canAdd={access.canAddKnowledge} onAsk={text=>void askAgent(text)} onAdd={()=>setQuickOpen(true)} onAttention={()=>openAttention()}/>:null;
+ const attention=attentionItems(documents,jobs,datasets).length;
+ const status=userId?<PhoneStatus documents={documents} jobs={jobs} attention={attention} onAttention={()=>openAttention()} onReview={()=>go('Extract')}/>:null;
  const tab=(target:string,label:string,Icon:typeof Database|null)=>{const current=view===target;return <button type="button" className="tab-bar-item" aria-label={label} aria-current={current?'page':undefined} onClick={()=>go(target)}>{Icon?<Icon size={22} aria-hidden="true"/>:<AgentLogo size={24}/>}<span>{label}</span></button>;};
  const layer:ReactNode=<div ref={own} className="workspace-assist-layer">
   <nav className="mobile-tab-bar" aria-label="Quick navigation">
-   {tab('Home','Home',Home)}
-   {tab('Lapi agent V2','Ask',null)}
-   {access.canAddKnowledge&&<button type="button" className="tab-bar-item tab-bar-add" aria-label="Add documents" onClick={()=>setQuickOpen(true)}><span className="tab-bar-add-mark" aria-hidden="true"><Plus size={26}/></span></button>}
-   {!agentOnly&&tab('Extract','Review',CheckSquare)}
+   {tab('Lapi agent V2','Agent',null)}
+   {access.canAddKnowledge&&<button type="button" className="tab-bar-item" aria-label="Quick Extract" aria-current={quickExtract?'page':undefined} onClick={()=>{setQuickExtract(true);setQuickOpen(true);}}><Table2 size={22} aria-hidden="true"/><span>Quick Extract</span></button>}
    {!agentOnly&&<button type="button" className="tab-bar-item" aria-label="More pages" aria-haspopup="dialog" aria-controls="workspace-navigation" onClick={onOpenNavigation}><Menu size={22} aria-hidden="true"/><span>More</span></button>}
   </nav>
-  {view==='Home'&&!sheetOpen&&<button type="button" className="mobile-ask-fab" aria-label="Ask a question" onClick={()=>void ask()}><MessageSquare size={20} aria-hidden="true"/><span>Ask</span></button>}
   {sheetOpen&&preferences&&<SetupSheet initial={preferences} access={access} onSave={async answers=>{await save(answers);}} onSkip={skip} onAct={step=>void act(step)} onClose={()=>setSheetOpen(false)}/>}
   {helpOpen&&<ShortcutsDialog onClose={()=>setHelpOpen(false)}/>}
-  {quickOpen&&<QuickStart onSelectDataset={onSelectDataset} api={api} user={user} datasets={datasets} sources={preferences?.sources||[]} initialFiles={quickFiles} onClose={()=>{setQuickOpen(false);setQuickFiles([]);}} onChanged={onChanged} onNavigate={target=>go(target)}/>}
+  {quickOpen&&<QuickStart onSelectDataset={onSelectDataset} api={api} user={user} datasets={datasets} sources={preferences?.sources||[]} initialFiles={quickFiles} quickExtract={quickExtract} onClose={()=>{setQuickOpen(false);setQuickFiles([]);setQuickExtract(false);}} onChanged={onChanged} onNavigate={target=>go(target)}/>}
   <p className="sr-only" aria-live="polite" role="status">{announcement}</p>
  </div>;
- return <>{phoneHome}{hero}{launcher}{card}{mounted&&createPortal(layer,document.body)}</>;
+ return <>{status}{launcher}{card}{mounted&&createPortal(layer,document.body)}</>;
 }

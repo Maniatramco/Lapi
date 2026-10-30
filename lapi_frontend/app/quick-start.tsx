@@ -23,12 +23,12 @@ const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
  * reading → a first answer with sources, or a first extraction with a prompt the AI drafts
  * from the document. Full screen on phones, a dialog on larger screens. */
 const ENLARGED_KEY='lapi:quick-start-enlarged';
-export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose,onChanged,onNavigate,onSelectDataset}:{api:Api;user:Entity;datasets:Entity[];sources?:string[];initialFiles?:File[];onClose:()=>void;onChanged:()=>void;onNavigate:(view:string)=>void;onSelectDataset?:(id:string)=>void}){
+export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickExtract=false,onClose,onChanged,onNavigate,onSelectDataset}:{api:Api;user:Entity;datasets:Entity[];sources?:string[];initialFiles?:File[];quickExtract?:boolean;onClose:()=>void;onChanged:()=>void;onNavigate:(view:string)=>void;onSelectDataset?:(id:string)=>void}){
  // Contributors (Keycloak lapi-contributor) create datasets and are Owner on all of them, like administrators.
  const isAdmin=Boolean(user?.is_admin||user?.is_contributor);
  const editor=canAddDocuments(datasets,isAdmin);
  const choices=editor?uploadable(datasets,isAdmin):askable(datasets);
- const [path,setPath]=useState<Path>('ask');
+ const [path,setPath]=useState<Path>(quickExtract?'extract':'ask');
  const steps=stepsFor(datasets,isAdmin,path);
  const [step,setStep]=useState<Step>('dataset');
  // Enlarged: the Quick start fills the window (remembered on this device).
@@ -177,7 +177,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
      </span>
     </div>
     <p className="quick-start-eyebrow">Quick start · step {position+1} of {steps.length}</p>
-    <h2 id="quick-start-title" tabIndex={-1}>{STEP_TITLE[step]}</h2>
+    <h2 id="quick-start-title" tabIndex={-1}>{quickExtract&&step==='choose'?'Ready to pull out your data':STEP_TITLE[step]}</h2>
    </header>
    <div className="quick-start-body">
 
@@ -233,12 +233,12 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
     </>}
 
     {step==='choose'&&<>
-     <p className="quick-start-lead">Both use the AI models set up for <strong>{dataset?.name||'this dataset'}</strong>.</p>
+     <p className="quick-start-lead">{quickExtract?'This uses':'Both use'} the AI models set up for <strong>{dataset?.name||'this dataset'}</strong>.</p>
      {consentBox('qs-consent-ai',aiConsent,setAiConsent,'Let Lapi send my question or the document text to the AI model set up for this dataset.')}
-     <div className="quick-start-paths">
+     {quickExtract?<div className="quick-start-paths"><button type="button" onClick={startExtract} disabled={busy}><Table2 size={24}/><span><strong>Continue</strong><small>Lapi suggests the fields from your document; you check them, then it extracts.</small></span></button></div>:<div className="quick-start-paths">
       <button type="button" onClick={startAsk} disabled={busy}><MessageSquare size={24}/><span><strong>Ask a question</strong><small>Get an answer with the sources it came from.</small></span></button>
       <button type="button" onClick={startExtract} disabled={busy}><Table2 size={24}/><span><strong>Pull out data</strong><small>Lapi suggests the fields from your document; you check them, then it extracts.</small></span></button>
-     </div>
+     </div>}
     </>}
 
     {step==='ask'&&<>
@@ -323,7 +323,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
     {step==='dataset'&&<button type="button" className="quick-start-primary" disabled={busy||(!choices.length&&!canCreateDataset(isAdmin))||(!editor&&!aiConsent)} onClick={()=>void chooseDataset()}>{busy?'Creating…':'Continue'}</button>}
     {step==='documents'&&<button type="button" className="quick-start-primary" disabled={busy||!files.length||!uploadConsent} onClick={()=>void upload()}>{busy?(merging?'Merging and uploading…':'Uploading…'):merging?`Merge ${files.length} into one and read`:`Upload ${files.length||''} and read`.replace('  ',' ')}</button>}
     {step==='processing'&&<button type="button" className="quick-start-primary" disabled={!state.ready} onClick={next}>{state.ready?'Continue':'Reading…'}</button>}
-    {step==='choose'&&<p className="quick-start-foot-note">{aiConsent?'Choose one above.':'Tick the box above to continue.'}</p>}
+    {step==='choose'&&<p className="quick-start-foot-note">{aiConsent?(quickExtract?'Tap Continue above.':'Choose one above.'):'Tick the box above to continue.'}</p>}
     {step==='ask'&&<button type="button" className="quick-start-primary" disabled={!answer||busy} onClick={next}>{answer?'Finish':'Ask to continue'}</button>}
     {step==='prompt'&&<button type="button" className="quick-start-primary" disabled={busy||!fields.length} onClick={()=>void extract(tablePlan?columnMapping(columnPicks):undefined)}>{tablePlan?'Extract with these columns':'Save prompt and extract'}</button>}
     {step==='extracting'&&(rows.length&&extraction?<div className="quick-start-foot-actions">

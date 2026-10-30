@@ -95,3 +95,6 @@ body .shell .workspace .agent-v2-composer .agent-v2-compose-box .agent-v2-input 
 body .shell .workspace .agent-v2-compose-box:focus-within{border-color:#6397ce;box-shadow:0 0 0 1px #dbeafe}
 @media(max-width:560px){body .shell .workspace .agent-v2-composer .agent-v2-compose-box .agent-v2-input .agent-v2-editor :is(textarea,.agent-v2-input-highlight){font-size:16px}}
 .agent-v2-model-empty{display:block;font-size:12px;line-height:1.4;color:#92400e}
+.agent-reading{margin:0 0 10px;padding:10px 12px;border-radius:14px;background:#f1f5fd;font-size:14px}
+.agent-reading-headline{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}.agent-reading-headline span{font-size:13px;font-weight:600;color:#4d5a75}.agent-reading-headline strong{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.15;color:#14213d;overflow-wrap:anywhere}
+.agent-reading summary{min-height:32px;display:flex;align-items:center;cursor:pointer;font-weight:700;color:#1e3a8a}.agent-reading ul{margin:6px 0 2px;padding-left:18px;line-height:1.5}

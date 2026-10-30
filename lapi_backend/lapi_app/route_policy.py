@@ -152,6 +152,7 @@ POLICY = {
     ('POST', '/api/documents/upload'): 'editor',
     ('GET', '/api/documents/{id}'): 'viewer',
     ('GET', '/api/documents/{id}/preview'): 'viewer',
+    ('GET', '/api/documents/{id}/row-context'): 'viewer',
     ('GET', '/api/documents/{id}/download'): 'viewer',
     ('GET', '/api/documents/{id}/source'): 'viewer',
     ('GET', '/api/documents/{id}/page-image'): 'viewer',
