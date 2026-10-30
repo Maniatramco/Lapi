@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.36 - 30 October 2026
+
+A phone design that puts the answer first (phones only, up to 640px; computers unchanged)
+
+- `phone-home.tsx`, `phone-home-data.ts`, `phone-home.css`: Home with a greeting, the dataset's ready count, one ask box (questions go to Lapi Agent's composer), suggested questions from the newest ready files, Needs you (from `attentionItems`) and Reading now (step and share of workflow stages done). Replaces the phone hero, Quick start banner, floating Ask button and background progress card on Home.
+- Tab bar: Home, Ask, raised Add (Quick start), Review, More.
+- `phone-design.css`: chat question bubble and answer card, chip follow-ups and sources, rounded composer; citation panel as a bottom sheet; Quick start column check as cards; sticky Review buttons.
+- `howBadge` in `quick-start-flow.ts`: a short badge for each field's column choice, shown in the mapping on every screen size.
+
 ## v26.1.16.35 - 29 October 2026
 
 Workbooks: everything read and connected (see `lapi_docs/workbooks.md`)

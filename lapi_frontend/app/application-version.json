@@ -1,6 +1,18 @@
 {
-  "version": "26.1.16.35",
+  "version": "26.1.16.36",
   "releases": [
+    {
+      "version": "26.1.16.36",
+      "date": "2026-10-30",
+      "title": "A phone design that puts the answer first",
+      "changes": [
+        "On phones, Home opens on one ask box with suggested questions from your newest files, then what needs you (files that failed) and what Lapi is still reading, with its step and progress.",
+        "The phone tab bar is Home, Ask, a raised Add button in the middle, Review and More.",
+        "Chat on phones shows your question in a dark bubble and the answer on a card; sources and follow-up questions are large chips, and a source opens as a sheet from the bottom.",
+        "When Quick start checks your spreadsheet columns, each field shows how its column was chosen: same name, by meaning, linked sheet, AI per row or no column.",
+        "On phones, Review keeps its save and approve buttons large and at the bottom. Computers are unchanged."
+      ]
+    },
     {
       "version": "26.1.16.35",
       "date": "2026-10-29",
