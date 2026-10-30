@@ -10,6 +10,7 @@ export const PAGE_INTROS:Record<string,Intro>={
  'Extract':{group:'Onboard',step:'Step 4 of 4',title:'Review',text:'Check extracted fields against the source before they are trusted in answers and exports.'},
  'Model Registration':{group:'Manage workspace',title:'Model registration',text:'Register chat, extraction, embedding and OCR models and test their connections.'},
  'Model Mapping':{group:'Manage workspace',title:'Model mapping',text:'Choose which models each dataset uses for embedding, chat, extraction and OCR.'},
+ 'Enabled models':{group:'Manage workspace',title:'Enabled models',text:'Turn registered models on or off for chat and new work, from a computer or a phone.'},
  'Users & passwords':{group:'Manage workspace',title:'Users & passwords',text:'Manage people, roles and dataset access, and change your own password.'},
  'Access map':{group:'Manage workspace',title:'Access map',text:'See who can open which dataset as a graph, change it in one place, and check that OpenFGA agrees.'},
  'Jobs & activity':{group:'Manage workspace',title:'Jobs & activity',text:'Indexing, extraction and cleanup run in the background. Follow their progress and retry failures here.'},

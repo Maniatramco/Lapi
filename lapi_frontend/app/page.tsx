@@ -37,7 +37,7 @@ import { rememberAssistantDataset } from "./agent-prompt-selection";
 import {prepareFreshLoginChat} from './chat-login-session';
 import { fetchWithSessionCsrf } from "./session-request";
 import {pendingJobIds,mergeJobUpdates} from './workflow-polling';
-import {
+import { ToggleRight,
   Activity,
   Bot,
   BookOpen,
@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { AddKnowledge } from "./add-knowledge";
 import { PageBand, PAGE_INTROS } from "./page-band";
+import { EnabledModels } from "./enabled-models";
 import { JobsBoard } from "./jobs-board";
 import { NeedsAttentionDialog, attentionItems, onAttention, type AttentionScope } from "./needs-attention";
 import { ManageDataset, onDatasetEditor, type ManageRequest } from "./manage-dataset";
@@ -91,6 +92,7 @@ type View =
   | "Files & processing"
   | "Model Registration"
   | "Model Mapping"
+  | "Enabled models"
   | "Users & passwords"
   | "Access map"
   | "Token usage"
@@ -115,6 +117,7 @@ const sections: { name: View; icon: typeof Shield; group?: string }[] = [
   { name: "Token usage", icon: Coins },
   { name: "Model Registration", icon: Layers },
   { name: "Model Mapping", icon: BookOpen },
+  { name: "Enabled models", icon: ToggleRight },
   { name: "Add knowledge", icon: CloudUpload },
 ];
 // Keep saved route identifiers compatible while presenting the product names.
@@ -806,7 +809,7 @@ export default function App() {
           <span className="brand-name">Lapi</span>
         </div>
         <div className="brand-sub">AI Data Platform</div>
-        <WorkspaceNavigation view={view} isAdmin={Boolean(user.is_admin)} allowed={allowedView} onNavigate={navigate} adminOpen={adminNavigation} onAdminToggle={()=>setAdminNavigation(!adminNavigation)} adminItems={sections.filter(s=>allowedView(s.name)&&!["About","Home","Datasets","Add knowledge","Lapi Agent","Lapi agent V2","Skills & memory","Extract","Extract Data","Review","Extraction Review","Re-extract","Prompt templates","Model Registration","Model Mapping"].includes(s.name)&&(user.is_admin||["Users & passwords","Jobs & activity"].includes(s.name)||(Boolean((user as {is_auditor?:boolean}).is_auditor)&&s.name==="Access map")))}/>
+        <WorkspaceNavigation view={view} isAdmin={Boolean(user.is_admin)} allowed={allowedView} onNavigate={navigate} adminOpen={adminNavigation} onAdminToggle={()=>setAdminNavigation(!adminNavigation)} adminItems={sections.filter(s=>allowedView(s.name)&&!["About","Home","Datasets","Add knowledge","Lapi Agent","Lapi agent V2","Skills & memory","Extract","Extract Data","Review","Extraction Review","Re-extract","Prompt templates","Model Registration","Model Mapping","Enabled models"].includes(s.name)&&(user.is_admin||["Users & passwords","Jobs & activity"].includes(s.name)||(Boolean((user as {is_auditor?:boolean}).is_auditor)&&s.name==="Access map")))}/>
 
         <div className="nav-footer">
           <div className="row" style={{ marginBottom: 9 }}>
@@ -975,6 +978,8 @@ export default function App() {
             onSaved={model => { setModels(current => current.some(m => m.id === model.id) ? current.map(m => m.id === model.id ? model : m) : [model, ...current]); notify("Model saved. New runs use the updated connection; re-apply an edited Default embedding model to rebuild the knowledge index."); reload(); }}
             onDefaultsChanged={() => { notify("Workspace Default saved."); reload(); }}
             onMapping={() => navigate("Model Mapping")} />}
+          {view === "Enabled models" && <EnabledModels models={models} api={api} onRegistration={() => navigate("Model Registration")}
+            onChanged={model => { setModels(current => current.map(m => m.id === model.id ? model : m)); notify(`${model.name} is ${model.enabled === false ? "off" : "on"}.`); reload(); }} />}
           {view === "Model Mapping" && <section className="panel model-mapping-screen">
             <MappingOverview datasets={kbs} selected={selectedDataset?.id || ""} busy={busy} onSelect={changeDataset} />
             <div className="field mapping-dataset-select"><label htmlFor="mapping-dataset">Dataset</label><select id="mapping-dataset" value={selectedDataset?.id || ""} onChange={e => changeDataset(e.target.value)} disabled={busy}><option value="">Choose a dataset</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}{d.active === false ? " · Inactive" : ""}</option>)}</select></div>

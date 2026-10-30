@@ -22,6 +22,14 @@
   /* Composer: one rounded field with the send button inside, above the keyboard. */
   html body .shell .workspace .agent-v2-composer .agent-v2-compose-box { border-radius: 26px; border-color: #d6e0f3; box-shadow: 0 10px 30px rgba(20,33,61,.10); }
 
+  /* Model picker: its own labelled row above the attach, voice and send buttons. */
+  html body .shell .agent-v2-compose-controls { flex-wrap: wrap; row-gap: 6px; }
+  html body .shell .agent-v2 .agent-v2-model-control { order: -1; flex: 1 1 100%; display: flex; align-items: center; gap: 8px; padding: 2px 4px 0; }
+  html body .shell .agent-v2 .agent-v2-model-control > span { display: inline !important; flex: none; padding: 0; font-size: 13px; font-weight: 600; color: #4d5a75; }
+  html body .shell .agent-v2 .agent-v2-model-control select { flex: 1; min-width: 0; max-width: none; min-height: 40px; border: 1px solid #dfe6f3; border-radius: 12px; background: #f8fafc; font-size: 15px; color: #14213d; }
+  html body .shell .agent-v2 .agent-v2-model-control .agent-v2-model-empty { flex-basis: 100%; }
+  html body .shell .agent-v2-compose-controls > .btn.icon:first-of-type { margin-right: auto; }
+
   /* Sources open as a sheet from the bottom instead of a side panel. */
   html body .citation-panel { inset: auto 0 0 0; width: 100%; max-width: 100%; height: 88dvh; max-height: 88dvh; border: 0; border-radius: 24px 24px 0 0; box-shadow: 0 -20px 50px rgba(15,23,42,.25); }
   html body .citation-panel::backdrop { background: rgba(15,23,42,.5); }

@@ -116,6 +116,7 @@ POLICY = {
     ('PUT', '/api/model-registrations/{id}'): 'admin',
     ('POST', '/api/model-registrations/test'): 'admin',
     ('PUT', '/api/model-registrations/{id}/default'): 'admin',
+    ('PUT', '/api/model-registrations/{id}/enabled'): 'admin',
     ('GET', '/api/model-registrations/{id}/prices'): 'signed_in',
     ('POST', '/api/model-registrations/{id}/prices'): 'admin',
     ('GET', '/api/local-models'): 'signed_in',

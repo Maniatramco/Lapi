@@ -94,3 +94,4 @@ body .shell .workspace .agent-v2-composer .agent-v2-compose-box .agent-v2-input 
 .agent-v2-command-token{color:#0667ef}
 body .shell .workspace .agent-v2-compose-box:focus-within{border-color:#6397ce;box-shadow:0 0 0 1px #dbeafe}
 @media(max-width:560px){body .shell .workspace .agent-v2-composer .agent-v2-compose-box .agent-v2-input .agent-v2-editor :is(textarea,.agent-v2-input-highlight){font-size:16px}}
+.agent-v2-model-empty{display:block;font-size:12px;line-height:1.4;color:#92400e}

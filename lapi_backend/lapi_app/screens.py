@@ -33,7 +33,7 @@ SCREENS = [
     ('storage', 'Storage', ['Storage'], True),
     ('files', 'Files & processing', ['Files & processing'], True),
     ('token-usage', 'Token usage', ['Token usage'], True),
-    ('models', 'Model Registration', ['Model Registration', 'Model Mapping'], True),
+    ('models', 'Model Registration', ['Model Registration', 'Model Mapping', 'Enabled models'], True),
 ]
 IDS = [s[0] for s in SCREENS]
 PRESETS = {

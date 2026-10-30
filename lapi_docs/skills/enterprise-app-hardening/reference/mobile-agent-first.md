@@ -50,3 +50,15 @@ columns, Review), then built as phone-only CSS plus one component, so desktop is
 - Preview without a backend: build the web image and run it with `API_INTERNAL_URL` pointing at a tiny
   stand-in API (`/api/auth/me` with a csrf token, `/api/datasets`, `/api/documents`, `/api/jobs`, everything
   else `[]`/`{}`), then check at 390px in the browser pane.
+
+## Models on phones (Lapi, after v26.1.16.36)
+- Chat model picker on phones: the composer's existing "Agent Model" select gets its own labelled,
+  full-width row above the attach/voice/send buttons (phone-design.css). It lists only enabled chat
+  models mapped for the dataset and preselects the dataset Default; when none is on it says where an
+  administrator turns one on.
+- Admin screen "Enabled models" (Manage workspace, all screen sizes; covered by the admin-only `models`
+  screen in screens.py): one row per registered model with a 44px switch. Backed by
+  `PUT /api/model-registrations/{id}/enabled` (admin in route_policy): writes a new model version with
+  only `enabled` changed, no connection re-test; `guard_disable` keeps a workspace Default on (409 with
+  the reason, and the UI locks that switch and says which Default to change first). Archived
+  registrations are refused.

@@ -481,6 +481,24 @@ class RetryInput(BaseModel):
     allow_external: bool = False
 
 
+class EnabledInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    enabled: bool
+
+
+def set_enabled(model_id, enabled, actor):
+    """Offer a registered model for new work, or stop offering it, without editing its connection."""
+    from . import dataset_models as routing
+    with core.document_lock('model-' + model_id):
+        record = routing.owned(model_id, actor, 'model')
+        data = routing.model_data(record)
+        if data.get('archived'): raise HTTPException(409, 'This registration is archived. Switch its replacement model instead.')
+        if not enabled: guard_disable(model_id)
+        if data.get('enabled', True) != enabled:
+            record = routing.write_version(record, dict(data, enabled=enabled))
+    return routing.model_public(record)
+
+
 def install(app, auth):
     from . import dataset_access as access
 
@@ -493,6 +511,11 @@ def install(app, auth):
         access.require_admin(actor)
         set_default(id, body.role, actor, body.acknowledge_index_rebuild, body.allow_external)
         return public(actor)
+
+    @app.put('/api/model-registrations/{id}/enabled')
+    def switch(id: str, body: EnabledInput, actor=Depends(auth)):
+        access.require_admin(actor)
+        return set_enabled(id, body.enabled, actor)
 
     @app.get('/api/workspace/knowledge-index')
     def index(actor=Depends(auth)):
