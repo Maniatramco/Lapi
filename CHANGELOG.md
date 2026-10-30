@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.38 - 30 October 2026
+
+Different models for phones and computers
+
+- Models store `devices` (`computer`, `phone`; missing means both). `PUT /api/model-registrations/{id}/enabled` accepts `devices` (omitted keeps it, empty is refused); registration edits and `PUT /api/models/{id}` keep it; `model_public` always returns it.
+- Enabled models: Phone and Computer toggles per model; counts of chat models per device.
+- `eligibleAgentModels(models, dataset, device)` with `useDevice()` (640 px, live on resize) filters Lapi Agent, Dataset Knowledge Chat and Quick start. Like screens per device, enforced in the app.
+
 ## v26.1.16.37 - 30 October 2026
 
 Choose and switch models from a phone

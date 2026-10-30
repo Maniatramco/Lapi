@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.37",
+  "version": "26.1.16.38",
   "releases": [
+    {
+      "version": "26.1.16.38",
+      "date": "2026-10-30",
+      "title": "Different models for phones and computers",
+      "changes": [
+        "In Manage workspace > Enabled models, each model has Phone and Computer toggles: offer it on phones, computers or both, so small models can serve phones and large ones computers. Models start on both.",
+        "Lapi Agent, the Dashboard chat and Quick start list only the chat models offered on the device in use, and switch when the window crosses the phone width.",
+        "The choice stays when a model's connection is edited in Model Registration."
+      ]
+    },
     {
       "version": "26.1.16.37",
       "date": "2026-10-30",
