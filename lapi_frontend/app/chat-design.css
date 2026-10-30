@@ -19,8 +19,8 @@ body .shell .agent-v2 .agent-v2-exchange,body .shell .agent-v2 .agent-v2-message
 @keyframes chat-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
 /* Your question: a soft bubble on the right. */
-body .shell .agent-v2 .agent-v2-request{display:flex;flex-direction:column;align-items:flex-end;gap:8px;margin:0 auto 18px;background:none;border:0;padding:0}
-body .shell .agent-v2 .agent-v2-user{max-width:min(85%,620px);padding:11px 17px;border:0;border-radius:20px 20px 6px 20px;background:var(--chat-bubble);color:var(--chat-ink);
+body .shell .agent-v2 .agent-v2-request{display:flex;flex-direction:column;align-items:flex-end;gap:8px;width:100%;max-width:none;margin:0 0 18px;background:none;border:0;padding:0}
+body .shell .agent-v2 .agent-v2-user{width:fit-content;overflow-wrap:break-word;max-width:min(85%,620px);padding:11px 17px;border:0;border-radius:20px 20px 6px 20px;background:var(--chat-bubble);color:var(--chat-ink);
   font-family:var(--chat-sans);font-size:16px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;box-shadow:none}
 
 /* Lapi's answer: no card, just readable text. */

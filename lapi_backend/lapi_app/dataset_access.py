@@ -33,7 +33,7 @@ def is_auditor(actor, session=None):
 
 
 def is_contributor(actor, session=None):
-    """Contributors are Owner on every dataset and may create datasets (not manage the workspace)."""
+    """Contributors may create datasets; like everyone they open only what they created or were given."""
     from . import authz
     if authz.enabled():
         return authz.is_contributor(actor)
@@ -69,10 +69,16 @@ def _saved_levels(actor, session):
     return levels
 
 
+def _created(actor, session, live):
+    """Collections this person made, unless someone has since removed them from it."""
+    removed = set(session.scalars(select(relational.UserDataset.dataset_id).where(relational.UserDataset.user_id == actor, relational.UserDataset.enabled == False)))
+    return set(session.scalars(live.where(core.Record.owner == actor))) - removed
+
+
 def dataset_levels(actor, session):
-    """Each dataset this person can open, with their level: 'owner' for administrators and contributors."""
+    """Each dataset this person can open, with their level. Its creator is Owner; a role alone opens nothing."""
     live = select(core.Record.id).where(core.Record.kind == 'knowledge_base', core.Record.status != 'deleted')
-    if manages_datasets(actor, session):
+    if request_actor.get() is None and manages_datasets(actor, session):  # Trusted internal work, such as background jobs.
         return {id: 'owner' for id in session.scalars(live)}
     if not session.get(core.User, actor) and request_actor.get() is None:
         return {id: 'owner' for id in session.scalars(live.where(core.Record.owner == actor))}
@@ -82,8 +88,9 @@ def dataset_levels(actor, session):
         levels = {}
         for level in ('viewer', 'editor', 'owner'):  # Later levels overwrite: the highest wins.
             levels.update({id: level for id in authz.datasets_at(actor, level) & existing})
-        return levels
-    return {id: level for id, level in _saved_levels(actor, session).items() if id in existing}
+    else:
+        levels = {id: level for id, level in _saved_levels(actor, session).items() if id in existing}
+    return levels | {id: 'owner' for id in _created(actor, session, live)}
 
 
 def level_for(actor, dataset_id, session=None):
@@ -116,16 +123,17 @@ def record_dataset(record):
 
 def dataset_ids(actor, session):
     live = select(core.Record.id).where(core.Record.kind == 'knowledge_base', core.Record.status != 'deleted')
-    if manages_datasets(actor, session):
+    if request_actor.get() is None and manages_datasets(actor, session):  # Trusted internal work, such as background jobs.
         return set(session.scalars(live))
+    created = _created(actor, session, live)
     if not session.get(core.User, actor) and request_actor.get() is None:
-        return set(session.scalars(live.where(core.Record.owner == actor)))
+        return created
     from . import authz
     if authz.enabled():
         # Intersect in Python: Oracle limits IN lists to 1000 values.
-        return set(session.scalars(live)) & authz.viewable_datasets(actor)
+        return created | (set(session.scalars(live)) & authz.viewable_datasets(actor))
     # Own grants and team grants (without OpenFGA, the database answers).
-    return set(_saved_levels(actor, session)) & set(session.scalars(live))
+    return created | (set(_saved_levels(actor, session)) & set(session.scalars(live)))
 
 
 def allowed(record, actor, session, datasets=None, models=None):

@@ -67,3 +67,21 @@ def test_existing_datasets_are_placed_without_widening_access(accounts):
         assert all(not w['organization'] for w in outsider.get('/api/workspaces').json()['workspaces'])
         assert outsider.get('/api/datasets/' + shared['id']).status_code == 404
     assert core.store.json(records[1].ref)['workspace_id'] != organization['id']  # Unshared: the owner's own.
+
+
+def test_personal_workspaces_stay_private_from_every_role(accounts):
+    admin = accounts; login(admin); add_outsider()
+    with core.Session.begin() as session:
+        session.add(relational.WorkspaceContributor(user_id='colleague'))
+    with TestClient(main.app) as person, TestClient(main.app) as outsider:
+        login(person, 'Colleague'); login(outsider, 'Outsider')
+        private = person.post('/api/datasets', json={'name': 'My own'}).json()
+        for other in (admin, outsider):
+            assert other.get('/api/datasets/' + private['id']).status_code == 404
+            assert private['id'] not in [d['id'] for d in other.get('/api/datasets').json()]
+            assert all(w['id'] != private['workspace_id'] for w in other.get('/api/workspaces').json()['workspaces'])
+        assert person.get('/api/datasets/' + private['id']).status_code == 200
+        # An administrator's collection is just as private from a Contributor.
+        theirs = admin.post('/api/datasets', json={'name': 'Admin only'}).json()
+        assert person.get('/api/datasets/' + theirs['id']).status_code == 404
+        assert person.request('DELETE', '/api/datasets/' + theirs['id'], json={'confirmation': 'Admin only', 'expected_version': theirs['version']}).status_code in (403, 404)

@@ -172,14 +172,14 @@ def install(app, auth):
             teams = [{'team_id': row.team_id, 'level': row.access_level} for row in session.scalars(select(relational.TeamDataset).where(relational.TeamDataset.dataset_id == id))]
             # Owners pick people and teams to share with by name; administrators already see everything.
             directory = [{'id': user.id, 'username': user.username} for user in session.scalars(
-                select(core.User).where(core.User.role != 'administrator').order_by(core.User.username))]
+                select(core.User).order_by(core.User.username))]
             all_teams = [{'id': team.team_id, 'name': team.name, 'source': team.source} for team in session.scalars(
                 select(relational.Team).order_by(relational.Team.name))]
         return {'dataset_id': id, 'people': people, 'teams': teams, 'directory': directory, 'all_teams': all_teams}
 
     @app.put('/api/datasets/{id}/members')
     def set_dataset_members(id: str, body: Members, owner=Depends(auth)):
-        """Owners give or remove access to their dataset. Administrators always have access."""
+        """Owners give or remove access to their dataset."""
         record = access.get_record(id, owner, 'knowledge_base', level='owner')
         from . import workspaces
         # Collections placed from before workspaces can still be shared by administrators.
@@ -190,8 +190,6 @@ def install(app, auth):
             found = set(session.scalars(select(core.User.id).where(core.User.id.in_(list(people))))) if people else set()
             if found != people:
                 raise HTTPException(404, 'One or more people no longer exist. Nothing changed.')
-            if any(core.is_administrator(user_id, session) for user_id in people):
-                raise HTTPException(400, 'Administrators always have access to every collection.')
             for team_id in body.teams:
                 _team(session, team_id)
             grants = {row.user_id: row for row in session.scalars(select(relational.UserDataset).where(relational.UserDataset.dataset_id == id))}

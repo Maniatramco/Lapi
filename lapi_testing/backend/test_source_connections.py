@@ -245,6 +245,7 @@ def test_admin_revocation_during_download_blocks_publication(system, remote):
     def revoke():
         with core.Session.begin() as session:
             session.get(core.User, 'alice').role = 'user'
+            session.get(relational.UserDataset, ('alice', d['id'])).enabled = False
     remote.after_read = revoke
     response = submit(s, c, [token])
     assert response.status_code == 200 and response.json()['results'][0]['status'] == 'failed'

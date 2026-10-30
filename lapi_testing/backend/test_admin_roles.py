@@ -16,6 +16,7 @@ def change(client, user='colleague', role='administrator', password=OLD):
 def test_promotion_grants_admin_scope_and_demoting_bootstrap_is_persistent(accounts):
     client=accounts;login(client)
     d=dataset(SimpleNamespace(api=client),name='Original administrator dataset')
+    assert client.put('/api/users/colleague/datasets',json={'dataset_ids':[d['id']]}).status_code==200  # A role alone opens nothing.
     assert change(client).status_code==200
     info=login(client,'Colleague')['user']
     assert info['is_admin'] and info['role']=='administrator'
@@ -34,8 +35,8 @@ def test_promotion_grants_admin_scope_and_demoting_bootstrap_is_persistent(accou
     assert client.patch('/api/datasets/'+d['id']+'/status',json={'active':False}).status_code==200
     assert client.patch('/api/datasets/'+d['id']+'/status',json={'active':True}).status_code==200
     assert client.post('/api/users',json=body(username='CreatedBySecondAdmin')).status_code==200
-    assert client.put('/api/users/colleague/datasets',json={'dataset_ids':[]}).status_code==400
-    assert client.get('/api/users/colleague/datasets').json()['all_datasets'] is True
+    assert client.put('/api/users/colleague/datasets',json={'dataset_ids':[]}).status_code==200
+    assert client.get('/api/users/colleague/datasets').json()['all_datasets'] is False
     assert change(client,'administrator','user').status_code==200
     core.init()
     with core.Session() as session:
@@ -44,7 +45,7 @@ def test_promotion_grants_admin_scope_and_demoting_bootstrap_is_persistent(accou
     login(client)
     assert client.get('/api/users').status_code==403
     assert client.get('/api/auth/me').json()['user']['is_admin'] is False
-    assert client.get('/api/datasets').json()==[]
+    assert [x['id'] for x in client.get('/api/datasets').json()]==[d['id']]  # Still what they created.
     assert change(client,'administrator').status_code==403
 
 
@@ -57,7 +58,7 @@ def test_role_change_revokes_all_target_sessions_preserves_assignments_and_audit
         result=change(client);assert result.status_code==200
         assert result.json()['sessions_revoked'] is True
         assert device1.get('/api/auth/me').status_code==device2.get('/api/auth/me').status_code==401
-        login(device1,'Colleague');assert device1.get('/api/datasets/'+other['id']).status_code==200
+        login(device1,'Colleague');assert device1.get('/api/datasets/'+other['id']).status_code==404
         assert change(client,role='user').status_code==200
         assert device1.get('/api/auth/me').status_code==401
         login(device1,'Colleague')

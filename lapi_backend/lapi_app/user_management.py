@@ -295,7 +295,7 @@ def install(app, auth):
             user=session.get(core.User,user_id)
             if not user:raise HTTPException(404,'User not found.')
             grants=list(session.scalars(select(relational.UserDataset).where(relational.UserDataset.user_id==user_id)))
-            return {'user_id':user_id,'all_datasets':core.is_administrator(user_id,session),'dataset_ids':[grant.dataset_id for grant in grants if grant.enabled],
+            return {'user_id':user_id,'all_datasets':False,'dataset_ids':[grant.dataset_id for grant in grants if grant.enabled],
                     'levels':{grant.dataset_id:grant.access_level or 'viewer' for grant in grants if grant.enabled},
                     'assignments':[{'dataset_id':grant.dataset_id,'enabled':grant.enabled,'level':grant.access_level,'created_at':grant.created_at,'created_by':grant.created_by,'updated_at':grant.updated_at,'updated_by':grant.updated_by} for grant in grants]}
 
@@ -307,7 +307,6 @@ def install(app, auth):
             with core.Session.begin() as session:
                 require_administrator(owner,session)
                 if not session.get(core.User,user_id):raise HTTPException(404,'User not found.')
-                if core.is_administrator(user_id,session):raise HTTPException(400,'Administrators always have access to every collection.')
                 found=set(session.scalars(select(relational.Dataset.dataset_id).where(relational.Dataset.dataset_id.in_(ids))))
                 if found!=ids:raise HTTPException(404,'One or more collections no longer exist. No assignments changed.')
                 if set(body.levels)-ids:raise HTTPException(400,'Levels can only be set for collections in dataset_ids.')

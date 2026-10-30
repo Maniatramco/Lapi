@@ -7,8 +7,7 @@ type Api=(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:bo
 type Members={people:{user_id:string;level:Level}[];teams:{team_id:string;level:Level}[];directory:{id:string;username:string}[];all_teams:{id:string;name:string;source:string}[]};
 type Change=Record<string,Level|null>;
 
-/** Who can open this dataset and at which level. Dataset owners and administrators change it here;
- * administrators always have access and are not listed. */
+/** Who can open this dataset and at which level. Dataset owners change it here. */
 export function DatasetMembers({api,datasetId,notify,onDirty,base}:{api:Api;datasetId:string;notify:(text:string)=>void;onDirty?:(dirty:boolean)=>void;base?:string}){
  const root=base||`/datasets/${encodeURIComponent(datasetId)}`;
  const [data,setData]=useState<Members|null>(null),[people,setPeople]=useState<Change>({}),[teams,setTeams]=useState<Change>({});

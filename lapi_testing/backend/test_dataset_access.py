@@ -139,8 +139,8 @@ def test_mapping_validation_csrf_and_audit(accounts):
     with core.Session() as session:
         row=session.get(relational.UserDataset,('colleague',d['id']))
         assert row.enabled and row.created_at==created
-    assert client.put('/api/users/administrator/datasets',json={'dataset_ids':[]}).status_code==400
-    assert client.get('/api/users/administrator/datasets').json()['all_datasets']
+    assert client.put('/api/users/administrator/datasets',json={'dataset_ids':[]}).status_code==200
+    assert not client.get('/api/users/administrator/datasets').json()['all_datasets']
     client.headers.pop('X-CSRF-Token')
     assert client.put('/api/users/colleague/datasets',json={'dataset_ids':[]}).status_code==403
 

@@ -88,8 +88,9 @@ def place_existing():
 
 def level_for(record, actor, session=None):
     """The person's level on the workspace itself, or None."""
-    if core.is_administrator(actor, session): return 'owner'
     data = read(record)
+    # Administrators look after the Organization workspace; everyone else's are private to their members.
+    if data.get('organization') and core.is_administrator(actor, session): return 'owner'
     # Whoever happened to trigger the Organization workspace's creation gains nothing from it.
     if record.owner == actor and not data.get('organization'): return 'owner'
     levels = [data.get('members', {}).get(actor)]
@@ -109,16 +110,25 @@ def visible(actor):
     """Workspaces this person belongs to, or holds a collection in (the Organization workspace)."""
     place_existing()
     personal_for(actor)
+    found = rows()
+    data_of = {record.id: read(record) for record in found}
+    placed = [(record, core.store.json(record.ref).get('workspace_id')) for record in collections()]
+    if core.is_administrator(actor):
+        organization = {id for id, data in data_of.items() if data.get('organization')}
+        with core.document_lock('dataset-access'), core.Session.begin() as session:
+            for record, workspace_id in placed:
+                if workspace_id in organization and session.get(relational.UserDataset, (actor, record.id)) is None:
+                    _set_grant(session, record.id, actor, 'owner')
     with core.Session() as session:
         mine = access.dataset_ids(actor, session)
     counts, holding = {}, set()
-    for record in collections():
-        workspace_id = core.store.json(record.ref).get('workspace_id')
+    for record, workspace_id in placed:
         counts[workspace_id] = counts.get(workspace_id, 0) + 1
         if record.id in mine: holding.add(workspace_id)
     out = []
-    for record in rows():
-        data, level = read(record), level_for(record, actor)
+    for record in found:
+        data, level = data_of[record.id], level_for(record, actor)
+        if data.get('audience') == 'personal' and record.owner != actor: continue  # Never anyone else's.
         if level is None and record.id not in holding: continue
         out.append({'id': record.id, 'name': record.name, 'audience': data.get('audience', 'team'), 'organization': bool(data.get('organization')),
                     'my_access': level or 'viewer', 'mine': record.owner == actor, 'collection_count': counts.get(record.id, 0)})
@@ -128,7 +138,8 @@ def visible(actor):
 def _set_grant(session, dataset_id, user_id, level):
     row = session.get(relational.UserDataset, (user_id, dataset_id))
     if row is None:
-        if level: session.add(relational.UserDataset(user_id=user_id, dataset_id=dataset_id, access_level=level))
+        # Written even on removal: a creator with no row would otherwise keep access.
+        session.add(relational.UserDataset(user_id=user_id, dataset_id=dataset_id, access_level=level or 'viewer', enabled=bool(level)))
     elif level:
         row.enabled, row.access_level = True, level
     else:
@@ -153,9 +164,9 @@ def grant_to_collection(workspace, dataset_id, creator):
             if user_id != creator: _set_grant(session, dataset_id, user_id, level)
         for team_id, level in data.get('teams', {}).items():
             _set_team_grant(session, dataset_id, team_id, level)
-        if not access.manages_datasets(creator, session) and session.get(core.User, creator):
+        if session.get(core.User, creator):
             _set_grant(session, dataset_id, creator, 'owner')
-        if workspace.owner != creator and session.get(core.User, workspace.owner) and not core.is_administrator(workspace.owner, session):
+        if workspace.owner != creator and session.get(core.User, workspace.owner):
             _set_grant(session, dataset_id, workspace.owner, 'owner')
 
 
@@ -196,7 +207,7 @@ def install(app, auth):
         data = read(record)
         with core.Session() as session:
             directory = [{'id': user.id, 'username': user.username} for user in session.scalars(
-                select(core.User).where(core.User.role != 'administrator').order_by(core.User.username)) if user.id != record.owner]
+                select(core.User).order_by(core.User.username)) if user.id != record.owner]
             all_teams = [{'id': team.team_id, 'name': team.name, 'source': team.source} for team in session.scalars(select(relational.Team).order_by(relational.Team.name))]
         return {'workspace_id': id, 'people': [{'user_id': k, 'level': v} for k, v in data.get('members', {}).items()],
                 'teams': [{'team_id': k, 'level': v} for k, v in data.get('teams', {}).items()], 'directory': directory, 'all_teams': all_teams}
@@ -213,8 +224,6 @@ def install(app, auth):
                 people = set(body.people)
                 found = set(session.scalars(select(core.User.id).where(core.User.id.in_(list(people))))) if people else set()
                 if found != people: raise HTTPException(404, 'One or more people no longer exist. Nothing changed.')
-                if any(core.is_administrator(user_id, session) for user_id in people if body.people[user_id]):
-                    raise HTTPException(400, 'Administrators always have access to every workspace.')
                 if record.owner in people: raise HTTPException(400, 'The workspace creator always keeps access.')
                 teams = set(body.teams)
                 known = set(session.scalars(select(relational.Team.team_id))) if teams else set()
