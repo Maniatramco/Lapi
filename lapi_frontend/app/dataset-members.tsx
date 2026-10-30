@@ -9,11 +9,12 @@ type Change=Record<string,Level|null>;
 
 /** Who can open this dataset and at which level. Dataset owners and administrators change it here;
  * administrators always have access and are not listed. */
-export function DatasetMembers({api,datasetId,notify}:{api:Api;datasetId:string;notify:(text:string)=>void}){
+export function DatasetMembers({api,datasetId,notify,onDirty}:{api:Api;datasetId:string;notify:(text:string)=>void;onDirty?:(dirty:boolean)=>void}){
  const [data,setData]=useState<Members|null>(null),[people,setPeople]=useState<Change>({}),[teams,setTeams]=useState<Change>({});
  const [addPerson,setAddPerson]=useState(''),[addTeam,setAddTeam]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const load=async()=>{setError('');try{setData(await api(`/datasets/${encodeURIComponent(datasetId)}/members`));setPeople({});setTeams({});}catch(e){setError(e instanceof Error?e.message:'Members could not be loaded.');}};
  useEffect(()=>{void load();},[datasetId]);
+ useEffect(()=>{onDirty?.(Object.keys(people).length+Object.keys(teams).length>0);},[people,teams]);
  if(!data)return error?<p className="notice error" role="alert">{error}</p>:<p className="manage-empty" role="status">Loading members…</p>;
  const names=new Map(data.directory.map(p=>[p.id,p.username])),teamNames=new Map(data.all_teams.map(t=>[t.id,t.name]));
  const personLevel=(id:string)=>id in people?people[id]:data.people.find(p=>p.user_id===id)?.level??null;

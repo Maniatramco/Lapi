@@ -1,5 +1,5 @@
 /* First sign-in: one short question, centred on any screen. */
-.first-workspace-backdrop{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:16px;background:rgba(15,23,42,.5)}
+.first-workspace-backdrop{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:16px;background:rgba(15,23,42,.5)}
 .first-workspace{display:flex;flex-direction:column;gap:12px;width:100%;max-width:420px;box-sizing:border-box;padding:24px;border-radius:22px;background:#fff;color:#14213d;box-shadow:0 24px 60px rgba(15,23,42,.3)}
 .first-workspace-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:16px;background:#e8f0ff;color:#1d4ed8}
 .first-workspace h2{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em}
@@ -11,3 +11,22 @@
 .first-workspace-primary:disabled{opacity:.6;cursor:wait}
 .first-workspace-later{min-height:44px;border:0;background:none;color:#3b4763;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
 .first-workspace :is(button,input):focus-visible{outline:3px solid #315de7;outline-offset:2px}
+.first-workspace{max-height:calc(100dvh - 32px);overflow:auto}
+.first-workspace.is-team{max-width:560px}
+.first-workspace-audience{display:flex;flex-direction:column;gap:8px;margin:6px 0 0;padding:0;border:0}
+.first-workspace-audience legend{padding:0 0 6px;font-size:14px;font-weight:600}
+.first-workspace-audience label{display:flex;align-items:center;gap:10px;min-height:56px;padding:8px 12px;border:1px solid #d6e0f3;border-radius:14px;cursor:pointer}
+.first-workspace-audience label[data-selected]{border-color:#2563eb;background:#eef4ff}
+.first-workspace-audience input{width:18px;height:18px;min-height:0;flex:none;accent-color:#2563eb}
+.first-workspace-audience span{display:flex;flex-direction:column;gap:1px}
+.first-workspace-audience strong{font-size:15px}
+.first-workspace-audience small{font-size:13px;color:#4d5a75}
+.first-workspace-note{font-size:13px !important;color:#4d5a75}
+.first-workspace{min-width:0;overflow-x:hidden}
+.first-workspace .dataset-members{min-width:0;max-width:100%}
+.first-workspace .dataset-members h3{margin:12px 0 6px;font-size:15px}
+.first-workspace .manage-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.first-workspace .manage-list li{display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:0}
+.first-workspace .manage-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin-top:8px}
+.first-workspace .dataset-members select{width:100%;max-width:100%;min-height:44px;min-width:0;box-sizing:border-box}
+.first-workspace .dataset-members .btn{width:100%;min-height:44px}
