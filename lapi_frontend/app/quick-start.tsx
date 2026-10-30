@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import {ArrowLeft,Camera,Check,CircleAlert,FileSearch,FileUp,Loader2,Maximize2,MessageSquare,Minimize2,Plus,Sparkles,Table2,Trash2,Users,Wand2,X} from "lucide-react";
 import "./quick-start.css";
-import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,columnMapping,columnValue,defaultDatasetName,extractionStages,howBadge,howChosen,initialChoices,isSpreadsheet,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,recordCount,resultRows,sourceName,stepsFor,uploadable,
+import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,workspaceSlots,canMerge,columnMapping,columnValue,defaultDatasetName,extractionStages,howBadge,howChosen,initialChoices,isSpreadsheet,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,recordCount,resultRows,sourceName,stepsFor,uploadable,
  type Field,type FieldType,type FileState,type Path,type Step,type TablePlan} from "./quick-start-flow";
 import {eligibleAgentModels} from "./agent-document-selection";
 import {currentDevice} from "./screens-client";
@@ -29,12 +29,15 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
  const editor=canAddDocuments(datasets,isAdmin);
  const choices=editor?uploadable(datasets,isAdmin):askable(datasets);
  const [path,setPath]=useState<Path>(quickExtract?'extract':'ask');
- const steps=stepsFor(datasets,isAdmin,path);
+ const slots=workspaceSlots(datasets,isAdmin),canCreate=slots.length>0;
+ const [newAudience,setNewAudience]=useState<'personal'|'team'>(slots[0]||'personal');
+ const [datasetId,setDatasetId]=useState<string>(choices[0]?.id||(canCreate?'new':''));
+ // A new workspace belongs to its creator, so its documents step is always available.
+ const steps=stepsFor(datasets,isAdmin||datasetId==='new',path);
  const [step,setStep]=useState<Step>('dataset');
  // Enlarged: the Quick start fills the window (remembered on this device).
  const [enlarged,setEnlarged]=useState(()=>{try{return localStorage.getItem(ENLARGED_KEY)==='1';}catch{return false;}});
  const toggleEnlarged=()=>setEnlarged(value=>{try{localStorage.setItem(ENLARGED_KEY,value?'0':'1');}catch{}return !value;});
- const [datasetId,setDatasetId]=useState<string>(choices[0]?.id||(isAdmin?'new':''));
  const [newName,setNewName]=useState(defaultDatasetName(user?.username)),[newDescription,setNewDescription]=useState('');
  const [files,setFiles]=useState<File[]>(initialFiles),[note,setNote]=useState('');  // may start with documents attached in the agent
  // Two or more files: stitch them into one document first, or keep them separate.
@@ -84,7 +87,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
  const chooseDataset=()=>run('Creating the workspace…',async()=>{
   if(datasetId==='new'){
    const name=newName.trim();if(!name)throw new Error('Give the workspace a name.');
-   const created=await api('/datasets','POST',{name,description:newDescription.trim()});
+   const created=await api('/datasets','POST',{name,description:newDescription.trim(),audience:newAudience});
    await api(`/datasets/${encodeURIComponent(created.id)}/migrate-settings`,'POST',{});  // Workspace Default models.
    setDatasetId(created.id);onChanged();
   }else if(!datasetId)throw new Error('Choose a workspace.');
@@ -183,14 +186,15 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
 
     {step==='dataset'&&<>
      <p className="quick-start-lead">{editor?'Documents always go into a workspace: a shared folder with its own models and people.':'Pick a workspace shared with you to ask about.'}</p>
-     {!choices.length&&!canCreateDataset(isAdmin)?<p className="quick-start-empty">No workspaces are shared with you yet. Ask an administrator or a workspace owner to give you access.</p>:
+     {!choices.length&&!canCreate?<p className="quick-start-empty">No workspaces are shared with you yet. Ask an administrator or a workspace owner to give you access.</p>:
      <div className="quick-start-options" role="radiogroup" aria-label="Workspaces">
       {choices.map(d=><label key={d.id} className={datasetId===d.id?'selected':''}><input type="radio" name="qs-dataset" checked={datasetId===d.id} onChange={()=>setDatasetId(d.id)}/>
        <span><strong>{d.name}</strong><small>{d.description||(d.my_access?`Your access: ${d.my_access}`:'')}</small></span></label>)}
-      {canCreateDataset(isAdmin)&&<label className={datasetId==='new'?'selected':''}><input type="radio" name="qs-dataset" checked={datasetId==='new'} onChange={()=>setDatasetId('new')}/>
+      {canCreate&&<label className={datasetId==='new'?'selected':''}><input type="radio" name="qs-dataset" checked={datasetId==='new'} onChange={()=>setDatasetId('new')}/>
        <span><strong><Plus size={15}/> New workspace</strong><small>Uses the workspace's default models</small></span></label>}
      </div>}
      {datasetId==='new'&&<fieldset className="quick-start-new">
+      {slots.length>1&&<label>Who is it for?<select aria-label="Who is it for" value={newAudience} onChange={e=>setNewAudience(e.target.value as 'personal'|'team')}>{slots.map(kind=><option key={kind} value={kind}>{kind==='personal'?'Just me':'My team'}</option>)}</select></label>}
       <legend>New workspace</legend>
       <label className="quick-start-field">Name<input value={newName} maxLength={200} onChange={e=>setNewName(e.target.value)} disabled={busy}/></label>
       <label className="quick-start-field">Description <small>(optional)</small><textarea rows={2} value={newDescription} maxLength={1000} placeholder="What goes in here, for example: supplier invoices for 2026" onChange={e=>setNewDescription(e.target.value)} disabled={busy}/></label>
@@ -320,7 +324,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
    </div>
 
    <footer className="quick-start-foot">
-    {step==='dataset'&&<button type="button" className="quick-start-primary" disabled={busy||(!choices.length&&!canCreateDataset(isAdmin))||(!editor&&!aiConsent)} onClick={()=>void chooseDataset()}>{busy?'Creating…':'Continue'}</button>}
+    {step==='dataset'&&<button type="button" className="quick-start-primary" disabled={busy||(!choices.length&&!canCreate)||(!editor&&!aiConsent)} onClick={()=>void chooseDataset()}>{busy?'Creating…':'Continue'}</button>}
     {step==='documents'&&<button type="button" className="quick-start-primary" disabled={busy||!files.length||!uploadConsent} onClick={()=>void upload()}>{busy?(merging?'Merging and uploading…':'Uploading…'):merging?`Merge ${files.length} into one and read`:`Upload ${files.length||''} and read`.replace('  ',' ')}</button>}
     {step==='processing'&&<button type="button" className="quick-start-primary" disabled={!state.ready} onClick={next}>{state.ready?'Continue':'Reading…'}</button>}
     {step==='choose'&&<p className="quick-start-foot-note">{aiConsent?(quickExtract?'Tap Continue above.':'Choose one above.'):'Tick the box above to continue.'}</p>}

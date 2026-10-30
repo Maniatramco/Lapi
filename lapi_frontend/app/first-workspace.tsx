@@ -22,7 +22,7 @@ export function FirstWorkspace({api,username,canCreate,onCreated,onLater}:{api:A
   const value=name.trim();if(!value){setError('Give your workspace a name.');return;}
   setBusy(true);setError('');
   try{
-   const made=await api('/datasets','POST',{name:value,description:''});
+   const made=await api('/datasets','POST',{name:value,description:'',audience:audience==='team'?'team':'personal'});
    await api(`/datasets/${encodeURIComponent(made.id)}/migrate-settings`,'POST',{});  // The overall Default models.
    // A team workspace stays open for adding people; the list refreshes once this step is done.
    if(audience==='team')setCreated(made.id);else onCreated(made.id);

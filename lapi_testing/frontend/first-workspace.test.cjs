@@ -14,6 +14,19 @@ test('first sign-in asks for a workspace only when none is active and the list h
 });
 
 test('the first workspace uses the same create and default-model calls as Quick start',()=>{
- assert.match(source,/api\('\/datasets','POST',\{name:value,description:''\}\)/);
+ assert.match(source,/api\('\/datasets','POST',\{name:value,description:'',audience:/);
  assert.match(source,/migrate-settings`,'POST',\{\}\)/);
+});
+
+test('people may create one personal and one team workspace; managers have no limit',()=>{
+ const Module=require('node:module'),ts=require('typescript');
+ const filename=path.resolve(__dirname,'../../lapi_frontend/app/quick-start-flow.ts'),compiled=new Module(filename,module);compiled.paths=module.paths;
+ compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
+ const {workspaceSlots}=compiled.exports;
+ assert.deepEqual(workspaceSlots([],false),['personal','team']);
+ assert.deepEqual(workspaceSlots([{mine:true,audience:'personal'}],false),['team']);
+ assert.deepEqual(workspaceSlots([{mine:true,audience:'team'}],false),['personal']);
+ assert.deepEqual(workspaceSlots([{mine:true,audience:'personal'},{mine:true,audience:'team'}],false),[]);
+ assert.deepEqual(workspaceSlots([{audience:'team'},{audience:'personal'}],false),['personal','team']);  // Shared with me: not mine.
+ assert.deepEqual(workspaceSlots([{mine:true,audience:'team'}],true),['team','personal']);
 });

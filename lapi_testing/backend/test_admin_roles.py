@@ -64,7 +64,17 @@ def test_role_change_revokes_all_target_sessions_preserves_assignments_and_audit
         assert [x['id'] for x in device1.get('/api/datasets').json()]==[d['id']]
         assert device1.get('/api/datasets/'+other['id']).status_code==404
         assert device1.get('/api/models').json()
-        assert device1.post('/api/datasets',json={'name':'Not allowed'}).status_code==403
+        made=device1.post('/api/datasets',json={'name':'My own'})
+        assert device1.post('/api/datasets',json={'name':'Second personal'}).status_code==409
+        team=device1.post('/api/datasets',json={'name':'My team','audience':'team'})
+        assert team.status_code==200,team.text
+        assert device1.post('/api/datasets',json={'name':'Second team','audience':'team'}).status_code==409
+        assert device1.put('/api/datasets/'+made.json()['id']+'/members',json={'people':{'administrator':'viewer'},'teams':{}}).status_code==400
+        assert made.status_code==200,made.text
+        assert {x['id']:x['my_access'] for x in device1.get('/api/datasets').json()}[made.json()['id']]=='owner'
+        assert device1.get('/api/datasets/'+made.json()['id']+'/members').status_code==200
+        assert device1.post('/api/datasets/'+other['id']+'/migrate-settings').status_code in (403,404)
+        assert device1.get('/api/datasets/'+other['id']).status_code==404
         assert device1.get('/api/users').status_code==403
     with core.Session() as session:
         user=session.get(core.User,'colleague')

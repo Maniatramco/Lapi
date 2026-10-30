@@ -4,6 +4,7 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from fastapi import HTTPException, Depends
+from typing import Literal
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from . import core
@@ -146,7 +147,7 @@ def routing_public(r,model_lookup=None,data=None):
 
 def dataset_public(r,model_lookup=None):
     data=dataset_config(r)
-    return core.representation(r)|{'name':r.name,'description':data.get('description',''),'active':data.get('active',True)}|routing_public(r,model_lookup,data)
+    return core.representation(r)|{'name':r.name,'description':data.get('description',''),'active':data.get('active',True),'audience':data.get('audience')}|routing_public(r,model_lookup,data)
 
 def require_active(r):
     if not dataset_config(r).get('active',True):raise HTTPException(409,'Workspace is inactive. Activate it before starting new uploads, indexing, chat, or extraction.')
@@ -330,6 +331,7 @@ class DatasetInput(BaseModel):
     name:str=Field(min_length=1,max_length=200)
     description:str=Field(default='',max_length=10000)
     active:bool=Field(default=True,strict=True)
+    audience:Literal['personal','team']|None=None
 class DatasetStatusInput(BaseModel):active:bool=Field(strict=True)
 class DatasetDetailsInput(BaseModel):
     name:str=Field(min_length=1,max_length=200)
@@ -436,10 +438,26 @@ def install_routes(app,auth,write_profile):
     def datasets(owner=Depends(auth)):
         # my_access tells the screens which actions to offer; the API enforces them regardless.
         with core.Session() as session:levels=access.dataset_levels(owner,session)
-        return [dataset_public(r)|{'my_access':levels.get(r.id,'viewer')} for r in rows(owner,'knowledge_base')]
+        return [dataset_public(r)|{'my_access':levels.get(r.id,'viewer'),'mine':r.owner==owner} for r in rows(owner,'knowledge_base')]
     @app.post('/api/datasets')
     def add_dataset(body:DatasetInput,owner=Depends(auth)):
-        return dataset_public(create('knowledge_base',owner,body.name,body.model_dump()|copy.deepcopy(ROUTING_DEFAULTS)|{'routing_version':1}))
+        data=body.model_dump()|copy.deepcopy(ROUTING_DEFAULTS)|{'routing_version':1}
+        # Administrators and Contributors own every dataset and have no limit. Anyone else may have
+        # one personal and one team workspace, and owns what they create.
+        limited=access.request_actor.get() is not None and not access.manages_datasets(owner)
+        if not limited:return dataset_public(create('knowledge_base',owner,body.name,data))
+        audience=data['audience']=body.audience or 'personal'
+        from . import relational
+        with core.document_lock('workspace-limit-'+owner):
+            mine=[r for r in rows(owner,'knowledge_base') if r.owner==owner]
+            if any(dataset_config(r).get('audience','personal')==audience for r in mine):
+                raise HTTPException(409,'You already have a '+audience+' workspace. Each person can have one personal and one team workspace.')
+            r=create('knowledge_base',owner,body.name,data)
+            with core.Session.begin() as session:
+                grant=session.scalar(select(relational.UserDataset).where(relational.UserDataset.user_id==owner,relational.UserDataset.dataset_id==r.id))
+                if grant:grant.enabled,grant.access_level=True,'owner'
+                else:session.add(relational.UserDataset(user_id=owner,dataset_id=r.id,access_level='owner'))
+        return dataset_public(r)
     @app.get('/api/datasets/{id}')
     def dataset(id:str,owner=Depends(auth)):return dataset_public(owned(id,owner,'knowledge_base'))
     @app.patch('/api/datasets/{id}')
@@ -464,6 +482,7 @@ def install_routes(app,auth,write_profile):
         with core.document_lock('dataset-'+id):return routing_public(save_mappings(owned(id,owner,'knowledge_base'),body))
     @app.post('/api/datasets/{id}/migrate-settings')
     def migrate(id:str,owner=Depends(auth)):
+        access.require_level(owner,id,'owner')
         with core.document_lock('dataset-'+id):
             r=owned(id,owner,'knowledge_base')
             actor,owner=owner,r.owner

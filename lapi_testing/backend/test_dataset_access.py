@@ -36,7 +36,7 @@ def test_user_only_sees_assignments_and_cannot_configure_or_self_assign(accounts
     assert [row['id'] for row in selectors['datasets']]==[a['id']]
     assert set(row['id'] for row in selectors['models'])==set(row['id'] for row in a['models'])
     assert client.get('/api/datasets/'+b['id']).status_code==404
-    for path,method,values in [('/api/datasets','post',{'name':'Unauthorized'}),('/api/datasets/'+a['id']+'/status','patch',{'active':False}),('/api/datasets/'+a['id']+'/models','put',{'mappings':[]}),('/api/users/colleague/datasets','put',{'dataset_ids':[b['id']]}),('/api/settings','patch',{'model_provider':'mock'})]:
+    for path,method,values in [('/api/datasets/'+a['id']+'/status','patch',{'active':False}),('/api/datasets/'+a['id']+'/models','put',{'mappings':[]}),('/api/users/colleague/datasets','put',{'dataset_ids':[b['id']]}),('/api/settings','patch',{'model_provider':'mock'})]:
         assert getattr(client,method)(path,json=values).status_code==403
 
 def test_agent_selectors_do_not_wait_for_index_checks_or_retired_profiles(accounts,monkeypatch):

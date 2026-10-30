@@ -256,7 +256,7 @@ export function WorkspaceAssist({api,user,view,datasets,onNavigate,onOpenNavigat
    {access.canAddKnowledge&&<button type="button" className="tab-bar-item" aria-label="Quick Extract" aria-current={quickExtract?'page':undefined} onClick={()=>{setQuickExtract(true);setQuickOpen(true);}}><Table2 size={22} aria-hidden="true"/><span>Quick Extract</span></button>}
    {!agentOnly&&<button type="button" className="tab-bar-item" aria-label="More pages" aria-haspopup="dialog" aria-controls="workspace-navigation" onClick={onOpenNavigation}><Menu size={22} aria-hidden="true"/><span>More</span></button>}
   </nav>
-  {firstWorkspace&&userId&&<FirstWorkspace api={api} username={user?.username} canCreate={Boolean(user?.is_admin||user?.is_contributor)} onCreated={id=>{onSelectDataset?.(id);onChanged();}} onLater={()=>{try{sessionStorage.setItem(WORKSPACE_LATER_KEY,'1');}catch{}setWorkspaceLater(true);}}/>}
+  {firstWorkspace&&userId&&<FirstWorkspace api={api} username={user?.username} canCreate={true} onCreated={id=>{onSelectDataset?.(id);onChanged();}} onLater={()=>{try{sessionStorage.setItem(WORKSPACE_LATER_KEY,'1');}catch{}setWorkspaceLater(true);}}/>}
   {sheetOpen&&preferences&&<SetupSheet initial={preferences} access={access} onSave={async answers=>{await save(answers);}} onSkip={skip} onAct={step=>void act(step)} onClose={()=>setSheetOpen(false)}/>}
   {helpOpen&&<ShortcutsDialog onClose={()=>setHelpOpen(false)}/>}
   {quickOpen&&<QuickStart onSelectDataset={onSelectDataset} api={api} user={user} datasets={datasets} sources={preferences?.sources||[]} initialFiles={quickFiles} quickExtract={quickExtract} onClose={()=>{setQuickOpen(false);setQuickFiles([]);setQuickExtract(false);}} onChanged={onChanged} onNavigate={target=>go(target)}/>}

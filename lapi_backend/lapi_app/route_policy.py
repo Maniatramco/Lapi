@@ -6,7 +6,7 @@
   viewer    reads dataset content; the route code requires Viewer on that dataset
   editor    changes dataset content; the route code requires Editor on that dataset
   owner     changes a dataset's settings or members; the route code requires Owner
-  contributor Administrators and Contributors (creating, deleting and restoring datasets and
+  contributor Administrators and Contributors (deleting and restoring datasets and
             onboarding; Contributors are Owner on every dataset). Model mapping stays 'admin':
             new datasets use the workspace Default models.
   audit     Administrators and Auditors (read-only views of people, access and usage)
@@ -128,13 +128,13 @@ POLICY = {
     ('GET', '/api/knowledge-bases'): 'signed_in',
     ('POST', '/api/knowledge-bases'): 'contributor',
     ('GET', '/api/datasets'): 'signed_in',
-    ('POST', '/api/datasets'): 'contributor',
+    ('POST', '/api/datasets'): 'signed_in',  # Anyone may start a workspace; they own only what they create.
     ('GET', '/api/datasets/{id}'): 'viewer',
     ('PATCH', '/api/datasets/{id}'): 'owner',
     ('PATCH', '/api/datasets/{id}/status'): 'contributor',
     ('GET', '/api/datasets/{id}/models'): 'viewer',
     ('PUT', '/api/datasets/{id}/models'): 'admin',
-    ('POST', '/api/datasets/{id}/migrate-settings'): 'contributor',
+    ('POST', '/api/datasets/{id}/migrate-settings'): 'owner',
     ('POST', '/api/datasets/{id}/assign-documents'): 'contributor',
     ('POST', '/api/datasets/{id}/local-models'): 'admin',
     ('DELETE', '/api/datasets/{id}'): 'contributor',

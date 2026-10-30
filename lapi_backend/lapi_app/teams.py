@@ -180,7 +180,9 @@ def install(app, auth):
     @app.put('/api/datasets/{id}/members')
     def set_dataset_members(id: str, body: Members, owner=Depends(auth)):
         """Owners give or remove access to their dataset. Administrators always have access."""
-        access.get_record(id, owner, 'knowledge_base', level='owner')
+        record = access.get_record(id, owner, 'knowledge_base', level='owner')
+        if core.store.json(record.ref).get('audience') == 'personal' and any(level for level in [*body.people.values(), *body.teams.values()]):
+            raise HTTPException(400, 'This is a personal workspace, so it cannot be shared. Use your team workspace to work with others.')
         with core.document_lock('dataset-access'), core.Session.begin() as session:
             people = set(body.people)
             found = set(session.scalars(select(core.User.id).where(core.User.id.in_(list(people))))) if people else set()
