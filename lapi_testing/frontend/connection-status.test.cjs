@@ -90,7 +90,7 @@ test('Connections supports keyboard focus, Escape, click pinning and outside dis
   h.trigger().props.onFocus();h.render();h.trigger().props.onBlur({relatedTarget:h.outside()});h.render();assert.equal(h.panel(),undefined);
  }finally{h.destroy();}
 });
-test('Gemini workspace defaults override the old Local model-host hint and show GCP',()=>{
+test('Gemini collection defaults override the old Local model-host hint and show GCP',()=>{
  const models=[{id:'chat',provider:'openai-compatible',provider_model:'gemini-flash',connection:{protocol:'openai-compatible',endpoint:'https://generativelanguage.googleapis.com/v1beta/openai'}},
   {id:'embed',provider_model:'gemini-embedding',connection:{protocol:'openai-compatible',endpoint:'https://generativelanguage.googleapis.com/v1beta/openai'}},
   {id:'local-unused',provider:'ollama',provider_model:'qwen',connection:{protocol:'ollama',endpoint:'http://localhost:11435'}}];
@@ -101,7 +101,7 @@ test('Gemini workspace defaults override the old Local model-host hint and show 
  const html=renderFooter({open:true,datasets,datasetId:'gemini-dataset'});
  assert.match(html,/Google Gemini/);assert.match(html,/>GCP</);assert.ok(!html.includes('Laptop models'));
 });
-test('mixed workspace model defaults report Local / GCP and respect scope and disabled mappings',()=>{
+test('mixed collection model defaults report Local / GCP and respect scope and disabled mappings',()=>{
  const local={id:'local',provider:'ollama',provider_model:'qwen',connection:{protocol:'ollama',endpoint:'http://localhost:11435'}};
  const gemini={id:'gemini',provider_model:'gemini',connection:{protocol:'vertex',endpoint:'https://us-central1-aiplatform.googleapis.com',region:'us-central1'}};
  const datasets=[{id:'local-dataset',default_chat_model_id:'local',models:[local]},

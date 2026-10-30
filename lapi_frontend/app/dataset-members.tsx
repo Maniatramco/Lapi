@@ -9,10 +9,11 @@ type Change=Record<string,Level|null>;
 
 /** Who can open this dataset and at which level. Dataset owners and administrators change it here;
  * administrators always have access and are not listed. */
-export function DatasetMembers({api,datasetId,notify,onDirty}:{api:Api;datasetId:string;notify:(text:string)=>void;onDirty?:(dirty:boolean)=>void}){
+export function DatasetMembers({api,datasetId,notify,onDirty,base}:{api:Api;datasetId:string;notify:(text:string)=>void;onDirty?:(dirty:boolean)=>void;base?:string}){
+ const root=base||`/datasets/${encodeURIComponent(datasetId)}`;
  const [data,setData]=useState<Members|null>(null),[people,setPeople]=useState<Change>({}),[teams,setTeams]=useState<Change>({});
  const [addPerson,setAddPerson]=useState(''),[addTeam,setAddTeam]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const load=async()=>{setError('');try{setData(await api(`/datasets/${encodeURIComponent(datasetId)}/members`));setPeople({});setTeams({});}catch(e){setError(e instanceof Error?e.message:'Members could not be loaded.');}};
+ const load=async()=>{setError('');try{setData(await api(`${root}/members`));setPeople({});setTeams({});}catch(e){setError(e instanceof Error?e.message:'Members could not be loaded.');}};
  useEffect(()=>{void load();},[datasetId]);
  useEffect(()=>{onDirty?.(Object.keys(people).length+Object.keys(teams).length>0);},[people,teams]);
  if(!data)return error?<p className="notice error" role="alert">{error}</p>:<p className="manage-empty" role="status">Loading members…</p>;
@@ -22,15 +23,15 @@ export function DatasetMembers({api,datasetId,notify,onDirty}:{api:Api;datasetId
  const shownPeople=[...new Set([...data.people.map(p=>p.user_id),...Object.keys(people)])].filter(id=>personLevel(id)!==null||data.people.some(p=>p.user_id===id));
  const shownTeams=[...new Set([...data.teams.map(t=>t.team_id),...Object.keys(teams)])];
  const dirty=Object.keys(people).length+Object.keys(teams).length>0;
- const save=async()=>{setBusy(true);setError('');try{await api(`/datasets/${encodeURIComponent(datasetId)}/members`,'PUT',{people,teams});notify('Saved who can open this workspace. It applies to their next request.');await load();}
+ const save=async()=>{setBusy(true);setError('');try{await api(`${root}/members`,'PUT',{people,teams});notify('Saved who can open this collection. It applies to their next request.');await load();}
   catch(e){setError(e instanceof Error?e.message:'Members were not saved.');}finally{setBusy(false);}};
  const select=(value:Level|null,onChange:(level:Level|null)=>void,label:string)=><select aria-label={label} value={value??''} disabled={busy} onChange={event=>onChange((event.target.value||null) as Level|null)}>
   {LEVELS.map(level=><option key={level} value={level}>{LEVEL_LABEL[level]} · {LEVEL_HELP[level]}</option>)}<option value="">No access</option></select>;
  return <div className="dataset-members">
-  <p className="manage-note"><Users size={14} aria-hidden="true"/>Viewer: chat and read results. Editor: also upload, extract and review. Owner: also manage this workspace and its members. Administrators always have access.</p>
+  <p className="manage-note"><Users size={14} aria-hidden="true"/>Viewer: chat and read results. Editor: also upload, extract and review. Owner: also manage this collection and its members. Administrators always have access.</p>
   {error&&<p className="notice error" role="alert">{error}</p>}
   <h3>People</h3>
-  {shownPeople.length?<ul className="manage-list">{shownPeople.map(id=><li key={id}><span className="manage-list-name"><strong>{names.get(id)||id}</strong></span>{select(personLevel(id),level=>setPeople(c=>({...c,[id]:level})),`Access for ${names.get(id)||id}`)}</li>)}</ul>:<p className="manage-empty">Only administrators can open this workspace so far.</p>}
+  {shownPeople.length?<ul className="manage-list">{shownPeople.map(id=><li key={id}><span className="manage-list-name"><strong>{names.get(id)||id}</strong></span>{select(personLevel(id),level=>setPeople(c=>({...c,[id]:level})),`Access for ${names.get(id)||id}`)}</li>)}</ul>:<p className="manage-empty">Only administrators can open this collection so far.</p>}
   <div className="manage-actions"><select aria-label="Person to add" value={addPerson} disabled={busy} onChange={event=>setAddPerson(event.target.value)}><option value="">Add a person…</option>{data.directory.filter(p=>!shownPeople.includes(p.id)).map(p=><option key={p.id} value={p.id}>{p.username}</option>)}</select>
    <button type="button" className="btn" disabled={busy||!addPerson} onClick={()=>{setPeople(c=>({...c,[addPerson]:'viewer'}));setAddPerson('');}}><Plus size={15}/>Add as Viewer</button></div>
   <h3>Teams</h3>

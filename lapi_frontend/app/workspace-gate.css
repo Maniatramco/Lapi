@@ -1,0 +1,34 @@
+/* Choosing a workspace, creating a team workspace and a first collection: short, centred, on any screen. */
+.workspace-gate-backdrop{position:fixed;inset:0;z-index:60;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:16px;background:rgba(15,23,42,.5)}
+.workspace-gate{display:flex;flex-direction:column;gap:12px;width:100%;min-width:0;max-width:460px;max-height:calc(100dvh - 32px);overflow:hidden auto;box-sizing:border-box;padding:24px;border-radius:22px;background:#fff;color:#14213d;box-shadow:0 24px 60px rgba(15,23,42,.3)}
+.workspace-gate h2{margin:0;font-size:var(--fit-title,1.5rem);font-weight:800;letter-spacing:-.02em}
+.workspace-gate p{margin:0;font-size:15px;line-height:1.5;color:#3b4763}
+.workspace-gate form{display:flex;flex-direction:column;gap:8px}
+.workspace-gate label{font-size:14px;font-weight:600}.workspace-gate label small{font-weight:400;color:#4d5a75}
+.workspace-gate form input{min-height:48px;padding:0 14px;box-sizing:border-box;width:100%;border:1px solid #d6e0f3;border-radius:12px;font:inherit;font-size:16px;color:#14213d}
+.workspace-gate-types{display:flex;flex-wrap:wrap;gap:6px}
+.workspace-gate-types button{min-height:40px;padding:0 12px;border:1px solid #d6e0f3;border-radius:20px;background:#fff;color:#14213d;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.workspace-gate-types button[aria-pressed=true]{border-color:#2563eb;background:#e8f0ff;color:#1e3a8a}
+.workspace-gate-primary{min-height:50px;margin-top:6px;border:0;border-radius:14px;background:#2563eb;color:#fff;font:inherit;font-size:16px;font-weight:700;cursor:pointer}
+.workspace-gate-primary:disabled{opacity:.6;cursor:wait}
+.workspace-gate-later{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border:0;background:none;color:#1d4ed8;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.workspace-gate-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.workspace-gate-list button{display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:10px 14px;border:1px solid #d6e0f3;border-radius:16px;background:#fff;color:#14213d;font:inherit;text-align:left;cursor:pointer}
+.workspace-gate-list button[aria-current]{border-color:#2563eb;background:#eef4ff}
+.workspace-gate-icon{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:12px;background:#e8f0ff;color:#1d4ed8}
+.workspace-gate-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.workspace-gate-text strong{font-size:15px;overflow-wrap:anywhere}.workspace-gate-text small{font-size:13px;color:#4d5a75}
+.workspace-gate-note{font-size:13px !important;color:#4d5a75}
+.workspace-gate .dataset-members{min-width:0;max-width:100%}.workspace-gate .dataset-members h3{margin:12px 0 6px;font-size:15px}
+.workspace-gate .manage-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.workspace-gate .manage-list li{display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:0}
+.workspace-gate .manage-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin-top:8px}
+.workspace-gate .dataset-members select{width:100%;max-width:100%;min-height:44px;min-width:0;box-sizing:border-box}
+.workspace-gate .dataset-members .btn{width:100%;min-height:44px}
+.workspace-gate :is(button,input):focus-visible{outline:3px solid #315de7;outline-offset:2px}
+.workspace-switcher{min-width:0;max-width:220px;min-height:36px;margin-left:10px;padding:0 8px;border:1px solid #d6e0f3;border-radius:10px;background:#fff;color:#14213d;font:inherit;font-size:14px;font-weight:600}
+.collection-type{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:9px;background:#e8f0ff;color:#1e3a8a;font-size:12px;font-weight:600;white-space:nowrap}
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
+ .shell > .topbar .workspace-switcher{flex:1 1 auto;width:100%;max-width:none;min-height:44px;font-size:16px;margin-left:4px}
+ .shell > .topbar .workspace-title{display:none}
+}

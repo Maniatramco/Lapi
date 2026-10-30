@@ -104,7 +104,7 @@ async def auth(request:Request):
     owner=await run_in_threadpool(authenticate,request)
     from .workspace_reset import paused
     if paused() and not request.url.path.startswith('/api/workspace/'):
-        raise HTTPException(503,'Workspace archive operation is running. Try again when it finishes.')
+        raise HTTPException(503,'An archive operation is running. Try again when it finishes.')
     access.request_actor.set(owner);relational.actor_override.set(owner)
     # Every route's policy (route_policy.py): administrator and auditor routes are enforced
     # here; dataset levels are enforced by the routes, which know the dataset.
@@ -203,6 +203,8 @@ from .user_management import install as install_user_management
 install_user_management(app, auth)
 from . import teams
 teams.install(app, auth)
+from . import workspaces as workspace_groups
+workspace_groups.install(app, auth)
 from . import screens
 screens.install(app, auth)
 from . import sessions as session_routes, totp as totp_routes
@@ -263,13 +265,13 @@ async def upload(files:list[UploadFile]=File(...),kb_id:str=Form(''),dataset_id:
     # request looks interrupted and cannot safely be retried after approval.
     upload_snapshot=None
     if dataset_id or kb_id:
-        if dataset_id and kb_id and dataset_id!=kb_id:raise HTTPException(400,'Conflicting workspace identifiers')
+        if dataset_id and kb_id and dataset_id!=kb_id:raise HTTPException(400,'Conflicting collection identifiers')
         upload_snapshot=routing.execution_snapshot(get_record(dataset_id or kb_id,owner,'knowledge_base',level='editor'),'embedding')
         external_check(allow_external,True,upload_snapshot['settings'])
     if template_id:
         template=get_record(template_id,owner,'template')
         scope_id=dataset_id or kb_id
-        if template.parent_id and template.parent_id!=scope_id:raise HTTPException(400,'Choose a prompt belonging to the upload workspace')
+        if template.parent_id and template.parent_id!=scope_id:raise HTTPException(400,'Choose a prompt belonging to the upload collection')
         # Validate routing before accepting originals or starting expensive jobs.
         extraction_snapshot=routing.execution_snapshot(get_record(scope_id,owner,'knowledge_base'),'extraction')
         external_check(allow_external,cfg=extraction_snapshot['settings'])
@@ -291,7 +293,7 @@ async def _upload_with_receipt(files,kb_id,dataset_id,allow_external,temporary_s
             if previous['signature']!=digest:raise HTTPException(409,'Upload idempotency key was already used for different inputs')
             if previous.get('deleted'):raise HTTPException(409,'This upload included a permanently deleted document. Start a new upload instead of replaying the previous request.')
             if previous.get('response'):return previous['response']
-            if not previous.get('uploaded'):raise HTTPException(409,'Upload submission was interrupted. Inspect workspace originals before resubmitting; automatic replay could duplicate files.')
+            if not previous.get('uploaded'):raise HTTPException(409,'Upload submission was interrupted. Inspect collection originals before resubmitting; automatic replay could duplicate files.')
     else:previous=None
     if previous and previous.get('uploaded'):response=previous['uploaded']
     else:
@@ -306,9 +308,9 @@ async def _upload_with_receipt(files,kb_id,dataset_id,allow_external,temporary_s
 
 async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_session_id,owner,merge_files,snapshot=None):
     if temporary_session_id:raise HTTPException(409,'Temporary chat uploads use /api/temporary-chat/documents and never create an index.')
-    if kb_id and dataset_id and kb_id!=dataset_id:raise HTTPException(400,'Conflicting workspace identifiers')
+    if kb_id and dataset_id and kb_id!=dataset_id:raise HTTPException(400,'Conflicting collection identifiers')
     kb_id=dataset_id or kb_id
-    if not kb_id:raise HTTPException(409,'Create or choose a workspace and map its embedding model before uploading.')
+    if not kb_id:raise HTTPException(409,'Create or choose a collection and map its embedding model before uploading.')
     dataset=get_record(kb_id,owner,'knowledge_base');snapshot=snapshot or routing.execution_snapshot(dataset,'embedding')
     from . import knowledge
     knowledge.require_writable(snapshot)
@@ -492,7 +494,7 @@ def conversations(owner=Depends(auth)):return [representation(r)|{'title':r.name
 def create_conversation(body:ConversationInput,owner=Depends(auth)):
     dataset_id=body.dataset_id or body.kb_id
     if body.mode=='general' and (dataset_id or body.document_ids):raise HTTPException(422,'General chat cannot include document references. Choose a document conversation.')
-    if body.dataset_id and body.kb_id and body.dataset_id!=body.kb_id:raise HTTPException(400,'Conflicting workspace identifiers')
+    if body.dataset_id and body.kb_id and body.dataset_id!=body.kb_id:raise HTTPException(400,'Conflicting collection identifiers')
     if dataset_id or body.document_ids:dataset,_=routing.documents_scope(owner,dataset_id,body.document_ids);dataset_id=dataset.id
     for id in body.document_ids:temporary_files.keep(id)
     r=new_record('conversation',owner,body.title[:200],parent=dataset_id,data=body.model_dump()|{'dataset_id':dataset_id,'kb_id':dataset_id,'messages':[]});return representation(r)|store.json(r.ref)
@@ -506,11 +508,11 @@ class MessageInput(BaseModel):
     _agent_context:dict|None=PrivateAttr(default=None)
 _locks={}
 def message_execution(body,owner,data):
-    if body.dataset_id and body.kb_id and body.dataset_id!=body.kb_id:raise HTTPException(400,'Conflicting workspace identifiers')
+    if body.dataset_id and body.kb_id and body.dataset_id!=body.kb_id:raise HTTPException(400,'Conflicting collection identifiers')
     ids=body.document_ids if body.document_ids is not None else data.get('document_ids',[])
     dataset_id=body.dataset_id if body.dataset_id is not None else body.kb_id if body.kb_id is not None else data.get('dataset_id') or data.get('kb_id','')
     if data.get('mode')=='general':
-        if dataset_id or ids:raise HTTPException(409,'Start a document conversation to use a workspace.')
+        if dataset_id or ids:raise HTTPException(409,'Start a document conversation to use a collection.')
         from .temporary_chat import chat_snapshot
         snapshot=chat_snapshot(owner,body.model_id or '')
         snapshot['settings']['general_chat']=True
@@ -520,10 +522,10 @@ def message_execution(body,owner,data):
     pinned=data.get('dataset_id') or data.get('kb_id')
     if not pinned and data.get('document_ids'):
         try:previous,_=routing.documents_scope(owner,'',data['document_ids']);pinned=previous.id
-        except HTTPException:raise HTTPException(409,'Start a new conversation scoped to one workspace.')
-    if data.get('messages') and not pinned:raise HTTPException(409,'Start a new conversation scoped to one workspace.')
+        except HTTPException:raise HTTPException(409,'Start a new conversation scoped to one collection.')
+    if data.get('messages') and not pinned:raise HTTPException(409,'Start a new conversation scoped to one collection.')
     dataset,docs=routing.documents_scope(owner,dataset_id,ids)
-    if pinned and dataset.id!=pinned:raise HTTPException(409,'A conversation stays within its original workspace. Start a new conversation for another workspace.')
+    if pinned and dataset.id!=pinned:raise HTTPException(409,'A conversation stays within its original collection. Start a new conversation for another collection.')
     snapshot=routing.execution_snapshot(dataset,'chat',body.model_id);routing.require_indexes(docs,snapshot)
     snapshot['settings'].pop('general_chat',None)
     data['dataset_id']=dataset.id;data['kb_id']=dataset.id
@@ -580,7 +582,7 @@ class TemplateInput(BaseModel):
 def uploaded_template(body,owner):
     if not body.source_filename:return None
     matches=[r for r in records(owner,'template') if r.parent_id==(body.dataset_id or '') and (store.json(r.ref).get('source_filename') or '').casefold()==body.source_filename.casefold()]
-    if len(matches)>1:raise HTTPException(409,'Multiple templates have this filename in the selected workspace. Resolve the duplicate filenames before uploading again.')
+    if len(matches)>1:raise HTTPException(409,'Multiple templates have this filename in the selected collection. Resolve the duplicate filenames before uploading again.')
     return matches[0] if matches else None
 def check_schema(schema):
     def location(path):return '$'+''.join('['+str(part)+']' if isinstance(part,int) else '.'+str(part) for part in path)
@@ -641,7 +643,7 @@ def update_template(id:str,body:TemplateInput,owner=Depends(auth)):
     get_record(id,owner,'template',level='editor')
     with document_lock('template-'+id):
         r=get_record(id,owner,'template');version=r.version+1;ref=f'template/{id}/v{version}.json'
-        if body.dataset_id and body.dataset_id!=r.parent_id:raise HTTPException(400,'Template workspace association cannot be changed. Import a new template for the destination workspace.')
+        if body.dataset_id and body.dataset_id!=r.parent_id:raise HTTPException(400,'Template collection association cannot be changed. Import a new template for the destination collection.')
         source_filename=body.source_filename or store.json(r.ref).get('source_filename')
         name=source_filename or body.name
         store.put_json(ref,{'name':name,'schema':body.schema_,'instructions':body.instructions,'version':version,'dataset_id':r.parent_id or None,'source_filename':source_filename})
@@ -740,7 +742,7 @@ def create_extraction(body:ExtractInput,owner=Depends(auth)):
 def _create_extraction(body,owner):
     t=get_record(body.template_id,owner,'template');dataset,docs=routing.documents_scope(owner,body.dataset_id,body.document_ids)
     access.require_level(owner,dataset.id,'editor')
-    if t.parent_id and t.parent_id!=dataset.id:raise HTTPException(400,'Choose a prompt template belonging to the selected workspace.')
+    if t.parent_id and t.parent_id!=dataset.id:raise HTTPException(400,'Choose a prompt template belonging to the selected collection.')
     snapshot=routing.execution_snapshot(dataset,'extraction',body.model_id)
     pending=[d for d in docs if d.status!='ready']
     if not pending:routing.require_indexes(docs,snapshot)
@@ -838,7 +840,7 @@ def resume_extraction(id:str,body:ResumeExtraction,owner=Depends(auth)):
         data=store.json(r.ref)
         if data.get('review_status')=='reviewed':raise HTTPException(409,'This extraction is Reviewed and locked. Create a separate result.')
         template=get_record(body.template_id,owner,'template')
-        if template.parent_id and template.parent_id!=r.parent_id:raise HTTPException(400,'Choose a prompt in this extraction workspace')
+        if template.parent_id and template.parent_id!=r.parent_id:raise HTTPException(400,'Choose a prompt in this extraction collection')
         prompt=store.json(template.ref);check_schema(prompt['schema'])
         dataset,docs=routing.documents_scope(owner,r.parent_id,data['document_ids'])
         snapshot=routing.execution_snapshot(dataset,'extraction')
@@ -950,14 +952,14 @@ def retry_job(id:str,owner=Depends(auth)):
             if not saved.get('settings',{}).get('_ocr_cloud_only') and not (cloud and cloud_ocr.provider(cloud)):
                 raise HTTPException(409,'This old indexing job saved the local OCR route. Use Reindex on the document to apply its current cloud OCR model; the old job was not restarted.')
             current=routing.execution_snapshot(routing.owned(target.parent_id,owner,'knowledge_base'),'embedding')
-            if not routing.same_run_models(saved,current):raise HTTPException(409,'Workspace model mappings changed. Use Reindex on the document to apply its current embedding and OCR models.')
+            if not routing.same_run_models(saved,current):raise HTTPException(409,'Collection model mappings changed. Use Reindex on the document to apply its current embedding and OCR models.')
         if j.kind=='extract':
-            if target.status=='ready':raise HTTPException(409,'This extraction already has a successful result. Use Re-extract to create a new result with current workspace models.')
+            if target.status=='ready':raise HTTPException(409,'This extraction already has a successful result. Use Re-extract to create a new result with current collection models.')
             data=store.json(target.ref)
             if data.get('review_status')=='reviewed':raise HTTPException(409,'This extraction is Reviewed and locked. Create a separate re-extraction.')
             saved=store.json('jobs/'+id+'.json').get('execution') or {}
             current=routing.execution_snapshot(routing.owned(target.parent_id,owner,'knowledge_base'),'extraction')
-            if not routing.same_run_models(saved,current):raise HTTPException(409,'Workspace model mappings changed. Use Re-extract with current workspace models; this historical job was not restarted.')
+            if not routing.same_run_models(saved,current):raise HTTPException(409,'Collection model mappings changed. Use Re-extract with current collection models; this historical job was not restarted.')
             docs=[s.get(Record,did) for did in data['document_ids']]
             waiting=any(d and d.status in ('queued','processing') for d in docs)
             if any(not d or d.status in ('failed','deleting') for d in docs):raise HTTPException(409,'Retry the failed source indexing jobs first')
@@ -1036,7 +1038,7 @@ def _save_settings(body,owner):
     if cfg['chunk_overlap']>=cfg['chunk_size']:raise HTTPException(400,'Chunk overlap must be smaller than chunk size')
     if any(cfg[k]!=settings()[k] for k in ('storage_provider','oci_storage_namespace','oci_storage_bucket','oci_storage_prefix','oci_storage_region')):
         with Session() as session:
-            if session.scalar(select(Record).where(Record.kind!='config_profile').limit(1)):raise HTTPException(409,'Storage switching requires an empty workspace or an operator-led data migration; existing objects cannot be silently moved')
+            if session.scalar(select(Record).where(Record.kind!='config_profile').limit(1)):raise HTTPException(409,'Storage switching requires an empty collection or an operator-led data migration; existing objects cannot be silently moved')
         if cfg['storage_provider']=='oci':
             from .oci_adapters import OCIStorageAdapter
             try:oci_storage(cfg).test_connection()
@@ -1205,7 +1207,7 @@ def revise_profile(id:str,body:ProfileInput,owner=Depends(auth)):return write_pr
 @app.post('/api/settings/profiles/{id}/activate')
 def activate_profile(id:str,owner=Depends(auth)):
     r=get_record(id,owner,'config_profile');data=local_store.json(r.ref);cfg=data['settings'].copy()
-    if data.get('registration_model_id'):raise HTTPException(400,'Apply registered models through the workspace Model Mapping screen.')
+    if data.get('registration_model_id'):raise HTTPException(400,'Apply registered models through the collection Model Mapping screen.')
     for target,key in [('openai.enc','api_key'),('oci.enc','oci_api_key')]:
         try:
             encrypted=local_store.get(f'secrets/profiles/{id}/v{r.version}/{target}');cfg[key]=secret_cipher().decrypt(encrypted).decode()

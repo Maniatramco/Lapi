@@ -84,7 +84,7 @@ def team_rows(session):
 def _existing_datasets(session, ids):
     found = set(session.scalars(select(relational.Dataset.dataset_id).where(relational.Dataset.dataset_id.in_(list(ids))))) if ids else set()
     if found != set(ids):
-        raise HTTPException(404, 'One or more workspaces no longer exist. Nothing changed.')
+        raise HTTPException(404, 'One or more collections no longer exist. Nothing changed.')
 
 
 def _team(session, team_id):
@@ -181,15 +181,17 @@ def install(app, auth):
     def set_dataset_members(id: str, body: Members, owner=Depends(auth)):
         """Owners give or remove access to their dataset. Administrators always have access."""
         record = access.get_record(id, owner, 'knowledge_base', level='owner')
-        if core.store.json(record.ref).get('audience') == 'personal' and any(level for level in [*body.people.values(), *body.teams.values()]):
-            raise HTTPException(400, 'This is a personal workspace, so it cannot be shared. Use your team workspace to work with others.')
+        from . import workspaces
+        # Collections placed from before workspaces can still be shared by administrators.
+        if workspaces.is_personal(record) and record.owner == owner and not core.is_administrator(owner) and any(level for level in [*body.people.values(), *body.teams.values()]):
+            raise HTTPException(400, 'This collection is in a personal workspace, so it cannot be shared. Use a team workspace to work with others.')
         with core.document_lock('dataset-access'), core.Session.begin() as session:
             people = set(body.people)
             found = set(session.scalars(select(core.User.id).where(core.User.id.in_(list(people))))) if people else set()
             if found != people:
                 raise HTTPException(404, 'One or more people no longer exist. Nothing changed.')
             if any(core.is_administrator(user_id, session) for user_id in people):
-                raise HTTPException(400, 'Administrators always have access to every workspace.')
+                raise HTTPException(400, 'Administrators always have access to every collection.')
             for team_id in body.teams:
                 _team(session, team_id)
             grants = {row.user_id: row for row in session.scalars(select(relational.UserDataset).where(relational.UserDataset.dataset_id == id))}

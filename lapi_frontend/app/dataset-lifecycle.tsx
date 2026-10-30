@@ -14,16 +14,16 @@ function DeleteDialog({dataset,api,onClose,onDeleted}:{dataset:Entity;api:Api;on
   if(busy||confirmation!==dataset.name)return;
   setBusy(true);setError('');
   try{await api(`/datasets/${encodeURIComponent(dataset.id)}`,'DELETE',{confirmation,expected_version:dataset.version});onDeleted();}
-  catch(error){setError(error instanceof Error?error.message:'Workspace could not be deleted.');setBusy(false);}
+  catch(error){setError(error instanceof Error?error.message:'Collection could not be deleted.');setBusy(false);}
  };
  return <dialog className="dataset-delete-dialog" ref={dialog} aria-labelledby="dataset-delete-title" onCancel={event=>{event.preventDefault();if(!busy)onClose();}}>
   <form onSubmit={event=>{event.preventDefault();void remove();}}>
-   <div className="panel-head"><h2 id="dataset-delete-title">Delete workspace?</h2><button type="button" className="btn icon" aria-label="Cancel workspace deletion" disabled={busy} onClick={onClose}><X size={18}/></button></div>
-   <p><strong>{dataset.name}</strong> and its documents, prompts, results and workspace chats will leave the active workspace. You can recover them from <strong>Deleted workspaces</strong>.</p>
+   <div className="panel-head"><h2 id="dataset-delete-title">Delete collection?</h2><button type="button" className="btn icon" aria-label="Cancel collection deletion" disabled={busy} onClick={onClose}><X size={18}/></button></div>
+   <p><strong>{dataset.name}</strong> and its documents, prompts, results and collection chats will leave the active collection. You can recover them from <strong>Deleted collections</strong>.</p>
    <p>Registered models remain available. Finish or cancel active processing before deleting.</p>
-   <label className="field">Type the workspace name to confirm<input autoFocus aria-label="Workspace name confirmation" value={confirmation} disabled={busy} autoComplete="off" onChange={event=>setConfirmation(event.target.value)}/></label>
+   <label className="field">Type the collection name to confirm<input autoFocus aria-label="Collection name confirmation" value={confirmation} disabled={busy} autoComplete="off" onChange={event=>setConfirmation(event.target.value)}/></label>
    {error&&<p role="alert" className="field-error">{error}</p>}
-   <div className="row dataset-delete-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button><button type="submit" className="btn danger" disabled={busy||confirmation!==dataset.name}><Trash2 size={16}/>{busy?'Deleting…':'Delete workspace'}</button></div>
+   <div className="row dataset-delete-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button><button type="submit" className="btn danger" disabled={busy||confirmation!==dataset.name}><Trash2 size={16}/>{busy?'Deleting…':'Delete collection'}</button></div>
   </form>
  </dialog>;
 }
@@ -31,26 +31,26 @@ function DeleteDialog({dataset,api,onClose,onDeleted}:{dataset:Entity;api:Api;on
 export function useDatasetLifecycle(api:Api,onChanged:()=>void,canManage:boolean){
  const [choice,setChoice]=useState<Entity|null>(null),[showTrash,setShowTrash]=useState(false),[deleted,setDeleted]=useState<Entity[]>([]);
  const [loading,setLoading]=useState(false),[restoring,setRestoring]=useState(''),[error,setError]=useState(''),[message,setMessage]=useState('');
- const load=async()=>{setLoading(true);setError('');try{setDeleted(await api('/dataset-trash'));}catch(error){setError(error instanceof Error?error.message:'Deleted workspaces could not load.');}finally{setLoading(false);}};
+ const load=async()=>{setLoading(true);setError('');try{setDeleted(await api('/dataset-trash'));}catch(error){setError(error instanceof Error?error.message:'Deleted collections could not load.');}finally{setLoading(false);}};
  useEffect(()=>{if(showTrash&&canManage)void load();},[showTrash,canManage]);
  const restore=async(dataset:Entity)=>{
   if(restoring)return;setRestoring(dataset.id);setError('');
   try{await api(`/dataset-trash/${encodeURIComponent(dataset.id)}/restore`,'POST');setDeleted(previous=>previous.filter(row=>row.id!==dataset.id));setMessage(`${dataset.name} restored.`);onChanged();}
-  catch(error){setError(error instanceof Error?error.message:'Workspace could not be restored.');}
+  catch(error){setError(error instanceof Error?error.message:'Collection could not be restored.');}
   finally{setRestoring('');}
  };
  return {
   requestDelete:(dataset:Entity)=>{if(canManage){setMessage('');setChoice(dataset);}},
   controls:canManage?<div className="dataset-lifecycle">
-   <button type="button" className="btn" aria-expanded={showTrash} onClick={()=>setShowTrash(value=>!value)}><Trash2 size={16}/>Deleted workspaces</button>
+   <button type="button" className="btn" aria-expanded={showTrash} onClick={()=>setShowTrash(value=>!value)}><Trash2 size={16}/>Deleted collections</button>
    {message&&<p role="status">{message}</p>}
-   {showTrash&&<section className="panel dataset-trash" aria-label="Deleted workspaces">
-    <div className="panel-head"><h3>Deleted workspaces</h3><button type="button" className="btn" disabled={loading||!!restoring} onClick={()=>void load()}>Refresh deleted workspaces</button></div>
-    <p className="muted small">Restore a workspace with its documents, saved results, model mappings and existing user assignments.</p>
-    {loading?<p role="status">Loading deleted workspaces…</p>:deleted.length?<ul>{deleted.map(dataset=><li key={dataset.id}><span><strong>{dataset.name}</strong><small>Deleted {new Date(dataset.deleted_at*1000).toLocaleString()}</small></span><button type="button" className="btn" aria-label={`Restore ${dataset.name}`} disabled={!!restoring} onClick={()=>void restore(dataset)}><RotateCcw size={15}/>{restoring===dataset.id?'Restoring…':'Restore'}</button></li>)}</ul>:!error&&<p>No deleted workspaces.</p>}
+   {showTrash&&<section className="panel dataset-trash" aria-label="Deleted collections">
+    <div className="panel-head"><h3>Deleted collections</h3><button type="button" className="btn" disabled={loading||!!restoring} onClick={()=>void load()}>Refresh deleted collections</button></div>
+    <p className="muted small">Restore a collection with its documents, saved results, model mappings and existing user assignments.</p>
+    {loading?<p role="status">Loading deleted collections…</p>:deleted.length?<ul>{deleted.map(dataset=><li key={dataset.id}><span><strong>{dataset.name}</strong><small>Deleted {new Date(dataset.deleted_at*1000).toLocaleString()}</small></span><button type="button" className="btn" aria-label={`Restore ${dataset.name}`} disabled={!!restoring} onClick={()=>void restore(dataset)}><RotateCcw size={15}/>{restoring===dataset.id?'Restoring…':'Restore'}</button></li>)}</ul>:!error&&<p>No deleted collections.</p>}
     {error&&<p role="alert" className="field-error">{error}</p>}
    </section>}
-   {choice&&<DeleteDialog key={choice.id} dataset={choice} api={api} onClose={()=>setChoice(null)} onDeleted={()=>{setMessage(`${choice.name} moved to Deleted workspaces.`);setChoice(null);onChanged();if(showTrash)void load();}}/>}
+   {choice&&<DeleteDialog key={choice.id} dataset={choice} api={api} onClose={()=>setChoice(null)} onDeleted={()=>{setMessage(`${choice.name} moved to Deleted collections.`);setChoice(null);onChanged();if(showTrash)void load();}}/>}
   </div>:null,
  };
 }

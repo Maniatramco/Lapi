@@ -94,7 +94,7 @@ def test_dataset_override_then_workspace_default(system):
     # Datasets never choose an embedding model.
     other = model(s, embedding_of(d)['connection_profile_id'], 'Other embeddings', ['embedding'])
     refused = s.api.put('/api/datasets/'+d['id']+'/models', json=payload | {'embedding_model_id': other['id'], 'acknowledge_reindex': True})
-    assert refused.status_code == 400 and 'workspace Default embedding' in refused.text
+    assert refused.status_code == 400 and 'overall Default embedding' in refused.text
 
 
 def test_embedding_change_requires_confirmation_deletes_now_and_reports_progress(system, monkeypatch):

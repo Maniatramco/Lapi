@@ -11,13 +11,13 @@ test.beforeEach(async({page})=>{
 });
 async function setup(page:Page){
  const headers=await sessionHeaders(page.request),models=await seedMockCatalog(page.request,headers,'Browser regression');
- const dataset=await seedDataset(page.request,headers,'Browser workspace '+Date.now(),[models.fast,models.careful],models.embedding);
+ const dataset=await seedDataset(page.request,headers,'Browser collection '+Date.now(),[models.fast,models.careful],models.embedding);
  const template=await checked(await page.request.post('/api/templates',{headers,data:{name:'browser-prompt.json',dataset_id:dataset.id,schema}}));
  await page.reload();await expect(page.getByLabel('Refresh',{exact:true})).toBeEnabled();
  return {headers,models,dataset,template};
 }
 async function agent(page:Page,dataset:string){
- await page.goto('/#Lapi%20Agent');await expect(page.getByLabel('Agent workspace')).toBeEnabled();await page.getByLabel('Agent workspace').selectOption(dataset);
+ await page.goto('/#Lapi%20Agent');await expect(page.getByLabel('Agent collection')).toBeEnabled();await page.getByLabel('Agent collection').selectOption(dataset);
  await expect(page.getByLabel('Agent Model')).toBeEnabled();
 }
 async function send(page:Page,text:string){
@@ -32,21 +32,21 @@ test('Dashboard loads without chat requests and opens chat only after user actio
  const requests:{path:string;method:string}[]=[];
  page.on('request',request=>{const path=new URL(request.url()).pathname;if(path.startsWith('/api/dataset-chat/'))requests.push({path,method:request.method()});});
  await page.reload();
- const dashboard=page.getByRole('region',{name:'Workspace dashboard',exact:true});
+ const dashboard=page.getByRole('region',{name:'Collection dashboard',exact:true});
  await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
  await expect(dashboard.getByRole('button',{name:'Open chat',exact:true})).toBeVisible();
  await expect(page.getByLabel('Refresh',{exact:true})).toBeEnabled();
- await expect(dashboard.getByRole('button',{name:'Onboard workspace',exact:true})).toHaveCount(0);
- await expect(page.getByLabel('Message Workspace Knowledge Chat',{exact:true})).toHaveCount(0);
+ await expect(dashboard.getByRole('button',{name:'Onboard collection',exact:true})).toHaveCount(0);
+ await expect(page.getByLabel('Message Collection Knowledge Chat',{exact:true})).toHaveCount(0);
  expect(requests).toEqual([]);
  if(process.env.LAPI_DASHBOARD_SCREENSHOT)await page.screenshot({path:process.env.LAPI_DASHBOARD_SCREENSHOT,fullPage:true});
  await dashboard.getByRole('button',{name:'Open chat',exact:true}).click();
- await expect(page.getByLabel('Workspace chat model',{exact:true})).toBeEnabled();
- await expect(page.getByText('Loading accessible workspace knowledge…',{exact:true})).toHaveCount(0);
+ await expect(page.getByLabel('Collection chat model',{exact:true})).toBeEnabled();
+ await expect(page.getByText('Loading accessible collection knowledge…',{exact:true})).toHaveCount(0);
  expect(requests.some(request=>request.path==='/api/dataset-chat/catalog')).toBe(true);
  expect(requests.filter(request=>request.method==='POST')).toEqual([]);
- await page.getByLabel('Message Workspace Knowledge Chat',{exact:true}).fill('Summarize the key themes');
- await expect(page.getByLabel('Send workspace chat question',{exact:true})).toBeEnabled();
+ await page.getByLabel('Message Collection Knowledge Chat',{exact:true}).fill('Summarize the key themes');
+ await expect(page.getByLabel('Send collection chat question',{exact:true})).toBeEnabled();
  expect(requests.filter(request=>request.method==='POST')).toEqual([]);
 });
 
@@ -69,7 +69,7 @@ test('grouped navigation, route aliases and agent drawer work on desktop and mob
  for(const hash of ['Setup','API Documentation','ADP Documentation','Index inspector']){
   await page.goto('/#'+encodeURIComponent(hash));await expect(page.getByRole('heading',{level:1})).toHaveText('Dashboard');await expect(page).toHaveURL(/#Dashboard$/);
  }
- for(const [hash,title,url] of [['Onboard workspace','Datasets',/#Datasets$/],['Home','Dashboard',/#Dashboard$/],['Connections','Storage',/#Storage$/],['Services & migration','Storage',/#Storage$/],['Document Chat','Lapi Agent',/#Lapi%20Agent$/],['Ask Lapi','Lapi Agent',/#Lapi%20Agent$/]] as [string,string,RegExp][]){
+ for(const [hash,title,url] of [['Onboard collection','Datasets',/#Datasets$/],['Home','Dashboard',/#Dashboard$/],['Connections','Storage',/#Storage$/],['Services & migration','Storage',/#Storage$/],['Document Chat','Lapi Agent',/#Lapi%20Agent$/],['Ask Lapi','Lapi Agent',/#Lapi%20Agent$/]] as [string,string,RegExp][]){
   await page.goto('/#'+encodeURIComponent(hash));await expect(page.getByRole('heading',{level:1})).toHaveText(title);await expect(page).toHaveURL(url);
  }
  await page.setViewportSize({width:390,height:844});await agent(page,'');await page.getByLabel('Open navigation').click();
@@ -77,33 +77,33 @@ test('grouped navigation, route aliases and agent drawer work on desktop and mob
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 
-test('retired onboarding screen resolves to Workspace and New workspace keeps the original inline workflow',async({page})=>{
+test('retired onboarding screen resolves to Collection and New collection keeps the original inline workflow',async({page})=>{
  await page.goto('/#Onboard%20dataset');
  await expect(page).toHaveURL(/#Datasets$/);
  await expect(page.getByRole('heading',{level:1})).toHaveText('Datasets');
- await page.getByRole('button',{name:'New workspace',exact:true}).first().click();
- await expect(page.getByRole('region',{name:'Workspace onboarding workflow',exact:true})).toBeVisible();
- await expect(page.getByLabel('Onboarding workspace name',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'New collection',exact:true}).first().click();
+ await expect(page.getByRole('region',{name:'Collection onboarding workflow',exact:true})).toBeVisible();
+ await expect(page.getByLabel('Onboarding collection name',{exact:true})).toBeVisible();
  await expect(page.getByLabel('Upload documents and run extraction',{exact:true})).toHaveCount(0);
  await expect(page).toHaveURL(/#Datasets$/);
- await page.getByRole('button',{name:'Close workspace onboarding',exact:true}).click();
- await expect(page.getByRole('region',{name:'Workspace onboarding workflow',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Close collection onboarding',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Collection onboarding workflow',exact:true})).toHaveCount(0);
  if(await page.getByLabel('Open navigation').isVisible())await page.getByLabel('Open navigation').click();
- await expect(page.getByRole('navigation',{name:'App pages'}).getByRole('button',{name:'Onboard workspace',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('navigation',{name:'App pages'}).getByRole('button',{name:'Onboard collection',exact:true})).toHaveCount(0);
  await expect(page.getByLabel('Refresh',{exact:true})).toBeEnabled();
  await expect(page.getByText('Loading Lapi…',{exact:true})).toHaveCount(0);
  if(process.env.LAPI_NAVIGATION_SCREENSHOT)await page.screenshot({path:process.env.LAPI_NAVIGATION_SCREENSHOT,fullPage:true});
 });
 
-test('workspace chat actions open Lapi Agent with the selected workspace',async({page})=>{
+test('collection chat actions open Lapi Agent with the selected collection',async({page})=>{
  const w=await setup(page);await uploadReady(page.request,w.headers,w.dataset,'agent-redirect.txt',source);await page.reload();
  // A prior General chat choice must not override an explicit dataset handoff,
  // including a dataset deep link resolved before the login request finishes.
  await agent(page,'');
  await page.goto('/#'+encodeURIComponent('dataset/'+w.dataset.id));
  await page.evaluate(key=>sessionStorage.setItem(key,''),`lapi-agent-v2:${process.env.LAPI_SMOKE_USERNAME||'smoke'}-dataset`);await page.reload();
- await page.getByRole('button',{name:'Ask this workspace',exact:true}).click();
- await expect(page).toHaveURL(/#Lapi%20Agent$/);await expect(page.getByLabel('Agent workspace')).toHaveValue(w.dataset.id);
+ await page.getByRole('button',{name:'Ask this collection',exact:true}).click();
+ await expect(page).toHaveURL(/#Lapi%20Agent$/);await expect(page.getByLabel('Agent collection')).toHaveValue(w.dataset.id);
  await expect(page.getByLabel('Message Lapi Agent')).toBeVisible();await expect(page.locator('.sidebar')).not.toHaveClass(/open/);
 });
 
@@ -145,11 +145,11 @@ test('model registration and mapping use tables and persist selected roles',asyn
  await page.reload();await page.getByRole('combobox',{name:'Dataset',exact:true}).selectOption(w.dataset.id);await expect(page.getByLabel('Chat model',{exact:true})).toHaveValue(w.models.careful.id);
 });
 
-test('Home workspace search is optional and filters matching cards',async({page})=>{
- const w=await setup(page);await page.reload();await page.getByLabel('Search workspaces').click();
- await page.getByRole('textbox',{name:'Search workspaces',exact:true}).fill(w.dataset.name);
- await expect(page.getByRole('article',{name:'Workspace '+w.dataset.name})).toBeVisible();
- await page.getByLabel('Clear and close workspace search').click();await expect(page.getByRole('textbox',{name:'Search workspaces',exact:true})).toHaveCount(0);
+test('Home collection search is optional and filters matching cards',async({page})=>{
+ const w=await setup(page);await page.reload();await page.getByLabel('Search collections').click();
+ await page.getByRole('textbox',{name:'Search collections',exact:true}).fill(w.dataset.name);
+ await expect(page.getByRole('article',{name:'Collection '+w.dataset.name})).toBeVisible();
+ await page.getByLabel('Clear and close collection search').click();await expect(page.getByRole('textbox',{name:'Search collections',exact:true})).toHaveCount(0);
 });
 
 test('agent command picker rejects malformed commands before API calls',async({page})=>{
@@ -162,20 +162,20 @@ test('agent command picker rejects malformed commands before API calls',async({p
 
 test('onboards models, prompt and document through the Agent and publishes a saved extraction',async({page})=>{
  const w=await setup(page);await agent(page,'');await send(page,'/Onboard');
- const flow=page.getByRole('region',{name:'Workspace onboarding workflow'});await expect(flow).toBeVisible();
- await page.getByLabel('Onboarding workspace name').fill('Full onboarding '+Date.now());
+ const flow=page.getByRole('region',{name:'Collection onboarding workflow'});await expect(flow).toBeVisible();
+ await page.getByLabel('Onboarding collection name').fill('Full onboarding '+Date.now());
  await page.getByLabel('Onboarding embedding model').selectOption(w.models.embedding.id);
  await page.getByLabel('Onboarding chat model').selectOption(w.models.fast.id);
  await page.getByLabel('Onboarding extraction model').selectOption(w.models.fast.id);
  await page.getByLabel('Upload documents and run extraction').check();
  await page.getByLabel('Onboarding documents').setInputFiles({name:'onboard.txt',mimeType:'text/plain',buffer:Buffer.from(source)});
  await page.getByLabel('Onboarding prompt JSON file').setInputFiles({name:'onboard-prompt.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({schema}))});
- const created=page.waitForResponse(r=>r.url().endsWith('/api/agent-v2/onboarding')&&r.request().method()==='POST');await page.getByRole('button',{name:'Confirm workspace onboarding',exact:true}).click();const workflow=await checked(await created);
+ const created=page.waitForResponse(r=>r.url().endsWith('/api/agent-v2/onboarding')&&r.request().method()==='POST');await page.getByRole('button',{name:'Confirm collection onboarding',exact:true}).click();const workflow=await checked(await created);
  await expect.poll(async()=>{const saved=await checked(await page.request.get(`/api/agent-v2/onboarding/${workflow.id}`));if(saved.status==='failed')throw new Error('Synthetic onboarding failed: '+saved.error);return saved.status;},{timeout:90000}).toBe('completed');
- await expect(page.getByRole('button',{name:'Use workspace in Lapi Agent',exact:true})).toBeVisible({timeout:90000});
+ await expect(page.getByRole('button',{name:'Use collection in Lapi Agent',exact:true})).toBeVisible({timeout:90000});
  await expect(flow.getByText(/Ready for review/).last()).toBeVisible();
- await page.getByRole('button',{name:'Use workspace in Lapi Agent',exact:true}).click();
- await expect(page.getByLabel('Agent workspace')).not.toHaveValue('');
+ await page.getByRole('button',{name:'Use collection in Lapi Agent',exact:true}).click();
+ await expect(page.getByLabel('Agent collection')).not.toHaveValue('');
 });
 
 test('confirmed upload and extraction save originals and Parquet; independent mode creates one result per file',async({page})=>{
@@ -232,7 +232,7 @@ test('external-processing approval appears immediately and cancellation does not
  let plans=0;page.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/api/agent-v2/plans'))plans++;});
  await send(page,'/Upload');const popup=page.getByRole('dialog',{name:'Allow external processing?'});await expect(popup).toBeVisible();expect(plans).toBe(0);
  await popup.getByRole('button',{name:'Cancel',exact:true}).click();await expect(popup).not.toBeVisible();expect(plans).toBe(0);
- await page.getByLabel('Send agent request').click();await popup.getByRole('button',{name:'Agree and continue',exact:true}).click();await expect(page.getByLabel('Workflow workspace')).toBeVisible();expect(plans).toBe(1);
+ await page.getByLabel('Send agent request').click();await popup.getByRole('button',{name:'Agree and continue',exact:true}).click();await expect(page.getByLabel('Workflow collection')).toBeVisible();expect(plans).toBe(1);
 });
 
 test('composer grows with content and stays within the full chat width',async({page})=>{
@@ -242,12 +242,12 @@ test('composer grows with content and stays within the full chat width',async({p
  await input.fill('Short');await expect.poll(async()=> (await input.boundingBox())!.height).toBeLessThanOrEqual(before.height+2);
 });
 
-test('reselecting the current Extract workspace and prompt preserves rows and CSV export',async({page})=>{
+test('reselecting the current Extract collection and prompt preserves rows and CSV export',async({page})=>{
  const w=await setup(page),doc=await uploadReady(page.request,w.headers,w.dataset,'table-export.txt',source);
  const run=await checked(await page.request.post('/api/extractions',{headers:w.headers,data:{dataset_id:w.dataset.id,document_ids:[doc.id],template_id:w.template.id}}));await extractionReady(page,run.id);
- await page.goto('/#Extract%20Data');await page.getByLabel('Extract workspace').selectOption(w.dataset.id);await page.getByLabel('Extract prompt template').selectOption(w.template.id);
+ await page.goto('/#Extract%20Data');await page.getByLabel('Extract collection').selectOption(w.dataset.id);await page.getByLabel('Extract prompt template').selectOption(w.template.id);
  await expect(page.getByRole('table')).toContainText('MOCK TEST VALUE');
- await page.getByLabel('Extract workspace').selectOption(w.dataset.id);await page.getByLabel('Extract prompt template').selectOption(w.template.id);await expect(page.getByRole('table')).toContainText('MOCK TEST VALUE');
+ await page.getByLabel('Extract collection').selectOption(w.dataset.id);await page.getByLabel('Extract prompt template').selectOption(w.template.id);await expect(page.getByRole('table')).toContainText('MOCK TEST VALUE');
  await page.getByLabel('Export Extract results').click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'CSV (.csv)',exact:true}).click();expect((await downloading).suggestedFilename()).toMatch(/\.csv$/);
  const exported=await page.request.get(`/api/extract-data/export?dataset_id=${w.dataset.id}&template_id=${w.template.id}&format=csv`);expect(await exported.text()).toContain('MOCK TEST VALUE');
 });
@@ -260,9 +260,9 @@ test('current screens fit phone, tablet and desktop and retain shared blue progr
   await page.goto('/#'+encodeURIComponent(hash));await expect(page.locator('h1.workspace-title')).toBeVisible();await expect(page.getByLabel('Refresh')).toBeEnabled();
   if(hash==='Model Registration')await expect(page.getByRole('table',{name:'Registered models'})).toBeVisible();
   if(hash==='Model Mapping'){await page.getByRole('combobox',{name:'Dataset',exact:true}).selectOption(w.dataset.id);await expect(page.getByLabel('Chat model',{exact:true})).toBeEnabled();}
-  if(hash==='Extract Data'){await page.getByLabel('Extract workspace').selectOption(w.dataset.id);await page.getByLabel('Extract prompt template').selectOption(w.template.id);await expect(page.getByRole('table')).toContainText('MOCK TEST VALUE');}
-  if(hash==='Review'){await page.getByLabel('Extraction workspace filter').selectOption(w.dataset.id);await expect(page.getByRole('button',{name:'Review extraction '+run.id,exact:true})).toBeVisible();}
-  if(hash==='Lapi Agent'){await page.getByLabel('Agent workspace').selectOption(w.dataset.id);await expect(page.getByLabel('Agent Model')).toBeEnabled();await expect(page.getByRole('heading',{name:'How can I help?',exact:true})).toBeVisible();}
+  if(hash==='Extract Data'){await page.getByLabel('Extract collection').selectOption(w.dataset.id);await page.getByLabel('Extract prompt template').selectOption(w.template.id);await expect(page.getByRole('table')).toContainText('MOCK TEST VALUE');}
+  if(hash==='Review'){await page.getByLabel('Extraction collection filter').selectOption(w.dataset.id);await expect(page.getByRole('button',{name:'Review extraction '+run.id,exact:true})).toBeVisible();}
+  if(hash==='Lapi Agent'){await page.getByLabel('Agent collection').selectOption(w.dataset.id);await expect(page.getByLabel('Agent Model')).toBeEnabled();await expect(page.getByRole('heading',{name:'How can I help?',exact:true})).toBeVisible();}
   if(hash==='Storage'){await page.getByLabel('Advanced connections',{exact:true}).locator('summary').first().click();await expect(page.getByLabel('Request timeout (sec)')).toBeVisible();}
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
   if(process.env.LAPI_CAPTURE_SCREENSHOTS==='true')await page.screenshot({path:`../lapi_runtime/lapi_screenshots/current-${hash.replaceAll(' ','-')}-${width}.png`,fullPage:true});

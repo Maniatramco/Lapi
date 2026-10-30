@@ -40,7 +40,7 @@ test('model form defaults follow backend configuration while category switches u
  assert.equal(s.field('registration-context-limit').props.value,16384);
 });
 
-test('direct Claude resets an embedding category to Chat, masks its key and sends the optional workspace with a fresh probe',async()=>{
+test('direct Claude resets an embedding category to Chat, masks its key and sends the optional collection with a fresh probe',async()=>{
  const s=await screen();
  s.field('registration-category').props.onChange({target:{value:'embedding'}});s.render();s.choose('anthropic');
  assert.equal(s.field('registration-category').props.value,'chat');

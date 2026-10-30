@@ -369,7 +369,7 @@ class AgentTools(Tools):
             found = [r for r in self.rows('knowledge_base') if _norm(value) in _norm(r.name)]
         if len(found) != 1:
             names = ', '.join(r.name for r in self.rows('knowledge_base')[:20])
-            raise HTTPException(404 if not found else 409, ('No accessible workspace matches ' if not found else 'Several workspaces match ') + repr(value) + '. Available: ' + names)
+            raise HTTPException(404 if not found else 409, ('No accessible collection matches ' if not found else 'Several collections match ') + repr(value) + '. Available: ' + names)
         self.body.dataset_id = found[0].id
         # The chat document filter only applies to the dataset it was chosen in.
         self.body.document_ids = list(self._selected_documents) if found[0].id == self._selected_dataset else []
@@ -498,7 +498,7 @@ class AgentTools(Tools):
                  for r in self.rows('knowledge_base') if _norm(name) in _norm(r.name)]
         page = fit_list(items[offset:offset + PAGE['datasets']]); nxt = offset + len(page)
         data = {'dataset_count': len(items), 'datasets': page}
-        n = self.cite('Workspace list', json.dumps(data, ensure_ascii=False), key=f'catalog:datasets:{name}:{offset}')
+        n = self.cite('Collection list', json.dumps(data, ensure_ascii=False), key=f'catalog:datasets:{name}:{offset}')
         return envelope(data, [n], nxt if nxt < len(items) else None)
 
     def v2_list_documents(self, name='', offset=0):
@@ -526,7 +526,7 @@ class AgentTools(Tools):
         state = self.get_dataset_status()
         data = {k: state[k] for k in ('dataset', 'scope', 'document_count', 'document_status_counts', 'extraction_status_counts', 'active_job_count')}
         if include_jobs: data['recent_jobs'] = state['recent_jobs']
-        n = self.cite('Workspace status · ' + state['dataset']['name'], json.dumps(data, ensure_ascii=False, default=str),
+        n = self.cite('Collection status · ' + state['dataset']['name'], json.dumps(data, ensure_ascii=False, default=str),
                       key=f'catalog:status:{state["dataset"]["id"]}:{include_jobs}')
         return envelope(data, [n])
 
@@ -897,7 +897,7 @@ class AgentTools(Tools):
         from .. import prompt_layers
         current = prompt_layers.dataset_instructions(dataset.id, self.owner)
         data = {'dataset': dataset.name, 'version': current.get('version', 0), 'instructions': current.get('text', '')}
-        n = self.cite('Workspace instructions · ' + dataset.name, json.dumps(data, ensure_ascii=False), key=f'instructions:{dataset.id}:v{data["version"]}')
+        n = self.cite('Collection instructions · ' + dataset.name, json.dumps(data, ensure_ascii=False), key=f'instructions:{dataset.id}:v{data["version"]}')
         return envelope(data, [n], note='' if data['instructions'] else 'This dataset has no instructions yet.')
 
     def v2_search_my_history(self, query, limit=3):
@@ -921,7 +921,7 @@ class AgentTools(Tools):
         return envelope(self.prepare_dataset_onboarding(name, description))
 
     def v2_propose_instruction_update(self, instructions, summary=''):
-        if not self.body.dataset_id: raise HTTPException(422, 'Select a workspace to change its instructions.')
+        if not self.body.dataset_id: raise HTTPException(422, 'Select a collection to change its instructions.')
         try:
             from .. import prompt_layers
             current = prompt_layers.dataset_instructions(self.body.dataset_id, self.owner)

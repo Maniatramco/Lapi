@@ -59,11 +59,11 @@ export function AgentAnswerText({text,...links}:{text:string}&AnswerLinks){
 function InstructionProposal({proposal,api,onError}:{proposal:Entity;api:(path:string,method?:string,body?:unknown)=>Promise<any>;onError:(error:string)=>void}){
  const [state,setState]=useState<'open'|'saving'|'saved'>('open');
  const save=async()=>{setState('saving');try{await api(`/datasets/${proposal.dataset_id}/instructions`,'PUT',{text:proposal.after,summary:proposal.summary||'',expected_version:proposal.current_version});setState('saved');}catch(e){setState('open');onError(e instanceof Error?e.message:'Could not save the instructions.');}};
- return <div className="agent-setup-card" aria-label="Proposed workspace instructions">
-  <strong>Proposed workspace instructions{proposal.summary?` · ${proposal.summary}`:''}</strong>
+ return <div className="agent-setup-card" aria-label="Proposed collection instructions">
+  <strong>Proposed collection instructions{proposal.summary?` · ${proposal.summary}`:''}</strong>
   {proposal.warnings?.length>0&&<p className="agent-setup-warning small">Check before saving: {proposal.warnings.join('; ')}.</p>}
   <div className="agent-instruction-diff"><div><span className="small muted">Now (version {proposal.current_version||0})</span><pre>{proposal.before||'(none)'}</pre></div><div><span className="small muted">Proposed</span><pre>{proposal.after}</pre></div></div>
-  {state==='saved'?<p className="small" role="status">Saved. New answers in this workspace use these instructions.</p>:<div className="agent-setup-actions"><button className="btn primary" disabled={state==='saving'} onClick={()=>void save()}><Save size={15}/>Save instructions</button></div>}
+  {state==='saved'?<p className="small" role="status">Saved. New answers in this collection use these instructions.</p>:<div className="agent-setup-actions"><button className="btn primary" disabled={state==='saving'} onClick={()=>void save()}><Save size={15}/>Save instructions</button></div>}
  </div>;
 }
 /** Per-answer token line; tap to expand the per-call steps when the provider reported them. */

@@ -76,12 +76,6 @@ export function stepsFor(datasets:Entity[],isAdmin:boolean,path:Path='ask'):Step
  return ['dataset','documents','processing','choose',...(path==='extract'?['prompt','extracting'] as Step[]:['ask'] as Step[]),'done'];
 }
 
-/** The kinds of workspace this person may still create: one personal and one team; no limit for administrators. */
-export function workspaceSlots(datasets:Entity[],isAdmin:boolean):('personal'|'team')[]{
- if(isAdmin)return ['team','personal'];
- const taken=datasets.filter(d=>d.mine).map(d=>d.audience||'personal');
- return (['personal','team'] as const).filter(kind=>!taken.includes(kind));
-}
 
 export function fileState(status:string|undefined):FileState{
  if(status==='ready')return 'ready';

@@ -128,7 +128,11 @@ POLICY = {
     ('GET', '/api/knowledge-bases'): 'signed_in',
     ('POST', '/api/knowledge-bases'): 'contributor',
     ('GET', '/api/datasets'): 'signed_in',
-    ('POST', '/api/datasets'): 'signed_in',  # Anyone may start a workspace; they own only what they create.
+    ('POST', '/api/datasets'): 'signed_in',  # Collections: the route checks the person's level on the workspace.
+    ('GET', '/api/workspaces'): 'signed_in',
+    ('POST', '/api/workspaces'): 'signed_in',  # One team workspace per person; administrators have no limit.
+    ('GET', '/api/workspaces/{id}/members'): 'signed_in',  # The route requires Owner of the workspace.
+    ('PUT', '/api/workspaces/{id}/members'): 'signed_in',  # The route requires Owner of the workspace.
     ('GET', '/api/datasets/{id}'): 'viewer',
     ('PATCH', '/api/datasets/{id}'): 'owner',
     ('PATCH', '/api/datasets/{id}/status'): 'contributor',

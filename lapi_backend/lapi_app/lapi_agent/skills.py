@@ -171,12 +171,12 @@ class SkillInput(BaseModel):
 
 def _check_scope(body, owner):
     if body.scope == 'workspace' and not core.is_administrator(owner):
-        raise HTTPException(403, 'Only an administrator can share a skill with the whole workspace.')
+        raise HTTPException(403, 'Only an administrator can share a skill with the whole collection.')
     if body.scope == 'dataset':
-        if not body.dataset_id: raise HTTPException(422, 'Choose the workspace to share this skill with.')
-        if not core.is_administrator(owner): raise HTTPException(403, 'Only an administrator can share a skill with a workspace.')
+        if not body.dataset_id: raise HTTPException(422, 'Choose the collection to share this skill with.')
+        if not core.is_administrator(owner): raise HTTPException(403, 'Only an administrator can share a skill with a collection.')
         with core.Session() as session:
-            if body.dataset_id not in dataset_ids(owner, session): raise HTTPException(404, 'Workspace not found.')
+            if body.dataset_id not in dataset_ids(owner, session): raise HTTPException(404, 'Collection not found.')
 
 
 def _editable(skill_id, owner):

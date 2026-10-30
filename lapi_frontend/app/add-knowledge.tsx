@@ -92,17 +92,17 @@ export function AddKnowledge({api,datasets,documents,selectedDataset,onChanged,o
   <header className="add-knowledge-hero">
    <button type="button" className="add-knowledge-back" onClick={onBack}><ArrowLeft size={16}/>Dashboard</button>
    <h1 id="add-knowledge-title">Add new knowledge</h1>
-   <p>Connect your cloud storage, choose documents and vectorize them into a workspace. Copies are read-only snapshots; your cloud files are never changed.</p>
+   <p>Connect your cloud storage, choose documents and vectorize them into a collection. Copies are read-only snapshots; your cloud files are never changed.</p>
    <ol className="add-knowledge-steps" aria-label="Progress">{STEPS.map(([id,label],i)=><li key={id} data-state={i<index?'done':i===index?'current':'todo'} aria-current={i===index?'step':undefined}><span>{i<index?<CheckCircle2 size={15}/>:i+1}</span>{label}</li>)}</ol>
   </header>
   {error&&<div role="alert" className="add-knowledge-alert"><AlertCircle size={17}/><span>{error}</span></div>}
   {message&&<div role="status" className="add-knowledge-message"><CheckCircle2 size={17}/><span>{message}</span></div>}
 
   {step==='choose'&&<div className="add-knowledge-body">
-   {!usable.length&&<p className="add-knowledge-empty">You need access to an active workspace before adding knowledge. Ask your administrator to assign one.</p>}
+   {!usable.length&&<p className="add-knowledge-empty">You need access to an active collection before adding knowledge. Ask your administrator to assign one.</p>}
    <h2>Where are your documents?</h2>
    <div className="storage-grid" role="list">{STORAGE_PROVIDERS.map(p=><button key={p.id} type="button" role="listitem" className="storage-card" disabled={!usable.length} onClick={()=>pick(p.id)} data-provider={p.id}><span className="storage-icon"><Cloud size={22}/></span><strong>{p.name}</strong><span>{p.help}</span><small>{p.auth}</small><ArrowRight size={16} className="storage-go"/></button>)}</div>
-   {connections.length>0&&<><h2>Your saved connections</h2><ul className="saved-connections">{connections.map(c=><li key={c.id}><button type="button" onClick={()=>open(c)} disabled={!c.enabled}><Cloud size={17}/><span><strong>{c.name}</strong><small>{STORAGE_PROVIDERS.find(p=>p.id===c.provider)?.name} · {datasets.find(d=>d.id===c.dataset_id)?.name||'Workspace'}{c.enabled?'':' · disabled'}</small></span><span className="saved-action">Browse documents<ChevronRight size={15}/></span></button></li>)}</ul></>}
+   {connections.length>0&&<><h2>Your saved connections</h2><ul className="saved-connections">{connections.map(c=><li key={c.id}><button type="button" onClick={()=>open(c)} disabled={!c.enabled}><Cloud size={17}/><span><strong>{c.name}</strong><small>{STORAGE_PROVIDERS.find(p=>p.id===c.provider)?.name} · {datasets.find(d=>d.id===c.dataset_id)?.name||'Collection'}{c.enabled?'':' · disabled'}</small></span><span className="saved-action">Browse documents<ChevronRight size={15}/></span></button></li>)}</ul></>}
   </div>}
 
   {step==='connect'&&form&&provider&&<form className="add-knowledge-body" onSubmit={e=>{e.preventDefault();void save();}}>
@@ -111,7 +111,7 @@ export function AddKnowledge({api,datasets,documents,selectedDataset,onChanged,o
    <fieldset disabled={!!busy}><legend className="sr-only">{provider.name} location and credentials</legend>
    <div className="knowledge-fields">
     {field('name','Connection name','For example: Finance contracts')}
-    <label className="knowledge-field"><span>Add documents to workspace</span><select value={form.dataset_id} required onChange={e=>change('dataset_id',e.target.value)}>{usable.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select><small>Copies follow this workspace's access and embedding model.</small></label>
+    <label className="knowledge-field"><span>Add documents to collection</span><select value={form.dataset_id} required onChange={e=>change('dataset_id',e.target.value)}>{usable.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select><small>Copies follow this collection's access and embedding model.</small></label>
     {form.provider==='s3'&&<>{field('bucket','S3 bucket','Bucket name, without s3://')}{field('region','AWS region','For example: ap-south-1')}{field('prefix','Folder prefix','End with / to limit browsing to one folder.',false)}{field('expected_owner','Expected bucket owner','12-digit AWS account ID.',false)}
      <label className="knowledge-field"><span>Sign-in method</span><select value={form.auth_mode} onChange={e=>{change('auth_mode',e.target.value);change('credentials',{});}}><option value="access_key">Access key</option><option value="server_identity">Server IAM identity</option></select></label>
      {form.auth_mode==='access_key'&&<>{credential('access_key_id','Access key ID')}{credential('secret_access_key','Secret access key','Use a key that can only list and read.')}{credential('session_token','Session token','',false,false)}</>}</>}
@@ -131,7 +131,7 @@ export function AddKnowledge({api,datasets,documents,selectedDataset,onChanged,o
   </form>}
 
   {step==='select'&&active&&<div className="add-knowledge-body">
-   <div className="knowledge-section-head"><div><h2>Select documents</h2><p className="knowledge-sub">{active.name} · into <strong>{dataset?.name||'workspace'}</strong> · up to {MAX_SELECTION} files, PDF, DOCX, TXT, JSON or images</p></div><button type="button" className="text-button" onClick={()=>setStep('choose')}>Change storage</button></div>
+   <div className="knowledge-section-head"><div><h2>Select documents</h2><p className="knowledge-sub">{active.name} · into <strong>{dataset?.name||'collection'}</strong> · up to {MAX_SELECTION} files, PDF, DOCX, TXT, JSON or images</p></div><button type="button" className="text-button" onClick={()=>setStep('choose')}>Change storage</button></div>
    <nav className="knowledge-trail" aria-label="Folder path"><button type="button" onClick={()=>void browse(active,[])}>{active.name}</button>{trail.map((part,i)=><span key={part.id}><ChevronRight size={14}/><button type="button" onClick={()=>void browse(active,trail.slice(0,i+1))}>{part.name}</button></span>)}</nav>
    <ul className="knowledge-files" aria-busy={busy==='Reading documents'}>
     {items.map(item=>item.folder?<li key={item.id}><button type="button" className="knowledge-folder" onClick={()=>void browse(active,[...trail,{id:item.id,name:item.name}])}><Folder size={18}/><span>{item.name}</span><ChevronRight size={15}/></button></li>:<li key={item.id}><label data-disabled={!item.selection}><input type="checkbox" checked={chosen.some(c=>c.id===item.id)} disabled={!item.selection||(!chosen.some(c=>c.id===item.id)&&chosen.length>=MAX_SELECTION)} onChange={()=>toggle(item)} aria-label={`Select ${item.name}`}/><FileText size={18}/><span><strong>{item.name}</strong><small>{item.selection?`${Math.max(1,Math.round((item.size||0)/1024))} KB`:'Unsupported file type'}</small></span></label></li>)}
@@ -140,14 +140,14 @@ export function AddKnowledge({api,datasets,documents,selectedDataset,onChanged,o
    </ul>
    {cursor&&<button type="button" className="btn" disabled={!!busy} onClick={()=>void browse(active,trail,cursor)}>Load more</button>}
    <div className="knowledge-consent">
-    <label><input type="checkbox" checked={share} onChange={e=>setShare(e.target.checked)}/><span>Everyone who can access <strong>{dataset?.name||'this workspace'}</strong> may read these copies.</span></label>
-    <label data-highlight={needsConsent}><input type="checkbox" checked={external} onChange={e=>setExternal(e.target.checked)}/><span>If this workspace uses an external embedding service, allow sending the documents' text to it.</span></label>
+    <label><input type="checkbox" checked={share} onChange={e=>setShare(e.target.checked)}/><span>Everyone who can access <strong>{dataset?.name||'this collection'}</strong> may read these copies.</span></label>
+    <label data-highlight={needsConsent}><input type="checkbox" checked={external} onChange={e=>setExternal(e.target.checked)}/><span>If this collection uses an external embedding service, allow sending the documents' text to it.</span></label>
    </div>
    <div className="knowledge-actions"><span className="knowledge-count">{chosen.length} of {MAX_SELECTION} selected</span><button type="button" className="btn primary" disabled={!!busy||!chosen.length||!share} onClick={()=>void vectorize()}>{busy==='Vectorizing'?<Loader2 size={16} className="animate-spin"/>:<Database size={16}/>}Vectorize {chosen.length||''} document{chosen.length===1?'':'s'}</button></div>
   </div>}
 
   {step==='vectorize'&&<div className="add-knowledge-body">
-   <div className="knowledge-section-head"><div><h2>{pending||waiting.length?'Vectorizing into '+(dataset?.name||'workspace'):'Vectorizing finished'}</h2><p className="knowledge-sub">{pending?'Indexing runs in the background. You can leave this page; progress continues.':waiting.length?'Publishing the indexed copies to chat…':`${ready.length} of ${results.length} ready to ask.`}</p></div></div>
+   <div className="knowledge-section-head"><div><h2>{pending||waiting.length?'Vectorizing into '+(dataset?.name||'collection'):'Vectorizing finished'}</h2><p className="knowledge-sub">{pending?'Indexing runs in the background. You can leave this page; progress continues.':waiting.length?'Publishing the indexed copies to chat…':`${ready.length} of ${results.length} ready to ask.`}</p></div></div>
    {publishFailed&&<div role="alert" className="add-knowledge-alert"><AlertCircle size={17}/><span>{publishFailed}</span><button type="button" className="btn" onClick={()=>setPublishFailed('')}>Retry publishing</button></div>}
    <ul className="vectorize-list">{results.map((result,i)=><li key={result.document_id||result.name} data-state={states[i].state}>{['running','publishing'].includes(states[i].state)?<Loader2 size={18} className="animate-spin"/>:states[i].state==='ready'?<CheckCircle2 size={18}/>:<AlertCircle size={18}/>}<span><strong>{result.name}</strong><small>{states[i].label}</small></span></li>)}</ul>
    <div className="knowledge-actions">

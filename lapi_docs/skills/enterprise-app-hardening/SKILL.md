@@ -147,6 +147,7 @@ Read `reference/keycloak-realm.md`, `reference/sessions-and-sign-in.md` and `ref
 - Agent-first phones and screen control: `reference/mobile-agent-first.md` (Release 2 planned: Azure and other
   stores through the agent with secure fields, consent and once-or-keep; review-in-chat; share-by-chat; /Datasets).
 - Mobile compact layouts, keyboard shortcuts (`?` lists them) and "ask first, then guide" set-up questions.
+- **Workspaces above collections** (Lapi 26.1.16.44+; `lapi_app/workspaces.py`, `app/workspace-gate.tsx`, `app/workspace-scope.ts`): Workspace → Document Collection (the old "dataset") with a free type tag. Ask which workspace at login; with none, walk through creating one, then a collection. Workspaces are `core.Record` rows, no new table, and access stays on collection grants: members are copied onto each collection's grants, so OpenFGA did not change. Everyone gets 1 personal + 1 team workspace, and only administrators are unlimited; the limit counts only workspaces you created. Existing data moves lazily: unshared to the owner's personal workspace, shared to one "Organization" workspace, keeping today's access. Whoever triggers that move must not become its owner. Scope every list by the open workspace, including jobs, extractions and templates, or an empty workspace shows another workspace's "Check 1 file".
 
 ## Production deploy routine (Lapi on an OCI Container Instance)
 1. Commit; `docker build --platform linux/amd64` api (`INSTALL_ORACLE=true INSTALL_OCI=true

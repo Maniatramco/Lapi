@@ -14,7 +14,7 @@ import "./lapi-theme.css";
 import "./login.css";
 export const metadata: Metadata = {
   title: "Lapi · AI Data Platform",
-  description: "AI data platform for workspaces, agents, chat, extraction, and review.",
+  description: "AI data platform for collections, agents, chat, extraction, and review.",
   icons: { icon: [{ url: "/favicon.ico?v=lp2", sizes: "any" }, { url: "/lapi-agent.svg?v=lp2", type: "image/svg+xml" }], apple: "/lapi-mark-180.png?v=lp2" },
 };
 export default function RootLayout({

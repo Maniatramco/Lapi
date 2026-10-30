@@ -2,12 +2,12 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 function load(name){const file=path.resolve(__dirname,'../../lapi_frontend/app',name),m=new Module(file,module);m.paths=module.paths;m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,file);return m.exports;}
 test('onboard-only preserves supplied details, chooses real defaults and keeps extraction separate',()=>{
  const {onboardingDraft,onboardingModelSelection}=load('onboarding-draft.ts');const {agentOperation}=load('agent-commands.ts');
- const request='can you onboard a workspace for me with the name of "TermSheet Workspace" and Description : "Sample Termsheet Extraction Workspace"';
+ const request='can you onboard a collection for me with the name of "TermSheet Collection" and Description : "Sample Termsheet Extraction Collection"';
  assert.equal(agentOperation(request),'onboard');
- assert.deepEqual(onboardingDraft(request,{name:'',description:''}),{name:'TermSheet Workspace',description:'Sample Termsheet Extraction Workspace',process_documents:false});
- assert.equal(onboardingDraft('@Onboard workspace named “Contracts” and then extract documents').process_documents,true);
- assert.equal(onboardingDraft('Onboard workspace called "Contracts" only, do not extract').process_documents,false);
- assert.equal(agentOperation('extract'),'extract');assert.equal(agentOperation('@Extract extract fields'),'extract');assert.equal(agentOperation('How can I onboard a workspace?'),undefined);
+ assert.deepEqual(onboardingDraft(request,{name:'',description:''}),{name:'TermSheet Collection',description:'Sample Termsheet Extraction Collection',process_documents:false});
+ assert.equal(onboardingDraft('@Onboard collection named “Contracts” and then extract documents').process_documents,true);
+ assert.equal(onboardingDraft('Onboard collection called "Contracts" only, do not extract').process_documents,false);
+ assert.equal(agentOperation('extract'),'extract');assert.equal(agentOperation('@Extract extract fields'),'extract');assert.equal(agentOperation('How can I onboard a collection?'),undefined);
  const roles=[['embedding_model_id','embedding'],['default_chat_model_id','chat'],['default_extraction_model_id','extraction']];
  const models=[{id:'bad',enabled:false,credential_configured:true,capabilities:['embedding']},{id:'emb',enabled:true,credential_configured:true,capabilities:['embedding']},{id:'one',enabled:true,credential_configured:true,capabilities:['chat','extraction']},{id:'two',enabled:true,credential_configured:true,capabilities:['chat','extraction']}];
  assert.deepEqual(onboardingModelSelection(models,roles,{default_chat_model_id:'two'}),{embedding_model_id:'emb',default_chat_model_id:'two',default_extraction_model_id:'one'});

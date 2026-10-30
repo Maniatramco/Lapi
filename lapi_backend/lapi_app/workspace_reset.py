@@ -101,7 +101,7 @@ def reset(actor):
     with core.document_lock('workspace-reset'):
         preview=catalog()
         if preview['active_jobs']:raise HTTPException(409,'Finish or cancel processing jobs before a fresh start.')
-        if paused():raise HTTPException(409,'A workspace operation is already running.')
+        if paused():raise HTTPException(409,'A collection operation is already running.')
         core.local_store.put_json(FLAG,{'active':True})
         locks=ExitStack()
         id=str(uuid.uuid4());archive='workspace-archives/'+id+'/files/'
@@ -177,14 +177,14 @@ def install(app,auth):
     @app.post('/api/workspace/reset')
     def fresh(body:Confirm,actor=Depends(auth)):
         access.require_admin(actor)
-        if body.confirmation!='START FRESH':raise HTTPException(400,'Type START FRESH to archive and clear the active workspace.')
+        if body.confirmation!='START FRESH':raise HTTPException(400,'Type START FRESH to archive and clear the active collection.')
         return reset(actor)
     @app.post('/api/workspace/archives/{id}/restore')
     def restore(id:str,body:Confirm,actor=Depends(auth)):
         access.require_admin(actor)
         if body.confirmation!='RESTORE':raise HTTPException(400,'Type RESTORE to restore this archive.')
         with core.document_lock('workspace-reset'):
-            if catalog()['counts']:raise HTTPException(409,'Archive the current workspaces before restoring an earlier workspace.')
+            if catalog()['counts']:raise HTTPException(409,'Archive the current collections before restoring an earlier collection.')
             core.local_store.put_json(FLAG,{'active':True})
             try:return _restore(id)
             except (ValueError,FileNotFoundError):raise HTTPException(400,'Archive is unavailable or failed its integrity check.') from None

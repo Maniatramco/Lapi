@@ -254,7 +254,7 @@ def embedding_execution():
         with core.Session() as session: profile = session.get(core.Record, data.get('connection_profile_id'))
         profile_version = profile.version if profile else None
     if model.version != snapshot.get('model_version') or profile_version != snapshot.get('connection_profile_version'):
-        raise HTTPException(409, 'Embedding model configuration changed. Re-apply it as the workspace Default in Model Registration to delete and rebuild the knowledge index.')
+        raise HTTPException(409, 'Embedding model configuration changed. Re-apply it as the overall Default in Model Registration to delete and rebuild the knowledge index.')
     return execution(snapshot)
 
 
@@ -262,7 +262,7 @@ def guard_disable(model_id):
     """The current Default of any role stays enabled until another is chosen."""
     roles = roles_of(model_id)
     if roles:
-        raise HTTPException(409, 'This model is the workspace ' + ', '.join(r.title() for r in roles) + ' Default. Choose another Default before disabling it.')
+        raise HTTPException(409, 'This model is the collection ' + ', '.join(r.title() for r in roles) + ' Default. Choose another Default before disabling it.')
 
 
 def record_test(model_id, profile_version):

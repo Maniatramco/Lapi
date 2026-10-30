@@ -15,7 +15,7 @@ export function runtimeConnections(base:string,env:Environment){
   web:{provider:target,name:'Next.js',detail:target==='oci'?'Hosted on OCI OKE.':'Serves this WebApp from its configured application host.'},
   api:{provider:api,name:'FastAPI',endpoint,detail:'WebApp requests reach FastAPI through the /api proxy. This successful status response confirms the API is reachable.'},
   worker:{provider:location(env.LAPI_WORKER_LOCATION),name:'Processing worker',detail:'Configured host for indexing, extraction and recovery. This footer does not probe worker health.'},
-  models:{provider:location(env.LAPI_MODEL_LOCATION),name:env.LAPI_MODEL_LOCATION==='local'?'Laptop models':'Configured models',detail:env.LAPI_MODEL_LOCATION==='local'&&target==='oci'?'Configured local model service through the private relay. Workspace defaults may use a cloud provider instead.':'Configured default model host. A request-specific model selection may use a different provider.'},
+  models:{provider:location(env.LAPI_MODEL_LOCATION),name:env.LAPI_MODEL_LOCATION==='local'?'Laptop models':'Configured models',detail:env.LAPI_MODEL_LOCATION==='local'&&target==='oci'?'Configured local model service through the private relay. Collection defaults may use a cloud provider instead.':'Configured default model host. A request-specific model selection may use a different provider.'},
  };
 }
 
@@ -53,7 +53,7 @@ export function modelConnectionSummary(datasets:ModelDataset[],datasetId?:string
  return {
   provider:locations.length===1?locations[0]:locations.length?'mixed':'unknown',locations,
   name:labels.size?[...labels].join(' / '):'No enabled mapped models reported',
-  detail:models.length?`${datasetId?'Selected workspace':'Accessible active workspaces'}: ${names.size?[...names].join(', '):'configured models'}. Uses saved default model connections; an individual request may select a different mapped model. This is not a provider health check.`:'No enabled model connection metadata is available for this scope.',
+  detail:models.length?`${datasetId?'Selected collection':'Accessible active collections'}: ${names.size?[...names].join(', '):'configured models'}. Uses saved default model connections; an individual request may select a different mapped model. This is not a provider health check.`:'No enabled model connection metadata is available for this scope.',
   endpoint:[...endpoints].join(', '),region:[...regions].join(', '),
  };
 }

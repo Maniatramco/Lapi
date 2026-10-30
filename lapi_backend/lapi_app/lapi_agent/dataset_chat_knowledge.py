@@ -15,16 +15,16 @@ def assemble(points):
 def validate_workspace_scope(actor,dataset_ids,document_ids=None):
     """Validate the explicit read-only scope before resolving any provider."""
     selected=set(dataset_ids)
-    if not selected:raise HTTPException(422,'Choose workspace knowledge before asking a question.')
+    if not selected:raise HTTPException(422,'Choose collection knowledge before asking a question.')
     with core.Session() as session:
         allowed=access.dataset_ids(actor,session)
-        if not selected<=allowed:raise HTTPException(404,'Workspace knowledge is no longer accessible.')
+        if not selected<=allowed:raise HTTPException(404,'Collection knowledge is no longer accessible.')
         if document_ids is not None:
             if not document_ids:raise HTTPException(422,'Include at least one available file.')
             for id in document_ids:
                 record=session.get(core.Record,id)
                 if not record or record.kind!='document' or record.parent_id not in selected or not access.allowed(record,actor,session,allowed):
-                    raise HTTPException(404,'Selected workspace knowledge is no longer accessible.')
+                    raise HTTPException(404,'Selected collection knowledge is no longer accessible.')
 
 
 class WorkspaceKnowledge:
@@ -39,7 +39,7 @@ class WorkspaceKnowledge:
             scoped=[doc for doc,parent in parents.items() if parent==id] if document_ids is not None else None
             if document_ids is not None and not scoped:continue
             self.views.append(PublishedKnowledge(actor,id,scoped))
-        if not self.views:raise HTTPException(422,'Include available workspace knowledge before asking a question.')
+        if not self.views:raise HTTPException(422,'Include available collection knowledge before asking a question.')
         self.snapshot=self.views[0].snapshot
         self.snapshots=[view.snapshot for view in self.views]
         self.records={id:r for view in self.views for id,r in view.records.items()}
@@ -67,7 +67,7 @@ class WorkspaceKnowledge:
                 seen.add(key);points.append(dict(point,_knowledge_collection=view.snapshot['knowledge_collection'],_knowledge_dataset_id=view.dataset_id))
         candidates=assemble(points)
         cap=runtime_config.get('LAPI_CHAT_SEARCH_CANDIDATES_MAX')
-        if len(candidates)>cap:raise HTTPException(413,'Choose fewer workspaces for this workspace question.')
+        if len(candidates)>cap:raise HTTPException(413,'Choose fewer collections for this collection question.')
         with (progress.step('Reranking workspace evidence') if progress else nullcontext()):
             ranked=reranker.rank(query,candidates,len(candidates)) if candidates else []
         # A workspace overview retains retrieved evidence from each dataset;

@@ -80,7 +80,7 @@ def _versions(kind, parent):
 
 def _require_dataset(dataset_id, actor):
     with core.Session() as session:
-        if dataset_id not in dataset_ids(actor, session): raise HTTPException(404, 'Workspace not found.')
+        if dataset_id not in dataset_ids(actor, session): raise HTTPException(404, 'Collection not found.')
 
 
 def dataset_instructions(dataset_id, owner=None):

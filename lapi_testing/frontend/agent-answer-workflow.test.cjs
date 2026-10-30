@@ -12,7 +12,7 @@ function view(workflow){
  const render=()=>{cursor=0;root=mod.exports.AgentAnswerWorkflow({workflow});while(effects.length)effects.shift()();cursor=0;root=mod.exports.AgentAnswerWorkflow({workflow});return root;};
  return{render,set(value){workflow=value;return render();},root:()=>root,region:()=>nodes(root).find(n=>n.props?.['aria-label']==='Expanded answer workflow'),button:label=>nodes(root).find(n=>n.type==='button'&&n.props?.['aria-label']===label),all:()=>nodes(root),destroy(){for(const hook of hooks)hook?.cleanup?.();}};
 }
-const fixture=()=>({status:'running',started_at:Date.now()-1000,steps:[{id:'config',label:'Checking agent configuration',status:'completed',started_at:Date.now()-1000,duration_ms:250},{id:'knowledge',label:'Chat Agent · Querying published vector knowledge for the selected workspace',status:'running',started_at:Date.now()-750}]});
+const fixture=()=>({status:'running',started_at:Date.now()-1000,steps:[{id:'config',label:'Checking agent configuration',status:'completed',started_at:Date.now()-1000,duration_ms:250},{id:'knowledge',label:'Chat Agent · Querying published vector knowledge for the selected collection',status:'running',started_at:Date.now()-750}]});
 const toggle=h=>h.all().find(n=>n.type==='button'&&n.props?.className==='answer-workflow-steps-toggle');
 const cells=h=>h.all().filter(n=>n.type==='td').map(n=>n.props.children);
 test('running shows only the status line; tapping it opens the phases, every actual step one more click away',()=>{const h=view(fixture());try{h.render();assert.equal(h.root().props['data-expanded'],false);assert.equal(h.region().props.hidden,true);h.button('Answer workflow details').props.onClick();h.render();assert.equal(h.region().props.hidden,false);assert.equal(cells(h).length,0);

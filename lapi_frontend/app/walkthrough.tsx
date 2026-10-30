@@ -68,7 +68,7 @@ const MODELS = [["Chat", "answers questions"], ["Extraction", "fills fields"], [
 function Unify() {
   return <div className="wt-scene wt-unify">
     <div className="wt-panel wt-dataset wt-in-left" {...at(0.2)}>
-      <span className="wt-panel-head"><FolderOpen size={15} aria-hidden="true" />Contracts workspace</span>
+      <span className="wt-panel-head"><FolderOpen size={15} aria-hidden="true" />Contracts collection</span>
       <ul className="wt-docs">{DOCS.map((doc, i) => <li key={doc.name} className="wt-in-up" {...at(0.8 + i * 0.6)}>
         <span className="wt-doc-name">{doc.ocr ? <ScanText size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}{doc.name}{doc.ocr && <em className="wt-ocr">OCR<i className="wt-scanline" aria-hidden="true" /></em>}</span>
         <span className="wt-bar" aria-hidden="true"><i style={{ ["--d" as string]: `${1.4 + i * 1.3}s` }} /></span>
@@ -143,7 +143,7 @@ function Skills() {
 function Secure({ endCard }: { endCard: ReactNode }) {
   const items = [
     { icon: KeyRound, title: "Single sign-on", text: "Sign in once with Keycloak" },
-    { icon: Users, title: "Access per workspace", text: "Viewer, Editor or Owner roles, checked by OpenFGA" },
+    { icon: Users, title: "Access per collection", text: "Viewer, Editor or Owner roles, checked by OpenFGA" },
     { icon: Activity, title: "Activity audit", text: "Every change is recorded" },
   ];
   return <div className="wt-scene wt-secure">

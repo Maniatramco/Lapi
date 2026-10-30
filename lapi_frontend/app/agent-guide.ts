@@ -9,7 +9,7 @@ export type GuideState={dataset:boolean;files:number;templates:number;canOnboard
 
 const UPLOAD=/\b(upload|attach|add|import|index|ingest|load|put|save)\b.*\b(this|that|these|those|it|them|file|files|doc|docs|document|documents|pdf|pdfs|scan|scans|image|photo|invoice|invoices|contract|contracts|resume|resumes|sheet|spreadsheet|excel|csv|one|ones)\b|^\s*(upload|attach|add|import)\s*(this|it|these|them|one|ones)?\s*[.!]?\s*$/i;
 const EXTRACT=/\b(extract|pull out|pull|take out|get|capture|read)\b.*\b(fields?|values?|data|totals?|amounts?|dates?|names?|numbers?|details?|information|info|table|tables)\b|\b(extract|extraction)\b/i;
-const DATASET=/\b(create|make|set ?up|new|start|open|add|onboard|register)\b.*\b(?:datasets?|workspaces?)\b|\b(?:datasets?|workspaces?)\b.*\b(create|make|set ?up|new)\b/i;
+const DATASET=/\b(create|make|set ?up|new|start|open|add|onboard|register)\b.*\b(?:datasets?|workspaces?|collections?)\b|\b(?:datasets?|workspaces?|collections?)\b.*\b(create|make|set ?up|new)\b/i;
 const PROMPT=/\b(prompt|template|instructions?)\b.*\b(create|make|write|draft|new|set ?up|add|need|want|define)\b|\b(create|make|write|draft|new|set ?up|add|need|want|define)\b.*\b(prompt|template)\b/i;
 const START=/^\s*(start|begin|get started|guide me|help me (start|begin|get started)|walk me through|show me how|how do i (start|begin|use this|get started))\b/i;
 const QUESTION=/^\s*(what|which|who|where|when|why|how (much|many|long))\b/i;
@@ -33,17 +33,17 @@ export function guideIntent(text:string):GuideIntent{
  * not onboard, prompt help, or "start". */
 export function guideFor(intent:GuideIntent,state:GuideState):GuideStep|null{
  const quick={label:'Guided start',action:'quick-start' as const};
- if(intent==='start')return {text:'I will walk you through it: a workspace, your documents, then a question or the fields to pull out.',actions:[quick]};
+ if(intent==='start')return {text:'I will walk you through it: a collection, your documents, then a question or the fields to pull out.',actions:[quick]};
  if(intent==='upload'){
   if(!state.files)return {text:'Attach the document first (PDF, Word, text, spreadsheet or a photo), then send again and I will read it.',actions:[{label:'Add documents',action:'attach'},quick]};
-  if(!state.dataset&&!state.datasets)return {text:'There is no workspace yet. I can create one and read your document in a guided start.',actions:[quick]};
+  if(!state.dataset&&!state.datasets)return {text:'There is no collection yet. I can create one and read your document in a guided start.',actions:[quick]};
   return null;
  }
  if(intent==='extract'){
-  if(!state.dataset&&!state.datasets)return {text:'Pulling out data needs a workspace with documents and a prompt that lists the fields. I can set all of that up in a guided start.',actions:[quick]};
+  if(!state.dataset&&!state.datasets)return {text:'Pulling out data needs a collection with documents and a prompt that lists the fields. I can set all of that up in a guided start.',actions:[quick]};
   return null;
  }
- if(intent==='dataset')return state.canOnboard?null:{text:'I will create the workspace for you in a guided start and read your first documents into it.',actions:[quick]};
+ if(intent==='dataset')return state.canOnboard?null:{text:'I will create the collection for you in a guided start and read your first documents into it.',actions:[quick]};
  if(intent==='prompt')return {text:'A prompt lists the fields to pull out of documents. I can draft one from your documents in a guided start, or you can write one on the Prompt page.',actions:[quick,{label:'Write a prompt',action:'prompt'}]};
  return null;
 }

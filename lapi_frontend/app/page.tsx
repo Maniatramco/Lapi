@@ -1,6 +1,6 @@
 "use client";
 import {ActionButton} from "./action-button";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SignInLayout } from "./sign-in-layout";
 import { DatasetSearch } from "./dataset-directory";
 import {ReviewDetail} from './review-detail';
@@ -68,6 +68,9 @@ import { ToggleRight,
 import { AddKnowledge } from "./add-knowledge";
 import { PageBand, PAGE_INTROS } from "./page-band";
 import { EnabledModels } from "./enabled-models";
+import { WorkspaceGate, type GateMode } from "./workspace-gate";
+import { canAddCollections, gateStep, inWorkspace, pickWorkspace } from "./workspace-scope";
+import { openQuickStart } from "./quick-start-flow";
 import { JobsBoard } from "./jobs-board";
 import { NeedsAttentionDialog, attentionItems, onAttention, type AttentionScope } from "./needs-attention";
 import { ManageDataset, onDatasetEditor, type ManageRequest } from "./manage-dataset";
@@ -122,8 +125,8 @@ const sections: { name: View; icon: typeof Shield; group?: string }[] = [
   { name: "Add knowledge", icon: CloudUpload },
 ];
 // Keep saved route identifiers compatible while presenting the product names.
-const viewLabel = (name: View) => name === "Datasets" ? "Workspaces" : name === "Home" ? "Dashboard" : name === "Lapi agent V2" ? "Lapi Agent" : name === "Extract" ? "Review" : name === "Extract Data" ? "Extract" : name;
-const viewRoute = (name: View) => name === "Extract Data" ? "Extract Data" : name === "Datasets" ? "Workspaces" : viewLabel(name);
+const viewLabel = (name: View) => name === "Datasets" ? "Collections" : name === "Home" ? "Dashboard" : name === "Lapi agent V2" ? "Lapi Agent" : name === "Extract" ? "Review" : name === "Extract Data" ? "Extract" : name;
+const viewRoute = (name: View) => name === "Extract Data" ? "Extract Data" : name === "Datasets" ? "Collections" : viewLabel(name);
 type ReviewReturn = {view: View; datasetId: string; agentTab: string; extractionTab: string};
 const date = (v: string | number) =>
   v
@@ -316,13 +319,22 @@ export default function App() {
   const [adminNavigation, setAdminNavigation] = useState(false);
   const [extractionTab, setExtractionTab] = useState("History");
   const [refresh, setRefresh] = useState(0);
-  const [docs, setDocs] = useState<Entity[]>([]);
+  const [allDocs, setDocs] = useState<Entity[]>([]);
   // A list response started before an upload must not erase its accepted result.
   const uploadRevision = useRef(0);
-  const [kbs, setKbs] = useState<Entity[]>([]);
+  const [allKbs, setKbs] = useState<Entity[]>([]);
+  // Workspaces: the open one scopes every screen. Access is still decided by the server, per collection.
+  const [workspaces, setWorkspaces] = useState<Entity[]>([]), [canCreateTeam, setCanCreateTeam] = useState(false), [workspaceId, setWorkspaceId] = useState('');
+  const [gateChosen, setGateChosen] = useState(false), [gateSkipped, setGateSkipped] = useState(false), [gateOpen, setGateOpen] = useState<GateMode | null>(null);
+  const currentWorkspace = useRef('');
+  currentWorkspace.current = workspaceId;
+  const kbs = useMemo(() => inWorkspace(allKbs, workspaceId), [allKbs, workspaceId]);
+  const openIds = useMemo(() => new Set(kbs.map(d => d.id)), [kbs]);
+  const docs = useMemo(() => { if (!workspaceId) return allDocs; const ids = new Set(kbs.map(d => d.id)); return allDocs.filter(d => { const owner = d.dataset_id || d.kb_id; return !owner || ids.has(owner); }); }, [allDocs, kbs, workspaceId]);
   const [kb, setKb] = useState("");
-  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
-  const [jobs, setJobs] = useState<Entity[]>([]);
+  const [allJobs, setJobs] = useState<Entity[]>([]);
+  // A file's job follows the file; a job about nothing in particular stays visible.
+  const jobs = useMemo(() => { if (!workspaceId) return allJobs; const here = new Set(docs.map(d => d.id)), known = new Set(allDocs.map(d => d.id)); return allJobs.filter(job => { const id = job.document_id || job.target_id; return !known.has(id) || here.has(id); }); }, [allJobs, allDocs, docs, workspaceId]);
   const [attention, setAttention] = useState<AttentionScope | null>(null);
   useEffect(() => onAttention(scope => setAttention(scope)), []);
   const [manage, setManage] = useState<ManageRequest | null>(null);
@@ -344,9 +356,12 @@ export default function App() {
   const [extractModelId, setExtractModelId] = useState("");
   const [, setDocumentPollError] = useState(false);
   const [scope, setScope] = useState<string[]>([]);
-  const [templates, setTemplates] = useState<Entity[]>([]);
+  const [allTemplates, setTemplates] = useState<Entity[]>([]);
   const [templateId, setTemplateId] = useState("");
-  const [extractions, setExtractions] = useState<Entity[]>([]);
+  const [allExtractions, setExtractions] = useState<Entity[]>([]);
+  // A run or prompt with no known collection stays visible rather than disappearing.
+  const extractions = useMemo(() => !workspaceId ? allExtractions : allExtractions.filter(e => { const owner = e.dataset_id || e.parent_id || allDocs.find(d => e.document_ids?.includes(d.id))?.dataset_id; return !owner || openIds.has(owner); }), [allExtractions, allDocs, openIds, workspaceId]);
+  const templates = useMemo(() => !workspaceId ? allTemplates : allTemplates.filter(t => { const owner = t.dataset_id || t.parent_id; return !owner || openIds.has(owner); }), [allTemplates, openIds, workspaceId]);
   const [extraction, setExtraction] = useState<Entity | null>(null);
   const [reviewOpenRequest, setReviewOpenRequest] = useState(0);
   const [reviewRouteId, setReviewRouteId] = useState("");
@@ -375,14 +390,16 @@ export default function App() {
       quiet = false,
     ) => {
       const requestId=randomId();
-      const resource=path.split('/')[1]||'workspace';
-      const section=({overview:'workspace summary',jobs:'workflow status',settings:'workspace settings',conversations:'chats',models:'available models',templates:'prompt templates'} as Record<string,string>)[resource]||resource.replaceAll('-',' ');
+      const resource=path.split('/')[1]||'collection';
+      const section=({overview:'collection summary',jobs:'workflow status',settings:'collection settings',conversations:'chats',models:'available models',templates:'prompt templates'} as Record<string,string>)[resource]||resource.replaceAll('-',' ');
       const testingModel=path==='/model-registrations/test';
       const planningAgent=path==='/agent-v2/plans'&&method==='POST';
-      const label=path==='/templates/validate'?'Validating prompt JSON…':path.startsWith('/temporary-chat/')?(path==='/temporary-chat/messages'?'Answering from the temporary document…':method==='DELETE'?'Clearing temporary document…':body instanceof FormData?'Reading temporary document…':'Loading temporary document…'):testingModel?'Testing model connection…':path.startsWith('/datasets/')&&path.endsWith('/models')&&method==='PUT'?'Applying workspace model mappings…':`${method==='GET'?'Loading':method==='POST'&&body instanceof FormData?'Uploading':'Saving'} ${section}…`;
+      const label=path==='/templates/validate'?'Validating prompt JSON…':path.startsWith('/temporary-chat/')?(path==='/temporary-chat/messages'?'Answering from the temporary document…':method==='DELETE'?'Clearing temporary document…':body instanceof FormData?'Reading temporary document…':'Loading temporary document…'):testingModel?'Testing model connection…':path.startsWith('/datasets/')&&path.endsWith('/models')&&method==='PUT'?'Applying collection model mappings…':`${method==='GET'?'Loading':method==='POST'&&body instanceof FormData?'Uploading':'Saving'} ${section}…`;
       if(!quiet)setRequests(previous=>[...previous,{id:requestId,label}]);
       const timeout=AbortSignal.timeout(planningAgent?630000:testingModel?Math.min(630000,(Number((body as Entity)?.timeout)||60)*1000+30000):method==='GET'?30000:120000);
       try {
+      // A new collection goes into the open workspace.
+      if (path === "/datasets" && method === "POST" && body && !(body instanceof FormData) && !(body as Entity).workspace_id && currentWorkspace.current) body = { ...(body as Entity), workspace_id: currentWorkspace.current };
       const headers: Record<string, string> = {};
       if (body && !(body instanceof FormData))
         headers["Content-Type"] = "application/json";
@@ -482,7 +499,7 @@ export default function App() {
     const list=(value:Entity|Entity[],key:string)=>Array.isArray(value)?value:value[key]||[];
     const tasks:[string,(value:any)=>void][]=[
       ['/documents',value=>{if(revision===uploadRevision.current)setDocs(list(value,'documents'));setDocumentPollError(false);}],
-      ['/datasets',value=>{setKbs(list(value,'datasets'));setWorkspacesLoaded(true);}],['/jobs',value=>{if(revision===uploadRevision.current)setJobs(list(value,'jobs'));}],
+      ['/datasets',value=>setKbs(list(value,'datasets'))],['/jobs',value=>{if(revision===uploadRevision.current)setJobs(list(value,'jobs'));}],
       ['/settings',setSettings],['/templates',value=>setTemplates(list(value,'templates'))],
       ['/extractions',value=>setExtractions(list(value,'extractions'))],
       ['/models',value=>setModels(list(value,'models'))],
@@ -602,7 +619,7 @@ export default function App() {
     let route: string;
     try { route = decodeURIComponent(hash.slice(1)); } catch { route = "Home"; }
     if (["connections","services & migration"].includes(route.toLowerCase())) {route="Storage";window.history.replaceState(null,"","#Storage");}
-    if (["onboard dataset","workspaces","datasets"].includes(route.toLowerCase())) {route="Datasets";window.history.replaceState(null,"","#Workspaces");}
+    if (["onboard dataset","workspaces","datasets","collections"].includes(route.toLowerCase())) {route="Datasets";window.history.replaceState(null,"","#Collections");}
     if (["dashboard","home"].includes(route.toLowerCase())) {route="Home";window.history.replaceState(null,"","#Dashboard");}
     if (["setup","api documentation","adp documentation","index inspector"].includes(route.toLowerCase())) {
       route = "Home";
@@ -654,6 +671,30 @@ export default function App() {
   const selectDoc = (id: string) =>
     setScope((s) => (s.includes(id) ? s.filter((v) => v !== id) : [...s, id]));
   const reload = () => setRefresh((v) => v + 1);
+  const savedWorkspaceKey = user ? `lapi-workspace:${user.id}` : '';
+  const readWorkspaces = async () => {
+    const result = await api('/workspaces', 'GET', undefined, undefined, true);
+    setWorkspaces(result.workspaces); setCanCreateTeam(Boolean(result.can_create_team));
+    return result.workspaces as Entity[];
+  };
+  const openWorkspace = (id: string) => {
+    setWorkspaceId(id); setGateChosen(true); setGateSkipped(false); setGateOpen(null); changeDataset('');
+    try { localStorage.setItem(savedWorkspaceKey, id); sessionStorage.setItem('lapi-workspace-chosen', '1'); } catch {}
+  };
+  useEffect(() => {
+    if (!user) return;
+    let stopped = false;
+    void readWorkspaces().then(found => {
+      if (stopped) return;
+      let saved: string | null = null, chosen = false;
+      try { saved = localStorage.getItem(savedWorkspaceKey); chosen = sessionStorage.getItem('lapi-workspace-chosen') === '1'; } catch {}
+      setWorkspaceId(pickWorkspace(found, saved)); setGateChosen(chosen);
+      reload();  // The first read may have placed existing collections in workspaces.
+    }).catch(() => undefined);
+    return () => { stopped = true; };
+  }, [user?.id]);
+  useEffect(() => { if (user && refresh) void readWorkspaces().catch(() => undefined); }, [refresh]);
+  const gateStepNow = gateOpen || gateStep({ workspaces, current: workspaceId, chosen: gateChosen, skipped: gateSkipped });
   const authenticate = () =>
     run(async () => {
       let d;
@@ -672,7 +713,7 @@ export default function App() {
   const chooseTemplate = (id: string) => setTemplateId(id);
   const extract = () =>
     run(async () => {
-      if (!kb || !selectedExtractModel) throw new Error("Choose a workspace and an eligible extraction model.");
+      if (!kb || !selectedExtractModel) throw new Error("Choose a collection and an eligible extraction model.");
       if (!scope.length || !templateId)
         throw new Error("Select at least one document and a template.");
       if (extractionNeedsConsent && !externalExtract)
@@ -710,13 +751,13 @@ export default function App() {
         ))
       ) : (
         <p className="small muted">
-          {kb ? "Add documents to this workspace first." : "Choose a workspace to see its documents."}
+          {kb ? "Add documents to this collection first." : "Choose a collection to see its documents."}
         </p>
       )}
     </div>
   );
-  const externalNotice = (model: Entity | undefined) => `I approve sending this extraction request and selected document content to ${modelLabel(model)} (${model?.provider || 'model provider'}), using the workspace’s configured embedding and retrieval providers. External API usage is billed separately.`;
-  const datasetSelect = (label: string) => <select aria-label={label} value={kb} onChange={e => changeDataset(e.target.value)}><option value="">Choose a workspace</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>;
+  const externalNotice = (model: Entity | undefined) => `I approve sending this extraction request and selected document content to ${modelLabel(model)} (${model?.provider || 'model provider'}), using the collection’s configured embedding and retrieval providers. External API usage is billed separately.`;
+  const datasetSelect = (label: string) => <select aria-label={label} value={kb} onChange={e => changeDataset(e.target.value)}><option value="">Choose a collection</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>;
   const configureDataset = () => { navigate("Model Mapping"); };
 
   if (!authChecked)
@@ -835,6 +876,16 @@ export default function App() {
             <img className="header-logo" src="/lapi-mark.svg" alt="Lapi" width={40} height={40} /><span className="crumb-workspace">Lapi</span>
             <ChevronRight size={13} />
             <h1 className="workspace-title">{viewLabel(view)}</h1>
+            {workspaces.length > 0 && <select className="workspace-switcher" aria-label="Current workspace" value={workspaceId} onChange={event => {
+              const value = event.target.value;
+              if (value === '__team') { setGateOpen('team'); return; }
+              if (value === '__people') { setGateOpen('people'); return; }
+              openWorkspace(value);
+            }}>
+              {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {canCreateTeam && <option value="__team">+ Create a team workspace</option>}
+              {(() => { const open = workspaces.find(w => w.id === workspaceId); return open && open.audience === 'team' && open.my_access === 'owner' ? <option value="__people">People in this workspace…</option> : null; })()}
+            </select>}
           </div>
           <div className="top-actions">
             {view !== "Lapi agent V2" && !(view === 'Review' && extraction) && <div className="workspace-page-actions" role="toolbar" aria-label={`${viewLabel(view)} actions`}>
@@ -896,7 +947,13 @@ export default function App() {
               </button>
             </Notice>
           )}
-          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs} workspacesLoaded={workspacesLoaded}/>
+          {gateStepNow && <WorkspaceGate mode={gateStepNow} api={api} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)}
+            onChoose={openWorkspace}
+            onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); setGateOpen('people'); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}
+            onPeopleDone={() => { setGateOpen(null); reload(); }}
+            onCollectionCreated={id => { setGateOpen(null); setGateSkipped(true); reload(); changeDataset(id); openQuickStart(); }}
+            onLater={gateStepNow === 'team' || gateStepNow === 'collection' ? () => { setGateOpen(null); setGateSkipped(true); } : null}/>}
+          <WorkspaceAssist api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs} workspace={workspaces.find(w => w.id === workspaceId)}/>
           {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin||user.is_contributor)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
           {view === "About" && <AboutLapi/>}
           <WalkthroughGate api={api} active={view === "Home"} userId={user.id as string | undefined}/>
@@ -906,8 +963,8 @@ export default function App() {
           {view === "Token usage" && (user.is_admin?<TokenUsageAdmin api={api}/>:<div className="panel" role="alert">Administrator access is required to view token usage.</div>)}
           {view === "Access map" && (user.is_admin||(user as {is_auditor?:boolean}).is_auditor?<AccessMap api={api}/>:<div className="panel" role="alert">Administrator or Auditor access is required to view the access map.</div>)}
           {view === "Users & passwords" && <UserManagement api={api} keycloak={keycloak} user={user as {id:string;username:string;is_admin?:boolean;is_auditor?:boolean;sign_in?:string}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
-          {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This workspace is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
-          {view === "Datasets" && <DatasetWorkspace directorySearch={directorySearch} onClearDirectorySearch={()=>setDirectorySearch('')} onDirectoryVisibilityChange={setDatasetDirectoryVisible} canManage={Boolean(user.is_admin||user.is_contributor)} datasets={kbs} models={models} documents={docs}
+          {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 workspaceId={workspaceId} renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This collection is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
+          {view === "Datasets" && <DatasetWorkspace onNewCollection={canAddCollections(workspaces.find(w => w.id === workspaceId)) ? () => setGateOpen("collection") : undefined} directorySearch={directorySearch} onClearDirectorySearch={()=>setDirectorySearch('')} onDirectoryVisibilityChange={setDatasetDirectoryVisible} canManage={Boolean(user.is_admin||user.is_contributor)} datasets={kbs} models={models} documents={docs}
             storageKey={`lapi-new-dataset:${user.id}`} defaults={selectedDataset} onSelect={changeDataset} onCreated={d=>{setKbs(current=>[...current.filter(item=>item.id!==d.id),d]);changeDataset(d.id);}}
             api={api} reload={reload} notify={notify} onUse={navigate}/>
           }
@@ -931,7 +988,7 @@ export default function App() {
                     Select a prompt template and documents. Review extracted values and
                     their evidence.
                   </p>
-                  <Field label="Workspace">{datasetSelect("Extraction workspace")}</Field>
+                  <Field label="Collection">{datasetSelect("Extraction collection")}</Field>
                   <ModelPicker dataset={selectedDataset} capability="extraction" value={extractModelId} onChange={setExtractModelId} onConfigure={configureDataset} />
                   <Field label="Prompt template">
                     <select
@@ -984,9 +1041,9 @@ export default function App() {
             onChanged={model => { setModels(current => current.map(m => m.id === model.id ? model : m)); notify(`${model.name} is ${model.enabled === false ? "off" : "on"}.`); reload(); }} />}
           {view === "Model Mapping" && <section className="panel model-mapping-screen">
             <MappingOverview datasets={kbs} selected={selectedDataset?.id || ""} busy={busy} onSelect={changeDataset} />
-            <div className="field mapping-dataset-select"><label htmlFor="mapping-dataset">Workspace</label><select id="mapping-dataset" value={selectedDataset?.id || ""} onChange={e => changeDataset(e.target.value)} disabled={busy}><option value="">Choose a workspace</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}{d.active === false ? " · Inactive" : ""}</option>)}</select></div>
-            {selectedDataset ? <DatasetMappings key={selectedDataset.id} dataset={selectedDataset} models={models} api={api} run={run} busy={busy} reload={reload} notify={notify} onConnections={() => navigate("Model Registration")} /> : <p className="muted">Choose a workspace to configure its Embedding, Chat, Extraction, and OCR models.</p>}
-            {!kbs.length && <button className="btn" onClick={() => navigate("Datasets")}>Open Workspaces to create one</button>}
+            <div className="field mapping-dataset-select"><label htmlFor="mapping-dataset">Collection</label><select id="mapping-dataset" value={selectedDataset?.id || ""} onChange={e => changeDataset(e.target.value)} disabled={busy}><option value="">Choose a collection</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}{d.active === false ? " · Inactive" : ""}</option>)}</select></div>
+            {selectedDataset ? <DatasetMappings key={selectedDataset.id} dataset={selectedDataset} models={models} api={api} run={run} busy={busy} reload={reload} notify={notify} onConnections={() => navigate("Model Registration")} /> : <p className="muted">Choose a collection to configure its Embedding, Chat, Extraction, and OCR models.</p>}
+            {!kbs.length && <button className="btn" onClick={() => navigate("Datasets")}>Open Collections to create one</button>}
           </section>}
           {view === "Storage" && user.is_admin && <StorageConfiguration api={api} connections={<ConnectionSettings api={api} onChanged={reload} onModels={()=>navigate("Model Registration")}/>} onChanged={reload} onFreshStart={()=>{changeDataset('');setExtraction(null);setReviewReturn(null);Object.keys(sessionStorage).filter(key=>key.startsWith('lapi-agent-v2:')||key.startsWith('lapi-review-return-')).forEach(key=>sessionStorage.removeItem(key));}}/>}
         </main>

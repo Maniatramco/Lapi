@@ -24,7 +24,7 @@ test('delete requires exact username and administrator password and submits only
  v.find('id','account-delete-username').props.onChange({target:{value:'Target'}});v.render();
  await v.find('aria-label','Delete user').props.onSubmit({preventDefault(){}});v.render();
  assert.deepEqual(v.calls[0],['/users/target','DELETE',{username:'Target',current_password:'Synthetic acting password'}]);
- assert.equal(v.find('id','account-current-password'),undefined);assert.match(v.find('role','status').props.children,/workspace access were removed/);
+ assert.equal(v.find('id','account-current-password'),undefined);assert.match(v.find('role','status').props.children,/collection access were removed/);
 });
 test('delete is hidden from ordinary users, disabled for self, and cancel makes no request',()=>{
  assert.equal(view(false).find('label','Delete user Target'),undefined);

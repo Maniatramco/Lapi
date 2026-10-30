@@ -48,7 +48,7 @@ export function TokenUsageAdmin({api}:{api:Api}){
   <section className="panel token-usage-filters" aria-label="Token usage filters">
    <label>From<input type="date" value={filters.start} max={filters.end||undefined} onChange={e=>set('start',e.target.value)}/></label>
    <label>To<input type="date" value={filters.end} min={filters.start||undefined} onChange={e=>set('end',e.target.value)}/></label>
-   <label>Workspace<select value={filters.dataset_id} onChange={e=>set('dataset_id',e.target.value)}><option value="">All workspaces</option>{options.datasets.map((o:Entity)=><option key={o.id} value={o.id}>{o.name}</option>)}<option value="none">No workspace</option></select></label>
+   <label>Collection<select value={filters.dataset_id} onChange={e=>set('dataset_id',e.target.value)}><option value="">All collections</option>{options.datasets.map((o:Entity)=><option key={o.id} value={o.id}>{o.name}</option>)}<option value="none">No collection</option></select></label>
    <label>Model<select value={filters.model_id} onChange={e=>set('model_id',e.target.value)}><option value="">All models</option>{options.models.map((o:Entity)=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
    <label>User<select value={filters.owner_id} onChange={e=>set('owner_id',e.target.value)}><option value="">All users</option>{options.users.map((o:Entity)=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
    <label>Stage<select value={filters.stage} onChange={e=>set('stage',e.target.value)}><option value="">All stages</option>{(options.stages||[]).map((s:string)=><option key={s} value={s}>{STAGE_LABELS[s]||s}</option>)}</select></label>
@@ -85,9 +85,9 @@ export function TokenUsageAdmin({api}:{api:Api}){
     </>:<p className="muted">No model calls match these filters.</p>}
    </section>
    <section className="panel" aria-labelledby="token-dataset-title">
-    <h2 id="token-dataset-title">By workspace</h2>
-    <div className="token-usage-table" role="region" aria-label="Token usage by workspace" tabIndex={0}><table>
-     <thead><tr><th scope="col">Workspace</th><th scope="col">Tokens</th><th scope="col">Cached share</th><th scope="col">Approx. cost</th><th scope="col">Calls</th><th scope="col">Top model</th></tr></thead>
+    <h2 id="token-dataset-title">By collection</h2>
+    <div className="token-usage-table" role="region" aria-label="Token usage by collection" tabIndex={0}><table>
+     <thead><tr><th scope="col">Collection</th><th scope="col">Tokens</th><th scope="col">Cached share</th><th scope="col">Approx. cost</th><th scope="col">Calls</th><th scope="col">Top model</th></tr></thead>
      <tbody>{(data.by_dataset||[]).map((row:Entity)=><DatasetRow key={row.key} row={row} open={open===row.key} onToggle={()=>setOpen(open===row.key?'':row.key)}/>)}
       {!(data.by_dataset||[]).length&&<tr><td colSpan={6} className="muted">No usage in this range.</td></tr>}</tbody>
     </table></div>

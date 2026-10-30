@@ -36,17 +36,17 @@ test('compact chat formatting escapes HTML and preserves readable code',()=>{
 });
 
 test('unified knowledge citations open the authorized source rather than a missing document',()=>{
- const html=renderToStaticMarkup(React.createElement(AgentChatAnswer,{message:{text:'Supplier workspace [1]',status:'completed',citations:[{index:1,kind:'knowledge',source_type:'dataset',knowledge_id:'point-id',knowledge_collection:'lapi_knowledge_abc',document_name:'Supplier workspace',text:'Canonical workspace description',source_version:2}]},api:()=>{},onError:()=>{}}));
- assert.match(html,/Supplier workspace/);assert.match(html,/Open citation 1/);
+ const html=renderToStaticMarkup(React.createElement(AgentChatAnswer,{message:{text:'Supplier collection [1]',status:'completed',citations:[{index:1,kind:'knowledge',source_type:'dataset',knowledge_id:'point-id',knowledge_collection:'lapi_knowledge_abc',document_name:'Supplier collection',text:'Canonical collection description',source_version:2}]},api:()=>{},onError:()=>{}}));
+ assert.match(html,/Supplier collection/);assert.match(html,/Open citation 1/);
  assert.match(html,/class="text-button"/);
  assert.doesNotMatch(html,/documents\/undefined/);
- assert.doesNotMatch(html,/Canonical workspace description/);
+ assert.doesNotMatch(html,/Canonical collection description/);
 });
 const items=Array.from({length:10},(_,i)=>({id:'row-'+i,name:'invoice-'+i+'.txt',status:'submitted',processing:true,document:{id:'doc-'+i,status:'processing'},job:{status:'running',workflow:{current:'extract',stages:{extract:{status:'running'}}}}}));
 const jobs=items.map((item,i)=>({...item.job,id:'job-'+i,kind:'index',document_id:item.document.id}));
 
 test('Agent keeps requests and background jobs inline without a second floating workflow',()=>{
- const props={requests:[{id:'refresh',label:'Reading workspace'}],workspaceLoading:true,jobs:[...jobs,{id:'extract',kind:'extract',status:'running',workflow:{stages:{generate:{status:'running'}}}}],uploadItems:items};
+ const props={requests:[{id:'refresh',label:'Reading collection'}],workspaceLoading:true,jobs:[...jobs,{id:'extract',kind:'extract',status:'running',workflow:{stages:{generate:{status:'running'}}}}],uploadItems:items};
  assert.equal(renderToStaticMarkup(React.createElement(OperationProgress,{...props,agentWorkspace:true})), '');
  assert.match(renderToStaticMarkup(React.createElement(OperationProgress,props)),/aria-label="App progress"/);
 });
@@ -169,15 +169,15 @@ test('review resolves the current extraction job after a result refresh removes 
 
 
 test('loading progress names the current task and closes after all requests finish',()=>{
- const html=renderToStaticMarkup(React.createElement(OperationProgress,{requests:[{id:'datasets',label:'Loading workspaces…'}],jobs:[]}));
+ const html=renderToStaticMarkup(React.createElement(OperationProgress,{requests:[{id:'datasets',label:'Loading collections…'}],jobs:[]}));
  assert.match(html,/operation-popup is-loading/);
- assert.match(html,/<strong>Loading workspaces…<\/strong>/);
+ assert.match(html,/<strong>Loading collections…<\/strong>/);
  assert.doesNotMatch(html,/Working…|<li>/);
  assert.match(html,/close automatically when complete/);
  assert.equal(renderToStaticMarkup(React.createElement(OperationProgress,{requests:[],jobs:[]})),'');
 });
 test('parallel refresh lists each outstanding task once and keeps the final task specific',()=>{
- const requests=[{id:'datasets',label:'Loading workspaces…'},{id:'documents',label:'Loading documents…'},{id:'duplicate',label:'Loading documents…'}];
+ const requests=[{id:'datasets',label:'Loading collections…'},{id:'documents',label:'Loading documents…'},{id:'duplicate',label:'Loading documents…'}];
  const html=renderToStaticMarkup(React.createElement(OperationProgress,{requests,jobs:[]}));
  assert.match(html,/<strong>Loading…<\/strong>/);
  assert.equal((html.match(/<li>/g)||[]).length,2);
@@ -187,15 +187,15 @@ test('parallel refresh lists each outstanding task once and keeps the final task
 });
 
 
-test('workspace startup keeps one stable popup as requests finish and background jobs arrive',()=>{
- const states=[[],[{id:'datasets',label:'Loading workspaces…'},{id:'documents',label:'Loading documents…'}],[{id:'documents',label:'Loading documents…'}],[]];
+test('collection startup keeps one stable popup as requests finish and background jobs arrive',()=>{
+ const states=[[],[{id:'datasets',label:'Loading collections…'},{id:'documents',label:'Loading documents…'}],[{id:'documents',label:'Loading documents…'}],[]];
  const job={id:'background',kind:'extract',status:'running'};
  for(const requests of states){
   const html=renderToStaticMarkup(React.createElement(OperationProgress,{workspaceLoading:true,requests,jobs:[job]}));
   assert.equal((html.match(/aria-label="App progress"/g)||[]).length,1);
   assert.match(html,/<strong>Loading Lapi…<\/strong>/);
-  assert.match(html,/Getting your workspaces, documents, and models ready/);
-  assert.doesNotMatch(html,/Loading workspaces…|Loading documents…|operation-request-list/);
+  assert.match(html,/Getting your collections, documents, and models ready/);
+  assert.doesNotMatch(html,/Loading collections…|Loading documents…|operation-request-list/);
   assert.equal((html.match(/aria-label="Processing workflow"/g)||[]).length,1);
  }
  assert.equal(renderToStaticMarkup(React.createElement(OperationProgress,{workspaceLoading:false,requests:[],jobs:[]})),'');
@@ -203,14 +203,14 @@ test('workspace startup keeps one stable popup as requests finish and background
  assert.match(background,/Processing workflow/);
 });
 const {DatasetHome}=load(path.resolve(__dirname,'../../lapi_frontend/app/dataset-directory.tsx'));
-test('Home does not add another loading announcement or flash an empty workspace message during startup',()=>{
+test('Home does not add another loading announcement or flash an empty collection message during startup',()=>{
  const html=renderToStaticMarkup(React.createElement(DatasetHome,{datasets:[],documents:[],loading:true,onBrowse:()=>{},onChat:()=>{}}));
- assert.doesNotMatch(html,/Loading workspaces|role="status"|No registered workspaces yet/);
+ assert.doesNotMatch(html,/Loading collections|role="status"|No registered collections yet/);
  assert.match(html,/aria-hidden="true"/);
- const partial=renderToStaticMarkup(React.createElement(DatasetHome,{datasets:[{id:'dataset',name:'Workspace arriving first'}],documents:[],loading:true,onBrowse:()=>{},onChat:()=>{}}));
+ const partial=renderToStaticMarkup(React.createElement(DatasetHome,{datasets:[{id:'dataset',name:'Collection arriving first'}],documents:[],loading:true,onBrowse:()=>{},onChat:()=>{}}));
  assert.doesNotMatch(partial,/No documents|0 ready/);
  const empty=renderToStaticMarkup(React.createElement(DatasetHome,{datasets:[],documents:[],loading:false,onBrowse:()=>{},onChat:()=>{}}));
- assert.match(empty,/No registered workspaces yet/);
+ assert.match(empty,/No registered collections yet/);
 });
 
 test('extraction uses the shared horizontal workflow and real completed-stage progress',()=>{

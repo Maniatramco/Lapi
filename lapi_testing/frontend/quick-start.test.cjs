@@ -5,7 +5,7 @@ compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerO
 const {stepsFor,uploadable,askable,fileState,progress,pickFiles,sourceName,defaultDatasetName,fieldKey,fieldsToSchema,fieldProblems,resultRows,MAX_FILES,canMerge,mergeByDefault,mergedName,extractionStages,recordCount,initialChoices,columnMapping,howChosen,columnValue}=compiled.exports;
 const datasets=[{id:'v',name:'Policies',my_access:'viewer'},{id:'e',name:'Contracts',my_access:'editor'},{id:'o',name:'Old',my_access:'owner',active:false}];
 
-test('people who can add documents choose to ask or extract; Viewers choose a workspace and ask',()=>{
+test('people who can add documents choose to ask or extract; Viewers choose a collection and ask',()=>{
  assert.deepEqual(stepsFor(datasets,false),['dataset','documents','processing','choose','ask','done']);
  assert.deepEqual(stepsFor(datasets,false,'extract'),['dataset','documents','processing','choose','prompt','extracting','done']);
  assert.deepEqual(stepsFor([datasets[0]],false),['dataset','ask','done']);

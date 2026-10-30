@@ -15,7 +15,7 @@ type Node={id:string;label:string;access:Access;viaTeam?:string;changed:boolean;
 
 const ROW=62,TOP=26;
 const short=(text:string,size:number)=>text.length>size?text.slice(0,size-1)+"…":text;
-const STATE_TEXT:Record<Access,string>={admin:"Administrator: every workspace",owner:"Owner",editor:"Editor",viewer:"Viewer",none:"No access"};
+const STATE_TEXT:Record<Access,string>={admin:"Administrator: every collection",owner:"Owner",editor:"Editor",viewer:"Viewer",none:"No access"};
 const CELL_TEXT:Record<Access,string>={admin:"A",owner:"O",editor:"E",viewer:"V",none:""};
 
 function nodeState(node:Node){
@@ -87,7 +87,7 @@ export function AccessMap({api}:{api:Api}){
  }
  async function createTeam(){
   const name=teamName.trim();if(!name)return;setSaving(true);setError("");setNotice("");
-  try{const team=await api("/teams","POST",{name});setTeamName("");setNotice(`Created team ${team.name}. Add its members, then give it workspaces.`);setMode("team");await load(true,"team");setSelected(team.id);}
+  try{const team=await api("/teams","POST",{name});setTeamName("");setNotice(`Created team ${team.name}. Add its members, then give it collections.`);setMode("team");await load(true,"team");setSelected(team.id);}
   catch(e){setError(e instanceof Error?e.message:"The team was not created.");}finally{setSaving(false);}
  }
  async function saveMembers(team:MapTeam){
@@ -113,7 +113,7 @@ export function AccessMap({api}:{api:Api}){
  let graph=null;
  if(mode==="person"&&person){
   const count=data.datasets.filter(d=>effective(person,draft,teams,teamDraft,d.id).access!=="none").length;
-  graph=<AccessGraph centerKind="person" center={person.username} centerDetail={person.is_admin?"Administrator · every workspace":`${count} of ${data.datasets.length} workspaces`}
+  graph=<AccessGraph centerKind="person" center={person.username} centerDetail={person.is_admin?"Administrator · every collection":`${count} of ${data.datasets.length} collections`}
    nodes={data.datasets.map(d=>{const e=effective(person,draft,teams,teamDraft,d.id);return {id:d.id,label:d.name,access:e.access,viaTeam:e.viaTeam,changed:changed(person,draft,d.id),warning:warn(person,d.id),locked:person.is_admin||saving||readOnly};})}
    onCycle={node=>cyclePerson(person.id,node.id)}/>;
  }else if(mode==="dataset"&&dataset){
@@ -129,11 +129,11 @@ export function AccessMap({api}:{api:Api}){
  }
  const list=mode==="person"
   ?data.users.filter(u=>u.username.toLowerCase().includes(lower)).map(u=>{const n=Object.keys(draft[u.id]||{}).length,teamCount=(u.team_ids||[]).length;
-   return {id:u.id,label:u.username,detail:u.is_admin?"Administrator · every workspace":[`${n} workspace${n===1?"":"s"}`,teamCount?`${teamCount} team${teamCount===1?"":"s"}`:"",u.is_contributor?"Contributor · every workspace":"",u.is_auditor?"Auditor":"",u.sign_in==="keycloak"?"Keycloak":""].filter(Boolean).join(" · "),
+   return {id:u.id,label:u.username,detail:u.is_admin?"Administrator · every collection":[`${n} collection${n===1?"":"s"}`,teamCount?`${teamCount} team${teamCount===1?"":"s"}`:"",u.is_contributor?"Contributor · every collection":"",u.is_auditor?"Auditor":"",u.sign_in==="keycloak"?"Keycloak":""].filter(Boolean).join(" · "),
     warn:Boolean(u.openfga&&!u.openfga.in_step),dirty:pending.includes(u.id)};})
   :mode==="dataset"?data.datasets.filter(d=>d.name.toLowerCase().includes(lower)).map(d=>{const count=data.users.filter(u=>effective(u,draft,teams,teamDraft,d.id).access!=="none").length;
    return {id:d.id,label:d.name,detail:`${count} ${count===1?"person":"people"}`,warn:data.users.some(u=>!u.is_admin&&openfgaDifference(u,d.id)),dirty:data.users.some(u=>changed(u,draft,d.id))||teams.some(t=>changedCell(t.grants,teamDraft,t.id,d.id))};})
-  :teams.filter(t=>t.name.toLowerCase().includes(lower)).map(t=>({id:t.id,label:t.name,detail:`${t.member_ids.length} member${t.member_ids.length===1?"":"s"} · ${Object.keys(teamDraft[t.id]||{}).length} workspaces${t.source==="keycloak"?" · Keycloak":""}`,warn:false,dirty:pendingTeams.includes(t.id)}));
+  :teams.filter(t=>t.name.toLowerCase().includes(lower)).map(t=>({id:t.id,label:t.name,detail:`${t.member_ids.length} member${t.member_ids.length===1?"":"s"} · ${Object.keys(teamDraft[t.id]||{}).length} collections${t.source==="keycloak"?" · Keycloak":""}`,warn:false,dirty:pendingTeams.includes(t.id)}));
  const names=new Map(data.users.map(u=>[u.id,u.username]));
  const editingMembers=members??team?.member_ids??[];
 
@@ -151,13 +151,13 @@ export function AccessMap({api}:{api:Api}){
   {error&&<div role="alert" className="notice error">{error}</div>}
   <section className="card access-levels-help" aria-label="Access levels">
    {(["viewer","editor","owner"] as const).map(level=><div key={level}><span className={`key key-${level}`}/><strong>{LEVEL_LABEL[level]}</strong><small>{LEVEL_HELP[level]}</small></div>)}
-   <div><span className="key key-admin"/><strong>Administrator</strong><small>Every workspace, people and settings</small></div>
+   <div><span className="key key-admin"/><strong>Administrator</strong><small>Every collection, people and settings</small></div>
   </section>
   <section className="card access-workbench">
    <div className="access-toolbar">
     <div className="access-modes" role="tablist" aria-label="Show access by">
      <button role="tab" aria-selected={mode==="person"} className={mode==="person"?"selected":""} onClick={()=>switchMode("person")}><User size={15}/> By person</button>
-     <button role="tab" aria-selected={mode==="dataset"} className={mode==="dataset"?"selected":""} onClick={()=>switchMode("dataset")}><BookOpen size={15}/> By workspace</button>
+     <button role="tab" aria-selected={mode==="dataset"} className={mode==="dataset"?"selected":""} onClick={()=>switchMode("dataset")}><BookOpen size={15}/> By collection</button>
      <button role="tab" aria-selected={mode==="team"} className={mode==="team"?"selected":""} onClick={()=>switchMode("team")}><Users size={15}/> By team</button>
      {!readOnly&&<button role="tab" aria-selected={mode==="screens"} className={mode==="screens"?"selected":""} onClick={()=>switchMode("screens")}><Monitor size={15}/> Screens</button>}
     </div>
@@ -168,13 +168,13 @@ export function AccessMap({api}:{api:Api}){
    {mode==="screens"&&<ScreensAdmin api={api} onNotice={setNotice}/>}
    <div className="access-columns" hidden={mode==="screens"}>
     <div className="access-picker">
-     <label className="account-search" htmlFor="access-search"><Search size={16}/><input id="access-search" placeholder={mode==="person"?"Search people":mode==="dataset"?"Search workspaces":"Search teams"} value={search} onChange={e=>setSearch(e.target.value)}/></label>
-     <ul aria-label={mode==="person"?"People":mode==="dataset"?"Workspaces":"Teams"}>{list.map(item=><li key={item.id}>
+     <label className="account-search" htmlFor="access-search"><Search size={16}/><input id="access-search" placeholder={mode==="person"?"Search people":mode==="dataset"?"Search collections":"Search teams"} value={search} onChange={e=>setSearch(e.target.value)}/></label>
+     <ul aria-label={mode==="person"?"People":mode==="dataset"?"Collections":"Teams"}>{list.map(item=><li key={item.id}>
       <button className={item.id===selected?"selected":""} aria-current={item.id===selected||undefined} onClick={()=>{setSelected(item.id);setMembers(null);}}>
        <span className="access-picker-name">{item.label}{item.dirty&&<i className="access-picker-dirty" title="Unsaved changes">●</i>}{item.warn&&<i className="access-picker-warn" title="OpenFGA answers differently">!</i>}</span>
        <small>{item.detail}</small>
       </button></li>)}</ul>
-     {!list.length&&<p className="muted small">{search?"Nothing matches this search.":mode==="person"?"No people yet.":mode==="dataset"?"No workspaces yet. Create one in Workspaces.":"No teams yet."}</p>}
+     {!list.length&&<p className="muted small">{search?"Nothing matches this search.":mode==="person"?"No people yet.":mode==="dataset"?"No collections yet. Create one in Collections.":"No teams yet."}</p>}
      {mode==="team"&&!readOnly&&<form className="access-new-team" onSubmit={e=>{e.preventDefault();void createTeam();}}>
       <label htmlFor="access-team-name">New Lapi team</label>
       <div className="row"><input id="access-team-name" value={teamName} maxLength={200} placeholder="For example Finance" onChange={e=>setTeamName(e.target.value)} disabled={saving}/>
@@ -184,8 +184,8 @@ export function AccessMap({api}:{api:Api}){
     </div>
     <div className="access-canvas">
      {graph&&<div className="access-graph-scroll">{graph}</div>}
-     {mode==="person"&&person?.is_admin&&<p className="muted small">Administrators open every workspace. Change their role in Users &amp; passwords.</p>}
-     {graph&&!readOnly&&!(mode==="person"&&person?.is_admin)&&<p className="muted small">Click a {mode==="person"||mode==="team"?"workspace":"person or team"} to move it to the next level: No access → Viewer → Editor → Owner.</p>}
+     {mode==="person"&&person?.is_admin&&<p className="muted small">Administrators open every collection. Change their role in Users &amp; passwords.</p>}
+     {graph&&!readOnly&&!(mode==="person"&&person?.is_admin)&&<p className="muted small">Click a {mode==="person"||mode==="team"?"collection":"person or team"} to move it to the next level: No access → Viewer → Editor → Owner.</p>}
      {mode==="team"&&team&&<div className="access-team-members">
       <div className="access-team-head"><h3>Members of {team.name}</h3>
        {!readOnly&&<button className="btn access-team-delete" disabled={saving} onClick={()=>void removeTeam(team)}><Trash2 size={15}/> Delete team</button>}</div>
@@ -200,7 +200,7 @@ export function AccessMap({api}:{api:Api}){
   </section>
   <section className="card access-matrix-card" hidden={mode==="screens"}>
    <h2>Everyone at a glance</h2>
-   <p className="muted small">Rows are people and teams, columns are workspaces. V, E and O are Viewer, Editor and Owner; a faded cell comes from a team.{readOnly?"":" Click a cell to move it to the next level."}</p>
+   <p className="muted small">Rows are people and teams, columns are collections. V, E and O are Viewer, Editor and Owner; a faded cell comes from a team.{readOnly?"":" Click a cell to move it to the next level."}</p>
    <div className="access-matrix"><table><thead><tr><th scope="col">Person or team</th>{data.datasets.map(d=><th key={d.id} scope="col" title={d.name}><span>{short(d.name,18)}</span></th>)}</tr></thead>
     <tbody>{data.users.map(u=><tr key={u.id}><th scope="row"><button className="access-matrix-name" onClick={()=>{setMode("person");setSearch("");setSelected(u.id);}}>{u.username}</button>{u.is_admin?<small>Administrator</small>:u.is_contributor?<small>Contributor</small>:u.is_auditor?<small>Auditor</small>:null}</th>
      {data.datasets.map(d=>{const e=effective(u,draft,teams,teamDraft,d.id),own=access(u,draft,d.id),dirty=changed(u,draft,d.id),warning=warn(u,d.id);
@@ -212,7 +212,7 @@ export function AccessMap({api}:{api:Api}){
      {data.datasets.map(d=>{const level=(teamDraft[t.id]?.[d.id]||"none") as Access,dirty=changedCell(t.grants,teamDraft,t.id,d.id),label=`Team ${t.name} · ${d.name}: ${STATE_TEXT[level]}${dirty?" (unsaved)":""}`;
       return <td key={d.id}><button className={`access-cell access-cell-${level}${dirty?" access-cell-changed":""}`} disabled={saving||readOnly} aria-label={label} title={label} onClick={()=>cycleTeam(t.id,d.id)}>{CELL_TEXT[level]}</button></td>;})}
     </tr>)}</tbody></table>
-    {!data.datasets.length&&<p className="muted small">No workspaces yet.</p>}</div>
+    {!data.datasets.length&&<p className="muted small">No collections yet.</p>}</div>
    {data.users.some(u=>u.team_ids?.length)&&<p className="muted small access-matrix-note">Team members: {teams.filter(t=>t.member_ids.length).map(t=>`${t.name} (${t.member_ids.map(id=>names.get(id)||id).join(", ")})`).join("; ")}.</p>}
   </section>
   {!readOnly&&(pending.length>0||pendingTeams.length>0)&&<div className="access-savebar" role="region" aria-label="Unsaved access changes">

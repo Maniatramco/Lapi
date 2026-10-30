@@ -141,7 +141,7 @@ def knowledge_lookup(text):
     lookups and never widens the dataset or document scope selected by the user.
     """
     action=re.search(r'\b(?:upload|extract|re-?extract)\b',text,re.I)
-    lookup=re.search(r'\b(?:find(?:\s+out)?|search|look\s+(?:up|for)|check)\b.*\b(?:information|info|documents?|files?|references?|anything|knowledge\s*base|dataset|workspace)\b|\b(?:is\s+there|are\s+there|any|have|has)\b.*\b(?:information|info|documents?|files?|references?)\b|\b(?:knowledge\s*base|dataset|(?:my|our|these|selected|uploaded)\s+documents?)\b',text,re.I)
+    lookup=re.search(r'\b(?:find(?:\s+out)?|search|look\s+(?:up|for)|check)\b.*\b(?:information|info|documents?|files?|references?|anything|knowledge\s*base|dataset|workspace|collection)\b|\b(?:is\s+there|are\s+there|any|have|has)\b.*\b(?:information|info|documents?|files?|references?)\b|\b(?:knowledge\s*base|dataset|(?:my|our|these|selected|uploaded)\s+documents?)\b',text,re.I)
     return bool(lookup and not action)
 
 def simple_extraction_request(text):
@@ -173,7 +173,7 @@ def application_context(data,owner):
     dataset=routing.owned(data['dataset_id'],owner,'knowledge_base') if data.get('dataset_id') else None
     template=routing.owned(data['template_id'],owner,'template') if data.get('template_id') else None
     if template and template.parent_id and (not dataset or template.parent_id!=dataset.id):
-        raise HTTPException(422,'Choose a prompt template from the selected workspace.')
+        raise HTTPException(422,'Choose a prompt template from the selected collection.')
     submitted=None
     if data.get('submitted_prompt_id'):
         if not template or data['submitted_prompt_id']!=template.id:
@@ -268,7 +268,7 @@ def plan_public(record, main):
             for id in call.get('job_ids', []):
                 job = session.get(core.Job, id)
                 from ..dataset_access import job_allowed
-                if not job_allowed(job,record.owner,session): raise HTTPException(409, 'A workflow job is no longer available or workspace access was removed.')
+                if not job_allowed(job,record.owner,session): raise HTTPException(409, 'A workflow job is no longer available or collection access was removed.')
                 jobs.append(main.job_repr(job))
         call['jobs'] = jobs
         # Keep polling until every job finishes; a failed item must not hide
@@ -385,13 +385,13 @@ def require_call(record, index, main):
 
 def scope(data, body, owner):
     dataset_id = body.dataset_id or data['dataset_id']
-    if not dataset_id: raise HTTPException(422, 'Choose a workspace for this tool.')
+    if not dataset_id: raise HTTPException(422, 'Choose a collection for this tool.')
     dataset = routing.owned(dataset_id, owner, 'knowledge_base')
     if data.get('runtime')=='langgraph' and data.get('conversation_id'):
         conversation=routing.owned(data['conversation_id'],owner,'conversation')
         saved=core.store.json(conversation.ref)
         if saved.get('dataset_id') and saved['dataset_id']!=dataset.id:
-            raise HTTPException(409,'Start a new assistant conversation to run a workflow in another workspace.')
+            raise HTTPException(409,'Start a new assistant conversation to run a workflow in another collection.')
         if not saved.get('dataset_id'):
             with core.document_lock('agent-turn-'+conversation.id):
                 saved['dataset_id']=dataset.id;core.store.put_json(conversation.ref,saved)
@@ -401,7 +401,7 @@ def scope(data, body, owner):
                     if plan:plan.parent_id=dataset.id
     # A chain consumes the exact references returned by its upload, not preselected old documents.
     uploaded = [id for call in data['calls'] for id in call.get('uploaded_document_ids', [])]
-    if uploaded and dataset.id != data['dataset_id']: raise HTTPException(409, 'Uploaded documents belong to the workspace selected for this workflow.')
+    if uploaded and dataset.id != data['dataset_id']: raise HTTPException(409, 'Uploaded documents belong to the collection selected for this workflow.')
     ids = data.get('recovery_document_ids') or uploaded or body.document_ids or data['document_ids']
     if data.get('recovery_document_ids') and body.document_ids:
         if not set(body.document_ids) <= set(ids): raise HTTPException(422, 'Recovery can only use documents from this request.')
@@ -421,7 +421,7 @@ def submit_extractions(record, data, call, body, owner, main):
     _,docs=routing.documents_scope(owner, dataset.id, ids)
     template=routing.owned(template_id, owner, 'template')
     if template.parent_id and template.parent_id!=dataset.id:
-        raise HTTPException(400,'Choose a prompt template belonging to the selected workspace.')
+        raise HTTPException(400,'Choose a prompt template belonging to the selected collection.')
     snapshot=routing.execution_snapshot(dataset,'extraction')
     main.external_check(body.allow_external,cfg=snapshot['settings'])
     stale=[doc for doc in docs if doc.status=='ready' and not routing.index_matches(doc,snapshot)]
@@ -569,7 +569,7 @@ def install(app, auth, main):
         prior_questions=[]
         if body.conversation_id:
             previous=main.conversation(body.conversation_id,owner)
-            if previous.get('dataset_id') and previous['dataset_id']!=body.dataset_id:raise HTTPException(409,'Conversation context belongs to a different workspace.')
+            if previous.get('dataset_id') and previous['dataset_id']!=body.dataset_id:raise HTTPException(409,'Conversation context belongs to a different collection.')
             prior_questions=[m['text'][:2000] for m in previous['messages'] if m['role']=='user'][-4:]
         # Never send credentials, endpoints, document content or previous tool outputs to the planner.
         names = {key: [{'name': row['name'], **({'dataset': next((d['name'] for d in items['datasets'] if d['id'] == row.get('parent_id')), '')} if key in ('documents', 'templates') else {})} for row in [r for r in items[key] if key == 'datasets' or not body.dataset_id or r.get('parent_id') in ('', body.dataset_id)][:100]] for key in ('datasets', 'documents', 'templates')}
@@ -709,7 +709,7 @@ def install(app, auth, main):
                     yield 'event: done\ndata: '+json.dumps({'message': message, 'user_message': user, 'conversation_id': conversation['id']})+'\n\n'
                 return StreamingResponse(completed_reply(), media_type='text/event-stream', headers={'Cache-Control':'no-cache', 'X-Accel-Buffering':'no'})
             general=data.get('answer_mode')=='general'
-            if not general and (data['clarification'] or not data['dataset_id']):raise HTTPException(422,'Choose a workspace and an unambiguous document scope before asking about documents.')
+            if not general and (data['clarification'] or not data['dataset_id']):raise HTTPException(422,'Choose a collection and an unambiguous document scope before asking about documents.')
             dataset_id='' if general else data['dataset_id']
             ids=[] if general else data['document_ids']
             if body.conversation_id:
@@ -790,7 +790,7 @@ def install(app, auth, main):
                     if not any(c['tool'] in ('extract','reextract') for c in data['calls']): raise HTTPException(422, 'This request has no extraction step.')
                     if len(files)>1 and not extraction_mode: raise HTTPException(422, 'Choose merged or independent extraction first.')
                     template = routing.owned(template_id or data['template_id'], owner, 'template')
-                    if template.parent_id and template.parent_id != dataset.id: raise HTTPException(422, 'Choose a template for this workspace.')
+                    if template.parent_id and template.parent_id != dataset.id: raise HTTPException(422, 'Choose a template for this collection.')
                     data.update(auto_continue=True, extraction_mode=extraction_mode or 'merge',merge_strategy=merge_strategy, template_id=template.id, workflow_allow_external=allow_external)
                 limit = core.settings()['max_upload_mb'] * 1024 * 1024
                 for file in files:
@@ -894,7 +894,7 @@ def install(app, auth, main):
             if call.get('publication_error') and body.action!='cancel':
                 raise HTTPException(409,'Retry the knowledge update to publish saved results without repeating extraction.')
             if body.action != 'cancel' and (call.get('submission_uncertain') or 'status is uncertain' in call.get('error','')):
-                raise HTTPException(409, 'Submission status is uncertain. Check extraction history or the workspace before submitting again; automatic retry could create duplicate work.')
+                raise HTTPException(409, 'Submission status is uncertain. Check extraction history or the collection before submitting again; automatic retry could create duplicate work.')
             data['auto_continue'] = False
             if body.action == 'retry':call['submission_revision']=call.get('submission_revision',0)+1
             if body.action == 'cancel':
@@ -906,7 +906,7 @@ def install(app, auth, main):
                     if not ids: raise HTTPException(422, 'No successfully indexed documents are available.')
                     call.update(status='completed', uploaded_document_ids=ids, skipped_document_ids=[j['target_id'] for j in jobs if j['status']!='completed'])
                 else:
-                    if not jobs: raise HTTPException(409, 'Check the workspace for a partial upload, then attach corrected files in a new request.')
+                    if not jobs: raise HTTPException(409, 'Check the collection for a partial upload, then attach corrected files in a new request.')
                     for job in jobs:
                         if job['status'] in ('failed','cancelled'): main.retry_job(job['id'], owner)
                     call['status'] = 'waiting'

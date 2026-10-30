@@ -68,7 +68,7 @@ export function currentUploadStep(item: UploadProgressItem): string {
   if (failed) return `${labels[failed]} failed`;
   const running = uploadStages.find(stage => uploadStageStatus(item,stage) === "running");
   if (running) return labels[running];
-  if (!item.document) return item.status === "submitted" ? "Check workspace status" : "Ready to upload";
+  if (!item.document) return item.status === "submitted" ? "Check collection status" : "Ready to upload";
   return item.processing ? "Queued for processing" : "Status unavailable";
 }
 

@@ -15,19 +15,19 @@ test('upload: attach first; with nothing to hold it, a guided start; otherwise t
  const noFiles=guideFor('upload',{...ready,files:0});
  assert.match(noFiles.text,/Attach the document first/);assert.deepEqual(noFiles.actions.map(a=>a.action),['attach','quick-start']);
  const nothing=guideFor('upload',{...ready,dataset:false,datasets:0});
- assert.match(nothing.text,/no workspace yet/);assert.deepEqual(nothing.actions.map(a=>a.action),['quick-start']);
+ assert.match(nothing.text,/no collection yet/);assert.deepEqual(nothing.actions.map(a=>a.action),['quick-start']);
  assert.equal(guideFor('upload',{...ready,dataset:false}),null,'the server asks which dataset itself');
  assert.equal(guideFor('upload',ready),null);assert.equal(guidedOperation('upload'),undefined);
 });
 
-test('extract: guided only when no workspace exists; the server asks for the prompt itself',()=>{
+test('extract: guided only when no collection exists; the server asks for the prompt itself',()=>{
  assert.match(guideFor('extract',{...ready,dataset:false,datasets:0}).text,/guided start/);
  assert.equal(guideFor('extract',{...ready,dataset:false}),null);
  assert.equal(guideFor('extract',{...ready,templates:0}),null);
  assert.equal(guideFor('extract',ready),null);assert.equal(guidedOperation('extract'),undefined);
 });
 
-test('workspace creation goes ahead for people who may onboard, and is guided for everyone else',()=>{
+test('collection creation goes ahead for people who may onboard, and is guided for everyone else',()=>{
  assert.equal(guideFor('dataset',ready),null);assert.equal(guidedOperation('dataset'),'onboard');
  assert.deepEqual(guideFor('dataset',{...ready,canOnboard:false}).actions.map(a=>a.action),['quick-start']);
  assert.deepEqual(guideFor('start',ready).actions.map(a=>a.action),['quick-start']);
