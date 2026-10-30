@@ -20,13 +20,12 @@
   /* Composer: one rounded field with the send button inside, above the keyboard. */
   html body .shell .workspace .agent-v2-composer .agent-v2-compose-box { border-radius: 26px; border-color: #d6e0f3; box-shadow: 0 10px 30px rgba(20,33,61,.10); }
 
-  /* Composer: one row of attach, model name, voice and send; starter chips go once a conversation has begun. */
+  /* Composer: one row of attach, model name, voice and send; the footer goes once a conversation has begun. */
   html body .shell .agent-v2-compose-controls { flex-wrap: nowrap; gap: 4px; }
   html body .shell .agent-v2 .agent-v2-model-control { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; padding: 0; }
   html body .shell .agent-v2 .agent-v2-model-control > span { display: none !important; }
   html body .shell .agent-v2 .agent-v2-model-control select { flex: 1; width: 100%; min-width: 0; max-width: none; min-height: 40px; border: 1px solid #dfe6f3; border-radius: 12px; background: #f8fafc; font-size: 15px; color: #14213d; }
   html body .shell .agent-v2 .agent-v2-model-control .agent-v2-model-empty { flex-basis: 100%; }
-  html body .shell .agent-v2:has(.agent-v2-exchange) .agent-v2-chips { display: none; }
   html body .shell .agent-v2:has(.agent-v2-exchange) .agent-v2-footer { display: none; }
 
   /* Sources open as a sheet from the bottom instead of a side panel. */
@@ -85,4 +84,11 @@
   html body .tab-bar-item { flex: 0 1 180px; }
   html body .quick-start:not(.is-enlarged) { max-width: 720px; margin-left: auto; margin-right: auto; }
   html body .citation-panel { max-width: 720px; margin-left: auto; margin-right: auto; }
+
+  /* A calm first screen: the greeting and a few suggestions, centred above the message box. */
+  html body .shell .agent-workspace .agent-v2-welcome { flex: 1; justify-content: center; align-items: center; text-align: center; padding: 16px; }
+  html body .shell .agent-welcome-hero { padding: 0 !important; background: none; border: 0; box-shadow: none; }
+  html body .shell .agent-welcome-hero h2 { margin: 0; font-size: 1.75rem !important; }
+  html body .shell .agent-workspace .agent-v2-welcome .agent-v2-suggestions { flex-wrap: wrap; justify-content: center; overflow: visible; }
+  html body .shell .agent-workspace .agent-v2-welcome .agent-v2-suggestions > .btn { min-height: 44px; white-space: normal; }
 }

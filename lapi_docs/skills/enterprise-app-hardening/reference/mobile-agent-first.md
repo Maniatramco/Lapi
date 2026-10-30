@@ -94,4 +94,7 @@ User decision: no Dashboard on phones for anyone, admins included. Phones land o
   1100 px; the phone style sheets use `(max-width: 640px), (pointer: coarse) and (max-width: 1100px)`. A narrow window on
   a computer stays a computer. Use `currentDevice()` rather than reading window width. Wider sizes keep the drawer menu
   and a 760 px reading column. A touch laptop under 1100 px also counts as a phone.
+- A calm chat (user: "too much instruction, info overloading"): the opening screen is only "How can I help?" and four
+  suggestions; no explanation paragraph, workflow cards or composer chips; placeholder "Ask anything…"; / and # still
+  work when typed. Status is one row of short pills. The full guide stays one tap away ("What can you do?").
 

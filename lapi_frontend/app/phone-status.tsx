@@ -10,8 +10,8 @@ export function PhoneStatus({documents,jobs,attention,onAttention,onReview}:{doc
  const reading=readingNow(documents,jobs),first=reading[0],extracting=extractionsRunning(jobs);
  if(!attention&&!first&&!extracting)return null;
  return <div className="phone-status" aria-label="Workspace status">
-  {attention>0&&<button type="button" className="is-warning" onClick={onAttention}><AlertTriangle size={16} aria-hidden="true"/><span>{attention} {attention===1?'file needs':'files need'} attention</span><ChevronRight size={16} aria-hidden="true"/></button>}
-  {extracting>0&&<button type="button" onClick={onReview}><Loader2 size={16} className="animate-spin" aria-hidden="true"/><span>Pulling out data{extracting>1?` · ${extracting} runs`:''}</span><ChevronRight size={16} aria-hidden="true"/></button>}
-  {first&&<div role="status"><Loader2 size={16} className="animate-spin" aria-hidden="true"/><span>{first.name}</span><small>{first.step} · {first.progress}%{reading.length>1?` · +${reading.length-1}`:''}</small></div>}
+  {attention>0&&<button type="button" className="is-warning" onClick={onAttention}><AlertTriangle size={16} aria-hidden="true"/><span>Check {attention} {attention===1?'file':'files'}</span><ChevronRight size={16} aria-hidden="true"/></button>}
+  {extracting>0&&<button type="button" onClick={onReview}><Loader2 size={16} className="animate-spin" aria-hidden="true"/><span>Extracting{extracting>1?` · ${extracting}`:''}</span><ChevronRight size={16} aria-hidden="true"/></button>}
+  {first&&<div role="status" title={`${first.name}: ${first.step}`}><Loader2 size={16} className="animate-spin" aria-hidden="true"/><span>Reading{reading.length>1?` ${reading.length} files`:''}</span><small>{first.progress}%</small></div>}
  </div>;
 }

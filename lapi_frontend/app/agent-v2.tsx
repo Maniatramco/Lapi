@@ -449,11 +449,13 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
    {onboardingOpen&&catalog.can_onboard_datasets&&<AgentOnboarding initialDocuments={documentFiles} initialPrompt={promptAttachment||undefined} onReview={onReview} api={api} models={catalog.models} defaults={datasetConfig} storageKey={key+'-onboarding'} onBusy={setOnboardingBusy} onReady={()=>{onWorkspaceChanged?.();void loadCatalog().catch(e=>setError(e.message));}} onEdit={id=>setManaging(id)} onUse={id=>{setDataset(id);setDocuments([]);setSavedPromptId('');rememberAssistantDataset(sessionStorage,username,id);setOnboardingOpen(false);sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}} onClose={completed=>{setOnboardingOpen(false);if(completed){sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}}}/>}
    {catalogError&&<div className="agent-v2-catalog-error" role="alert"><span>Could not load datasets and models. {catalogError}</span><ActionButton className="btn" disabled={catalogLoading} onClick={()=>{setError('');setCatalogAttempt(value=>value+1);}} label="Retry datasets and models" action="retry"/></div>}
    <AgentTraining api={api} userId={username} onTry={(action,example)=>{if(action==='ask'&&example){setText(example);composer.current?.focus();}else if(action==='attach')fileInput.current?.click();else if(action==='quick-start')openQuickStart();}}/>
-   {!plans.length&&!onboardingOpen&&<div className="agent-v2-welcome"><AgentLogo size={64} label="Lapi Agent"/>{!scopeReady?<p role="status">{catalogError?'Workspace choices are unavailable. Retry loading above.':'Preparing your workspace…'}</p>:<><div className="agent-welcome-hero"><div><h2>How can I help?</h2><p>Ask about Lapi, search indexed documents and saved results, or onboard and extract in one conversation. Answers are retrieved, reranked and checked against cited evidence.</p></div></div>
-    <h3 className="agent-welcome-label">Start a workflow</h3>
-    <div className="agent-workflow-cards">{agentCommands.filter(command=>!['skill','instructions','optimize','start'].includes(command.operation)).map(command=><button key={command.operation} type="button" className="agent-workflow-card" data-operation={command.operation} disabled={attachmentsBlocked} onClick={()=>startWorkflow(command.label)}><span className="agent-workflow-tag">{command.label}</span><strong>{({onboard:'Set up a dataset',upload:'Upload and index',extract:'Extract fields',reextract:'Re-extract',manage:'Manage a dataset'} as Record<string,string>)[command.operation]}</strong><span>{command.description}</span></button>)}</div>
-    <h3 className="agent-welcome-label">Or ask about your knowledge</h3>
-    <div className="agent-v2-suggestions">{['What can you do?','Summarize the key points','Upload and extract documents'].map(s=><button key={s} className="btn" onClick={()=>setText(s)}>{s}</button>)}</div></>}</div>}
+   {!plans.length&&!onboardingOpen&&<div className="agent-v2-welcome"><AgentLogo size={64} label="Lapi Agent"/>{!scopeReady?<p role="status">{catalogError?'Workspace choices are unavailable. Retry loading above.':'Preparing your workspace…'}</p>:<><div className="agent-welcome-hero"><div><h2>How can I help?</h2></div></div>
+    <div className="agent-v2-suggestions" aria-label="Suggestions">
+     <button className="btn" onClick={()=>{setText('Summarize the key points');composer.current?.focus();}}>Summarize the key points</button>
+     {!attachmentsBlocked&&<button className="btn" onClick={()=>fileInput.current?.click()}>Add documents</button>}
+     <button className="btn" onClick={()=>startWorkflow('/Extract')}>Pull out data</button>
+     <button className="btn" onClick={openAgentTraining}>What can you do?</button>
+    </div></>}</div>}
    {plans.map(plan=>{
     const index=nextCall(plan);const call=index>=0?plan.calls[index]:null;
     const needInputs=call?.status==='pending'&&!plan.superseded;const uploaded=plan.calls.some((c:Entity)=>c.uploaded_document_ids?.length);
@@ -528,7 +530,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
     })}<ActionButton className="text-button" disabled={attachmentsBlocked} onClick={()=>{setFiles([]);setJsonDocuments({});setAttachmentErrors({});setPromptAttachment(null);clearSavedPrompt();cancelPrompt();}} label="Clear files" action="close"/></div>}
     <div className="agent-v2-input"><div className="agent-v2-editor">
     <div ref={composerHighlight} className="agent-v2-input-highlight" aria-hidden="true">{highlightedCommand?<>{highlightedCommand[1]}<span className="agent-v2-command-token">{highlightedCommand[2]}</span>{text.slice(highlightedCommand[0].length)}</>:text}{text.endsWith('\n')?' ':''}</div>
-    <textarea ref={composer} aria-label="Message Lapi Agent" placeholder="Ask anything · / commands · # documents" value={text} rows={1} aria-autocomplete="list" aria-expanded={Boolean(mention||commandMention)} aria-controls={commandMention?'agent-command-mentions':mention?'agent-document-mentions':undefined} aria-activedescendant={commandMention&&commandOptions[mentionIndex]?`agent-command-${commandOptions[mentionIndex].operation}`:mentionDocuments[mentionIndex]?`agent-document-option-${mentionDocuments[mentionIndex].id}`:undefined} onScroll={e=>{if(composerHighlight.current){composerHighlight.current.scrollTop=e.currentTarget.scrollTop;composerHighlight.current.scrollLeft=e.currentTarget.scrollLeft;}}} onSelect={e=>setCaret(e.currentTarget.selectionStart)} onChange={e=>{setText(e.target.value);setCaret(e.target.selectionStart);setMentionClosed(false);setMentionIndex(0);}} onKeyDown={e=>{
+    <textarea ref={composer} aria-label="Message Lapi Agent" placeholder="Ask anything…" value={text} rows={1} aria-autocomplete="list" aria-expanded={Boolean(mention||commandMention)} aria-controls={commandMention?'agent-command-mentions':mention?'agent-document-mentions':undefined} aria-activedescendant={commandMention&&commandOptions[mentionIndex]?`agent-command-${commandOptions[mentionIndex].operation}`:mentionDocuments[mentionIndex]?`agent-document-option-${mentionDocuments[mentionIndex].id}`:undefined} onScroll={e=>{if(composerHighlight.current){composerHighlight.current.scrollTop=e.currentTarget.scrollTop;composerHighlight.current.scrollLeft=e.currentTarget.scrollLeft;}}} onSelect={e=>setCaret(e.currentTarget.selectionStart)} onChange={e=>{setText(e.target.value);setCaret(e.target.selectionStart);setMentionClosed(false);setMentionIndex(0);}} onKeyDown={e=>{
      if(commandMention){
       if(e.key==='Escape'){e.preventDefault();setMentionClosed(true);return;}
       if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();setMentionIndex(index=>commandOptions.length?(index+(e.key==='ArrowDown'?1:-1)+commandOptions.length)%commandOptions.length:0);return;}
@@ -541,12 +543,6 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
      }
      if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}
     }}/></div></div>
-    <div className="agent-v2-chips" aria-label="Quick actions">
-     <button type="button" className="agent-chip" onClick={()=>openQuickStart()}>Guided start</button>
-     {!attachmentsBlocked&&<button type="button" className="agent-chip" onClick={()=>fileInput.current?.click()}>Add documents</button>}
-     <button type="button" className="agent-chip" onClick={()=>startWorkflow('/Extract')}>Pull out data</button>
-     <button type="button" className="agent-chip" onClick={openAgentTraining}>How the agent works</button>
-    </div>
     <div className="agent-v2-compose-controls">
      <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json,.xlsx,.csv,.tsv,.png,.jpg,.jpeg,.webp" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>
      <button className="btn icon" aria-label="Attach documents for agent" title="Attach PDF, DOCX, TXT, JSON, spreadsheets (XLSX, CSV, TSV) or images (PNG, JPG, WEBP)" disabled={attachmentsBlocked} onClick={()=>fileInput.current?.click()}><Plus size={21}/></button>
@@ -559,7 +555,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
    </div>
    {inputIssue&&<p className="agent-v2-prompt-notice" role="status">{inputIssue}</p>}
    {promptNotice&&<p className="agent-v2-prompt-notice" role="status">{promptNotice}</p>}
-   <div className="agent-v2-footer"><span>Drag & drop PDF, DOCX, TXT, JSON, spreadsheets (XLSX, CSV) or images · up to 20 files</span><details><summary>Privacy & providers</summary><p>Chat uses your configured model and indexed knowledge directly. Onboarding, upload, extraction and re-extraction ask for external processing approval before sending files. Workflow requests and results are saved in your workspace.</p><p>Browser speech recognition may send audio to its speech service; voice is optional and text remains available.</p></details></div>
+   <div className="agent-v2-footer"><details><summary>Privacy & providers</summary><p>Chat uses your configured model and indexed knowledge directly. Onboarding, upload, extraction and re-extraction ask for external processing approval before sending files. Workflow requests and results are saved in your workspace.</p><p>Browser speech recognition may send audio to its speech service; voice is optional and text remains available.</p></details></div>
   </div>
   </div>
   <aside className="agent-context-panel" aria-label="Agent context">
