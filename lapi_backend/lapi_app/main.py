@@ -14,6 +14,7 @@ from . import providers, reranker, workflow, temporary_files, dataset_models as 
 from .json_documents import json_document_text
 from . import file_formats
 from . import dataset_access as access
+from . import preferences
 from .admin_documents import lifecycle_guard
 
 @asynccontextmanager
@@ -172,7 +173,7 @@ def login(body:Credentials,response:Response,request:Request):
                 if not body.code:raise HTTPException(401,'Enter the 6-digit code from your authenticator app.')
                 if not totp.verify(s,u.id,body.code):failure=(401,'That authenticator code is not valid. Wait for the next code and try again.')
             if not failure:
-                user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'is_contributor':access.is_contributor(u.id,s)}
+                user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'is_contributor':access.is_contributor(u.id,s),'display_name':preferences.display_name(u.id)}
                 user_id,mfa=u.id,totp.enabled(u.id,s)
     if failure:
         sign_in_limits.fail(attempt)
@@ -189,7 +190,7 @@ def me(request:Request,owner=Depends(auth)):
     from . import sessions, totp
     with Session() as s:
         u=s.get(User,owner);l=s.get(Login,sessions.session_id(sessions.token_from(request)))
-        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'is_contributor':access.is_contributor(u.id,s),'mfa':totp.enabled(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else '','session':{'idle_minutes':sessions.idle_seconds()//60,'expires_at':l.expires if l else None}}
+        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'is_contributor':access.is_contributor(u.id,s),'mfa':totp.enabled(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password','display_name':preferences.display_name(u.id)},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else '','session':{'idle_minutes':sessions.idle_seconds()//60,'expires_at':l.expires if l else None}}
 @app.post('/api/auth/logout')
 def logout(request:Request,response:Response,owner=Depends(auth)):
     from . import sessions

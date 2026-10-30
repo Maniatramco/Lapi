@@ -85,3 +85,20 @@ def test_personal_workspaces_stay_private_from_every_role(accounts):
         theirs = admin.post('/api/datasets', json={'name': 'Admin only'}).json()
         assert person.get('/api/datasets/' + theirs['id']).status_code == 404
         assert person.request('DELETE', '/api/datasets/' + theirs['id'], json={'confirmation': 'Admin only', 'expected_version': theirs['version']}).status_code in (403, 404)
+
+
+def test_the_name_people_give_names_their_workspace_and_greets_them(accounts):
+    admin = accounts; login(admin); add_outsider()
+    with TestClient(main.app) as person:
+        login(person, 'Colleague')
+        before = person.get('/api/workspaces').json()['workspaces']
+        assert next(w for w in before if w['audience'] == 'personal')['name'] == "Colleague's workspace"
+        assert person.get('/api/auth/me').json()['user']['display_name'] == ''
+        saved = person.put('/api/me/preferences', json={'goals': [], 'sources': [], 'completed': False, 'dismissed_next_steps': False, 'name': '  Mani  Tram '}).json()
+        assert saved['name'] == 'Mani Tram'
+        assert person.get('/api/auth/me').json()['user']['display_name'] == 'Mani Tram'
+        after = person.get('/api/workspaces').json()['workspaces']
+        assert next(w for w in after if w['audience'] == 'personal')['name'] == "Mani Tram's workspace"
+        # Saving the set-up answers without a name keeps it.
+        kept = person.put('/api/me/preferences', json={'goals': ['ask'], 'sources': [], 'completed': True, 'dismissed_next_steps': False}).json()
+        assert kept['name'] == 'Mani Tram' and kept['goals'] == ['ask']

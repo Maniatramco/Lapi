@@ -70,6 +70,7 @@ import { AddKnowledge } from "./add-knowledge";
 import { PageBand, PAGE_INTROS } from "./page-band";
 import { EnabledModels } from "./enabled-models";
 import { WorkspaceGate, type GateMode } from "./workspace-gate";
+import { SetupChat } from "./setup-chat";
 import { canAddCollections, gateStep, inWorkspace, pickWorkspace } from "./workspace-scope";
 import { openQuickStart } from "./quick-start-flow";
 import { JobsBoard } from "./jobs-board";
@@ -336,6 +337,7 @@ export default function App() {
   const [allJobs, setJobs] = useState<Entity[]>([]);
   const [attention, setAttention] = useState<AttentionScope | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [nameSkipped, setNameSkipped] = useState(false);
   useEffect(() => onAttention(scope => setAttention(scope)), []);
   const [manage, setManage] = useState<ManageRequest | null>(null);
   useEffect(() => onDatasetEditor(request => { setAttention(null); setManage(request); }), []);
@@ -698,6 +700,9 @@ export default function App() {
   }, [user?.id]);
   useEffect(() => { if (user && refresh) void readWorkspaces().catch(() => undefined); }, [refresh]);
   const gateStepNow = gateOpen || gateStep({ workspaces, current: workspaceId, chosen: gateChosen, skipped: gateSkipped });
+  // First sign-in is a chat with Lapi: the name, a team workspace, which workspace, the first collection.
+  const needName = Boolean(user && !user.display_name && !nameSkipped && workspaces.length > 0);
+  const setupChat = !gateOpen && (needName || gateStepNow === 'choose' || gateStepNow === 'collection');
   const authenticate = () =>
     run(async () => {
       let d;
@@ -948,7 +953,13 @@ export default function App() {
               </button>
             </Notice>
           )}
-          {gateStepNow && <WorkspaceGate mode={gateStepNow} api={api} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)}
+          {setupChat && user && <SetupChat api={api} user={user} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)} chosen={gateChosen} needName={needName}
+            onNamed={given => { setUser(current => current ? { ...current, display_name: given } : current); setNameSkipped(true); void readWorkspaces(); }}
+            onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}
+            onChoose={openWorkspace}
+            onCollectionCreated={id => { reload(); changeDataset(id); }}
+            onDone={() => { setGateChosen(true); setGateSkipped(true); setNameSkipped(true); }}/>}
+          {!setupChat && gateStepNow && <WorkspaceGate mode={gateStepNow} api={api} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)}
             onChoose={openWorkspace}
             onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); setGateOpen('people'); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}
             onPeopleDone={() => { setGateOpen(null); reload(); }}
@@ -964,7 +975,7 @@ export default function App() {
           {view === "Token usage" && (user.is_admin?<TokenUsageAdmin api={api}/>:<div className="panel" role="alert">Administrator access is required to view token usage.</div>)}
           {view === "Access map" && (user.is_admin||(user as {is_auditor?:boolean}).is_auditor?<AccessMap api={api}/>:<div className="panel" role="alert">Administrator or Auditor access is required to view the access map.</div>)}
           {view === "Users & passwords" && <UserManagement api={api} keycloak={keycloak} user={user as {id:string;username:string;is_admin?:boolean;is_auditor?:boolean;sign_in?:string}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
-          {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 workspaceId={workspaceId} renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This collection is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
+          {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 displayName={user.display_name || ''} workspaceId={workspaceId} renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This collection is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
           {view === "Datasets" && <DatasetWorkspace onNewCollection={canAddCollections(workspaces.find(w => w.id === workspaceId)) ? () => setGateOpen("collection") : undefined} directorySearch={directorySearch} onClearDirectorySearch={()=>setDirectorySearch('')} onDirectoryVisibilityChange={setDatasetDirectoryVisible} canManage={Boolean(user.is_admin||user.is_contributor)} datasets={kbs} models={models} documents={docs}
             storageKey={`lapi-new-dataset:${user.id}`} defaults={selectedDataset} onSelect={changeDataset} onCreated={d=>{setKbs(current=>[...current.filter(item=>item.id!==d.id),d]);changeDataset(d.id);}}
             api={api} reload={reload} notify={notify} onUse={navigate}/>

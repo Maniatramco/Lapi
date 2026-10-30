@@ -48,9 +48,23 @@ def _new(owner, name, audience, **extra):
 
 
 def _display(owner):
+    from . import preferences
+    name = preferences.display_name(owner)
+    if name: return name
     with core.Session() as session:
         user = session.get(core.User, owner)
     return user.username if user else owner
+
+
+def rename_personal(owner, name):
+    """The personal workspace takes the name the person gave, while it still has its default name."""
+    if not name: return
+    with core.document_lock('workspace-' + owner):
+        found = next((r for r in rows() if r.owner == owner and read(r).get('audience') == 'personal'), None)
+        if found is None: return
+        with core.Session.begin() as session:
+            record = session.get(core.Record, found.id)
+            if record.name.endswith("'s workspace"): record.name = name + "'s workspace"
 
 
 def personal_for(owner):

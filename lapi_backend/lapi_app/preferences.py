@@ -1,11 +1,12 @@
 """Per-person answers to the "Let's set you up" questions, used to suggest next steps.
 
 Stored in the control store (not the browser), so the answers follow the person to
-another browser or device. Only fixed choices are accepted; nothing free-form is kept.
+another browser or device. Only fixed choices are accepted, plus the name the person wants
+Lapi to call them.
 """
 import hashlib
 import time
-from typing import List, Literal
+from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 from . import core
@@ -22,6 +23,7 @@ class Preferences(BaseModel):
     sources: List[Source] = Field(default_factory=list, max_length=len(SOURCES))
     completed: bool = False
     dismissed_next_steps: bool = False
+    name: Optional[str] = Field(default=None, max_length=60)  # None on save keeps the saved name
 
 
 def _key(user_id: str) -> str:
@@ -53,7 +55,13 @@ def _clean(body: Preferences) -> dict:
         'sources': _unique(body.sources, SOURCES),
         'completed': body.completed,
         'dismissed_next_steps': body.dismissed_next_steps,
+        'name': ' '.join((body.name or '').split())[:60],
     }
+
+
+def display_name(user_id: str) -> str:
+    """What the person asked to be called, or '' before they answered."""
+    return _load(user_id).get('name') or ''
 
 
 def install(app, auth):
@@ -66,7 +74,11 @@ def install(app, auth):
     @router.put('/api/me/preferences')
     def save_preferences(body: Preferences, owner=Depends(auth)):
         record = _clean(body)
+        if body.name is None: record['name'] = display_name(owner)
         core.local_store.put_json(_key(owner), {**record, 'updated_at': int(time.time())})
+        if body.name is not None:
+            from . import workspaces
+            workspaces.rename_personal(owner, record['name'])
         return record
 
     app.include_router(router)

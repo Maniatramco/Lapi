@@ -27,8 +27,26 @@
 .quick-start-field{display:grid;gap:6px;font-size:14px;font-weight:700}.quick-start-field input{min-height:48px;font-size:16px}
 
 .quick-start-pick{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.quick-start-pick button{display:grid;justify-items:center;gap:8px;min-height:112px;padding:16px;border:1.5px dashed var(--blue-line);border-radius:16px;background:linear-gradient(160deg,var(--blue-soft),#fff7ed);color:var(--blue-strong);font:inherit;font-weight:800;cursor:pointer}
-.quick-start-pick button:hover{border-style:solid}
+.quick-start-pick button{position:relative;display:grid;justify-items:center;align-content:center;gap:6px;min-height:150px;padding:18px 12px;border:1.5px solid var(--line);border-radius:22px;background:#fff;color:var(--ink);font:inherit;font-weight:800;cursor:pointer;box-shadow:0 10px 26px rgba(20,33,61,.07)}
+.quick-start-pick button i{display:grid;place-items:center;width:56px;height:56px;margin-bottom:4px;border-radius:50%;background:var(--blue-soft);color:var(--blue-strong)}
+.quick-start-pick button small{font-size:12.5px;font-weight:500;color:var(--muted);text-align:center}
+.quick-start-pick button:hover{border-color:var(--blue)}
+/* The camera tile carries the corners of a scan frame. */
+.quick-start-pick-camera i{background:linear-gradient(160deg,var(--blue-soft),var(--orange-soft))}
+.quick-start-pick-camera::before,.quick-start-pick-camera::after{content:'';position:absolute;width:22px;height:22px;border:3px solid var(--blue);pointer-events:none}
+.quick-start-pick-camera::before{top:12px;left:12px;border-right:0;border-bottom:0;border-radius:8px 0 0 0}
+.quick-start-pick-camera::after{bottom:12px;right:12px;border-left:0;border-top:0;border-radius:0 0 8px 0}
+.quick-start-scope{display:flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;border:1px solid var(--blue-line);border-radius:999px;background:var(--blue-soft);color:var(--ink);font:inherit;cursor:pointer;min-width:0;max-width:100%}
+.quick-start-scope span{color:var(--muted);font-size:13px}.quick-start-scope strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:15px}.quick-start-scope small{color:var(--blue-strong);font-weight:800;font-size:13px}
+.quick-start-ring{position:relative;display:grid;place-items:center;align-content:center;gap:2px;width:156px;height:156px;margin:6px auto;border-radius:50%;background:conic-gradient(var(--blue) calc(var(--qs-percent,0)*1%),var(--line) 0)}
+.quick-start-ring::before{content:'';position:absolute;inset:13px;border-radius:50%;background:#fff}
+.quick-start-ring strong{position:relative;font-size:32px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}.quick-start-ring span{position:relative;font-size:13px;color:var(--muted)}
+.quick-start-field-chips{display:flex;flex-wrap:wrap;gap:8px}
+.quick-start-chip{display:inline-flex;align-items:stretch;border:1px solid var(--blue-line);border-radius:999px;background:#fff;overflow:hidden}
+.quick-start-chip[data-open]{border-color:var(--blue);background:var(--blue-soft)}
+.quick-start-chip button{min-height:42px;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.quick-start-chip button:first-child{padding:0 6px 0 14px}.quick-start-chip button:last-child{display:grid;place-items:center;width:34px;color:var(--muted)}
+.quick-start-chip-add{display:inline-flex;align-items:center;gap:4px;min-height:42px;padding:0 14px;border:1px dashed var(--blue-line);border-radius:999px;background:none;color:var(--blue-strong);font:inherit;font-size:14px;font-weight:800;cursor:pointer}
 .quick-start-paths{display:grid;gap:12px}
 .quick-start-paths button{display:flex;align-items:center;gap:14px;min-height:76px;padding:14px 16px;border:1.5px solid var(--line);border-radius:16px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .quick-start-paths button svg{flex:none;color:var(--blue)}

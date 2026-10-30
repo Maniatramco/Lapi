@@ -34,7 +34,10 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
  const [datasetId,setDatasetId]=useState<string>(choices[0]?.id||(canCreate?'new':''));
  // A new workspace belongs to its creator, so its documents step is always available.
  const steps=stepsFor(datasets,isAdmin||datasetId==='new',path);
- const [step,setStep]=useState<Step>('dataset');
+ // Phones go straight to the documents; the collection shows as a chip there and can still be changed.
+ const phone=currentDevice()==='phone';
+ const [step,setStep]=useState<Step>(phone&&quickExtract&&editor&&(choices.length||canCreate)?'documents':'dataset');
+ const [openField,setOpenField]=useState(-1);
  // Enlarged: the Quick start fills the window (remembered on this device).
  const [enlarged,setEnlarged]=useState(()=>{try{return localStorage.getItem(ENLARGED_KEY)==='1';}catch{return false;}});
  const toggleEnlarged=()=>setEnlarged(value=>{try{localStorage.setItem(ENLARGED_KEY,value?'0':'1');}catch{}return !value;});
@@ -99,8 +102,15 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
  const upload=()=>run(merging?'Merging your files into one document, then uploading…':'Uploading…',async()=>{
   if(!files.length)throw new Error('Add at least one document or photo.');
   if(!uploadConsent)throw new Error('Tick the box to let Lapi read these documents.');
+  let target=datasetId;
+  if(target==='new'){  // Phones skip the collection step: the collection is made as the documents go in.
+   const name=newName.trim()||defaultDatasetName(user?.username);
+   const created=await api('/datasets','POST',{name,description:newDescription.trim(),collection_type:newType.trim()});
+   await api(`/datasets/${encodeURIComponent(created.id)}/migrate-settings`,'POST',{});
+   target=created.id;setDatasetId(created.id);onChanged();
+  }
   const form=new FormData();files.forEach(file=>form.append('files',file,file.name));
-  form.append('dataset_id',datasetId);form.append('allow_external','true');
+  form.append('dataset_id',target);form.append('allow_external','true');
   if(merging)form.append('merge_files','true');
   const result=await api('/documents/upload','POST',form);
   setUploaded((result.documents||[]).map((doc:Entity)=>({id:doc.id,name:doc.name||doc.filename||'Document',state:fileState(doc.status),error:''})));
@@ -203,10 +213,11 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
     </>}
 
     {step==='documents'&&<>
-     <p className="quick-start-lead">Into <strong>{dataset?.name||'your collection'}</strong>. Photos of paper documents work too: Lapi reads them.</p>
+     {phone&&quickExtract?<button type="button" className="quick-start-scope" onClick={()=>go('dataset')} disabled={busy}><span>Into</span><strong>{dataset?.name||(datasetId==='new'?newName:'Choose a collection')}</strong><small>Change</small></button>
+      :<p className="quick-start-lead">Into <strong>{dataset?.name||'your collection'}</strong>. Photos of paper documents work too: Lapi reads them.</p>}
      <div className="quick-start-pick">
-      <button type="button" onClick={()=>camera.current?.click()} disabled={busy}><Camera size={26}/><span>Take a photo</span></button>
-      <button type="button" onClick={()=>picker.current?.click()} disabled={busy}><FileUp size={26}/><span>Choose files</span></button>
+      <button type="button" className="quick-start-pick-camera" onClick={()=>camera.current?.click()} disabled={busy}><i aria-hidden="true"><Camera size={28}/></i><span>Take a photo</span><small>Paper documents</small></button>
+      <button type="button" onClick={()=>picker.current?.click()} disabled={busy}><i aria-hidden="true"><FileUp size={28}/></i><span>Choose files</span><small>PDF, Word, Excel, photos</small></button>
       <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={e=>{addFiles(e.target.files);e.target.value='';}}/>
       <input ref={picker} type="file" accept={ACCEPT} multiple hidden onChange={e=>{addFiles(e.target.files);e.target.value='';}}/>
      </div>
@@ -229,7 +240,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
 
     {step==='processing'&&<>
      <p className="quick-start-lead">{state.finished?(state.ready?'Done. Your documents are ready.':'Lapi could not read these files.'):'This usually takes under a minute. You can continue as soon as one is ready.'}</p>
-     <div className="quick-start-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={state.percent}><span style={{width:`${Math.max(state.percent,6)}%`}}/></div>
+     <div className="quick-start-ring" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={state.percent} style={{'--qs-percent':state.percent} as React.CSSProperties}><strong>{state.percent}%</strong><span>{state.ready} of {state.total} ready</span></div>
      <ul className="quick-start-files" aria-live="polite">{uploaded.map(item=><li key={item.id} data-state={item.state}>
       {item.state==='working'?<Loader2 size={17} className="animate-spin"/>:item.state==='ready'?<Check size={17}/>:<CircleAlert size={17}/>}
       <span>{item.name}</span><small>{item.state==='failed'&&item.error?item.error:FILE_STATE_TEXT[item.state]}</small></li>)}</ul>
@@ -263,7 +274,12 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
      <p className="quick-start-lead">Lapi read your document and suggests these fields. Change anything, or ask the AI to rewrite them.</p>
      {fields.length>0&&<>
       <label className="quick-start-field">Prompt name<input value={promptName} maxLength={200} onChange={e=>setPromptName(e.target.value)} disabled={busy}/></label>
-      <ul className="quick-start-fields">{fields.map((field,i)=><li key={i}>
+      {phone&&<div className="quick-start-field-chips" role="group" aria-label="Fields">{fields.map((field,i)=><span key={i} className="quick-start-chip" data-open={openField===i||undefined}>
+       <button type="button" aria-pressed={openField===i} onClick={()=>setOpenField(openField===i?-1:i)} disabled={busy}>{field.label||'New field'}</button>
+       <button type="button" aria-label={`Remove ${field.label}`} onClick={()=>{setFields(fields.filter((_,j)=>j!==i));setOpenField(-1);}} disabled={busy}><X size={14}/></button></span>)}
+       <button type="button" className="quick-start-chip-add" onClick={()=>{addField();setOpenField(fields.length);}} disabled={busy||fields.length>=15}><Plus size={16}/> Add</button></div>}
+      {phone&&openField>=0&&!fields[openField]&&null}
+      <ul className="quick-start-fields">{fields.map((field,i)=>phone&&openField!==i?null:<li key={i}>
        <div className="quick-start-field-row">
         <input aria-label={`Field ${i+1} name`} value={field.label} maxLength={60} onChange={e=>editField(i,{label:e.target.value})} disabled={busy}/>
         <select aria-label={`Field ${i+1} type`} value={field.type} onChange={e=>editField(i,{type:e.target.value as FieldType})} disabled={busy}>{FIELD_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select>
@@ -271,7 +287,7 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
        </div>
        <textarea aria-label={`What to pull out for ${field.label}`} rows={2} value={field.description} maxLength={240} onChange={e=>editField(i,{description:e.target.value})} disabled={busy}/>
       </li>)}</ul>
-      <button type="button" className="quick-start-secondary" onClick={addField} disabled={busy||fields.length>=15}><Plus size={16}/> Add a field</button>
+      {!phone&&<button type="button" className="quick-start-secondary" onClick={addField} disabled={busy||fields.length>=15}><Plus size={16}/> Add a field</button>}
       <form className="quick-start-rewrite" onSubmit={e=>{e.preventDefault();if(change.trim())void suggest(change.trim());}}>
        <label htmlFor="qs-rewrite">Ask the AI to change them</label>
        <div><input id="qs-rewrite" value={change} maxLength={1000} placeholder="For example: add the due date, remove the address" onChange={e=>setChange(e.target.value)} disabled={busy}/>
