@@ -2,6 +2,12 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.41 - 30 October 2026
+
+A calmer Agent
+
+- Opening screen is the greeting and four suggestions; removes the explanation paragraph, workflow cards, composer chips and hint text. Commands and document mentions still work when typed. `phone-status` is one row of short pills.
+
 ## v26.1.16.40 - 30 October 2026
 
 Foldables and tablets get the phone layout

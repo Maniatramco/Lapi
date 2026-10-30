@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.40",
+  "version": "26.1.16.41",
   "releases": [
+    {
+      "version": "26.1.16.41",
+      "date": "2026-10-30",
+      "title": "A calmer Agent",
+      "changes": [
+        "Lapi Agent now opens with a short greeting and four suggestions, on phones and computers. The explanation, workflow cards and extra chips are gone.",
+        "Typing / or # still brings up commands and documents, and What can you do? opens the full guide.",
+        "On phones, foldables and tablets, status is one row of short labels."
+      ]
+    },
     {
       "version": "26.1.16.40",
       "date": "2026-10-30",
