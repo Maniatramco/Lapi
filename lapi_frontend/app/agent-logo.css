@@ -1,8 +1,21 @@
 .lapi-agent-logo{display:inline-block;flex-shrink:0;vertical-align:middle;overflow:visible}.agent-page-title{display:flex;align-items:center;gap:9px}
-/* The bubble floats and its dots type for a moment every few seconds. */
-.lapi-logo-bubble{transform-box:fill-box;transform-origin:30% 80%;animation:lapi-logo-float 4s ease-in-out infinite}
-.lapi-logo-dot{transform-box:fill-box;transform-origin:center;animation:lapi-logo-dot 4s ease-in-out infinite}
-.lapi-logo-dot:nth-child(4){animation-delay:.15s}.lapi-logo-dot:nth-child(5){animation-delay:.3s}
-@keyframes lapi-logo-float{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-1.5px) rotate(-3deg)}}
-@keyframes lapi-logo-dot{0%,60%,100%{transform:translateY(0);opacity:1}66%{transform:translateY(-2.2px);opacity:.6}72%{transform:translateY(0);opacity:1}}
-@media (prefers-reduced-motion: reduce){.lapi-logo-bubble,.lapi-logo-dot{animation:none}}
+/* Both robots hover and their antenna light glows. */
+.lapi-robo{transform-box:fill-box;transform-origin:50% 100%;animation:lapi-robo-bob 3.6s ease-in-out infinite}
+.lapi-robo-light{transform-box:fill-box;transform-origin:center;animation:lapi-robo-glow 1.8s ease-in-out infinite}
+/* The Agent's visor light scans left and right; its head tips every other loop. */
+.lapi-robo-scan{transform-box:fill-box;transform-origin:center;animation:lapi-robo-scan 3.6s ease-in-out infinite}
+.is-agent .lapi-robo-head{transform-box:fill-box;transform-origin:50% 90%;animation:lapi-robo-tilt 7.2s ease-in-out infinite}
+/* The Help Bot blinks, glances aside, waves, and its bubble pops once every two loops. */
+.is-help .lapi-robo-head{transform-box:fill-box;transform-origin:50% 90%;animation:lapi-robo-tilt-help 7.2s ease-in-out infinite}
+.lapi-robo-eye{transform-box:fill-box;transform-origin:center;animation:lapi-robo-blink 3.6s ease-in-out infinite}
+.lapi-robo-arm{transform-box:fill-box;transform-origin:20% 90%;animation:lapi-robo-wave 7.2s ease-in-out infinite}
+.lapi-robo-bubble{transform-box:fill-box;transform-origin:10% 100%;animation:lapi-robo-pop 7.2s ease-in-out infinite}
+@keyframes lapi-robo-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes lapi-robo-glow{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.25)}}
+@keyframes lapi-robo-scan{0%,100%{transform:translateX(-5px)}50%{transform:translateX(5px)}}
+@keyframes lapi-robo-tilt{0%,70%,100%{transform:rotate(0)}80%{transform:rotate(-4deg)}90%{transform:rotate(2deg)}}
+@keyframes lapi-robo-tilt-help{0%,70%,100%{transform:rotate(0)}80%{transform:rotate(5deg)}90%{transform:rotate(-2deg)}}
+@keyframes lapi-robo-blink{0%,46%,54%,100%{transform:scaleY(1)}50%{transform:scaleY(.1)}}
+@keyframes lapi-robo-wave{0%,55%,100%{transform:rotate(0)}62%{transform:rotate(-28deg)}70%{transform:rotate(-8deg)}78%{transform:rotate(-28deg)}86%{transform:rotate(0)}}
+@keyframes lapi-robo-pop{0%,55%,100%{transform:scale(1)}62%{transform:scale(1.12)}70%{transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){.lapi-robo,.lapi-robo-head,.lapi-robo-light,.lapi-robo-scan,.lapi-robo-eye,.lapi-robo-arm,.lapi-robo-bubble{animation:none}}
