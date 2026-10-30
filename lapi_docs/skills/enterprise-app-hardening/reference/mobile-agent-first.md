@@ -32,3 +32,21 @@ Quick start; let administrators switch any other screen on or off at any time **
   tests compile relative imports for real and 31 of them broke; keep shared openers in a pure module
   (`quick-start-flow.ts`). Wrap `api` calls in effects with `Promise.resolve().then(...)` so a test double that
   returns undefined cannot crash the component.
+
+## Phone design D: answer-first, one-handed (Lapi, after v26.1.16.35)
+Designed on a canvas first (six linked 390×844 artboards: Home, Answer, Source sheet, Add, Check the
+columns, Review), then built as phone-only CSS plus one component, so desktop is untouched.
+- `phone-home.tsx` + `phone-home-data.ts` (pure, unit-tested): greeting by hour, ready count for the chosen
+  dataset, one big ask box (questions go to the agent composer, typed in, not sent), suggested questions
+  from the newest ready files, "Needs you" from `attentionItems` (opens the shared pop-up), "Reading now"
+  with step and share of workflow stages done. Rendered by WorkspaceAssist on Home; CSS hides the old phone
+  hero, Quick start banner and floating Ask button with `.phone-home ~` and `body:has(.phone-home)`.
+- Tab bar: Home, Ask, a raised dark Add in the middle (opens Quick start), Review (view `Extract`), More.
+- `phone-design.css` (loaded after mobile.css, `html body .shell …` specificity): question in a dark
+  bubble, answer on a white card, follow-ups and sources as 44px chips, rounded composer; the citation
+  `<dialog>` becomes a bottom sheet with a grabber; Quick start mapping is one card per field with a badge
+  (`howBadge`: same name / by meaning / linked sheet / AI per row / no column / your choice); Review's save
+  footer is sticky with 52px buttons.
+- Preview without a backend: build the web image and run it with `API_INTERNAL_URL` pointing at a tiny
+  stand-in API (`/api/auth/me` with a csrf token, `/api/datasets`, `/api/documents`, `/api/jobs`, everything
+  else `[]`/`{}`), then check at 390px in the browser pane.

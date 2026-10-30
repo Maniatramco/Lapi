@@ -1,0 +1,52 @@
+/* Phone design D: answer-first and one-handed. Loaded after mobile.css; phones only (up to 640px).
+   Colours: ink #14213d, muted #4d5a75 (5.9:1 on white), Lapi blue #2563eb, warning orange on #fff7ed. */
+@media (max-width: 640px) {
+  /* Tab bar: Home, Ask, a raised Add in the middle, Review, More. */
+  body[data-tab-bar=on] .mobile-tab-bar { align-items: center; background: rgba(255,255,255,.96); border-top-color: #e3e9f4; }
+  html body .tab-bar-item { color: #5b6782; font-size: 11px; font-weight: 600; gap: 3px; }
+  html body .tab-bar-item[aria-current=page] { color: #1d4ed8; background: none; font-weight: 700; }
+  html body .tab-bar-add { flex: 0 0 64px; }
+  .tab-bar-add-mark { width: 56px; height: 56px; margin-top: -20px; display: grid; place-items: center; border-radius: 18px; background: #14213d; color: #fff; box-shadow: 0 10px 24px rgba(20,33,61,.3); }
+
+  /* Chat: the question in a dark bubble, the answer on a white card, follow-ups and sources as chips. */
+  html body .shell .agent-v2-thread { background: #f5f7fb; }
+  html body .shell .agent-v2 .agent-v2-user { background: #14213d; color: #fff; border-radius: 18px 18px 6px 18px; padding: 12px 14px; font-size: 15px; line-height: 1.45; }
+  html body .shell .agent-v2 .agent-v2-chat-answer { padding: 16px; border-radius: 22px; background: #fff; border: 1px solid #e3e9f4; box-shadow: 0 12px 30px rgba(20,33,61,.06); }
+  html body .shell .agent-v2 .agent-v2-reply { font-size: 15px; line-height: 1.55; }
+  html body .shell .agent-v2 .agent-v2-reply table { display: block; overflow-x: auto; font-size: 14px; }
+  html body .shell .agent-v2 .agent-citation { min-width: 28px; min-height: 28px; border-radius: 8px; background: #e8f0ff; color: #1d4ed8; font-weight: 800; }
+  html body .shell .agent-v2 .agent-v2-sources > summary { min-height: 44px; display: flex; align-items: center; font-weight: 600; color: #3b4763; }
+  html body .shell .agent-v2 .agent-v2-sources .text-button { min-height: 44px; text-align: left; }
+  html body .shell .agent-v2 .agent-follow-ups { flex-wrap: nowrap; overflow-x: auto; margin: 6px -12px 0; padding: 0 12px 2px; scrollbar-width: none; }
+  html body .shell .agent-v2 .agent-follow-ups .btn { flex: none; min-height: 44px; white-space: nowrap; border-radius: 22px !important; border-color: #c9d7f2; color: #1d4ed8; font-weight: 600; }
+  /* Composer: one rounded field with the send button inside, above the keyboard. */
+  html body .shell .workspace .agent-v2-composer .agent-v2-compose-box { border-radius: 26px; border-color: #d6e0f3; box-shadow: 0 10px 30px rgba(20,33,61,.10); }
+
+  /* Sources open as a sheet from the bottom instead of a side panel. */
+  html body .citation-panel { inset: auto 0 0 0; width: 100%; max-width: 100%; height: 88dvh; max-height: 88dvh; border: 0; border-radius: 24px 24px 0 0; box-shadow: 0 -20px 50px rgba(15,23,42,.25); }
+  html body .citation-panel::backdrop { background: rgba(15,23,42,.5); }
+  html body .citation-panel > header { position: relative; padding: 22px 16px 12px; background: #fff; border-bottom-color: #eef2f8; }
+  html body .citation-panel > header::before { content: ''; position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: #d3dbea; }
+  html body .citation-panel > header .btn.icon { border-radius: 50%; background: #f1f5fd; }
+  html body .citation-panel h2 { font-size: 18px; }
+  html body .citation-panel-eyebrow { font-size: 13px; }
+  html body .citation-panel dt { font-size: 13px; color: #4d5a75; }
+  html body .citation-panel dd { font-size: 15px; }
+  html body .citation-panel :is(blockquote, .citation-panel-values) { font-size: 14px; border-radius: 12px; }
+  html body .citation-panel-note { font-size: 13px; color: #4d5a75; }
+  html body .citation-panel > footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  html body .citation-panel > footer .btn { flex: 1; min-height: 48px; font-size: 15px; border-radius: 14px; }
+
+  /* Quick start, Check the columns: one card per field with how it was matched. */
+  html body .quick-start-mapping { padding: 0; border: 0; background: none; }
+  html body .quick-start-mapping li { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 14px; border: 1px solid #e3e9f4; border-radius: 16px; background: #fff; }
+  html body .quick-start-mapping li[data-how=none] { border: 1.5px dashed #f59e0b; background: #fffbeb; }
+  html body .quick-start-mapping select { min-height: 44px; border-radius: 12px; font-size: 16px; }
+  html body .quick-start-mapping small { font-size: 13px; color: #4d5a75; }
+
+  /* Review: the save and approve buttons stay large and within reach. */
+  html body .shell .review-save-footer { position: sticky; z-index: 6; padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #e3e9f4; flex-wrap: wrap; gap: 8px; }
+  html body .shell .review-save-footer .review-actions { display: flex; gap: 8px; width: 100%; margin-left: 0; }
+  html body .shell .review-save-footer .review-actions .btn { flex: 1 1 auto; min-height: 52px !important; border-radius: 16px; font-size: 15px; }
+  html body .shell .review-save-footer .review-actions .btn.primary { flex-grow: 2; box-shadow: 0 10px 24px rgba(37,99,235,.28); }
+}

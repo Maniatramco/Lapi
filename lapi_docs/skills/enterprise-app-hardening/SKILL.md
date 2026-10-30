@@ -27,7 +27,7 @@ Reference files in this folder:
 - `reference/quick-start.md`: the guided one-workflow Quick start (phone + web), merge files, extraction workflow.
 - `reference/chat-design.md`: the Claude-style chat layout for Lapi Agent and the Dashboard chat.
 - `reference/spreadsheets-and-charts.md`: XLSX/CSV/TSV with row-aware indexing, exact `query_table` answers, charts.
-- `reference/mobile-agent-first.md`: the agent-first phone version, screen control through OpenFGA, agent training.
+- `reference/mobile-agent-first.md`: the agent-first phone version, screen control through OpenFGA, agent training, and phone design D (answer-first Home, raised Add tab, bottom-sheet sources, mapping badges, previewing with a stand-in API).
 - `reference/deploy-pitfalls.md`: all three images (api, web, keycloak) must carry the release tag; failed-create recovery.
 - `reference/ocr-dense-pages.md`: read a dense scanned page in strips when the OCR answer is cut off.
 - `reference/agent-guide.md`: deterministic guide layer for plain requests (upload this / pull out / create dataset) before the model.

@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import {ArrowLeft,Camera,Check,CircleAlert,FileSearch,FileUp,Loader2,Maximize2,MessageSquare,Minimize2,Plus,Sparkles,Table2,Trash2,Users,Wand2,X} from "lucide-react";
 import "./quick-start.css";
-import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,columnMapping,columnValue,defaultDatasetName,extractionStages,howChosen,initialChoices,isSpreadsheet,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,recordCount,resultRows,sourceName,stepsFor,uploadable,
+import {ACCEPT,FIELD_TYPES,FILE_STATE_TEXT,SUGGESTED_QUESTIONS,askable,canAddDocuments,canCreateDataset,canMerge,columnMapping,columnValue,defaultDatasetName,extractionStages,howBadge,howChosen,initialChoices,isSpreadsheet,fieldKey,fieldProblems,fieldsToSchema,fileState,mergeByDefault,openReviewPage,pickFiles,progress,recordCount,resultRows,sourceName,stepsFor,uploadable,
  type Field,type FieldType,type FileState,type Path,type Step,type TablePlan} from "./quick-start-flow";
 import {eligibleAgentModels} from "./agent-document-selection";
 import {openDatasetEditor} from "./manage-dataset";
@@ -276,8 +276,8 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],onClose
      {tablePlan?.documents[0]&&(()=>{const doc=tablePlan.documents[0];return <section className="quick-start-mapping" aria-label="How Lapi will read your spreadsheet">
       <h3>How Lapi will read {doc.name}</h3>
       <p className="quick-start-note">One record per row of sheet “{doc.sheet}” ({doc.rows.toLocaleString()} rows). Values come straight from the columns; check each match and change any that are wrong.</p>
-      <ul>{fields.map(field=>{const pick=columnPicks[field.key]??'';return <li key={field.key}>
-       <label htmlFor={`qs-col-${field.key}`}>{field.label}</label>
+      <ul>{fields.map(field=>{const pick=columnPicks[field.key]??'',badge=howBadge(doc,field.key,pick);return <li key={field.key} data-how={badge.kind}>
+       <span className="quick-start-mapping-head"><label htmlFor={`qs-col-${field.key}`}>{field.label}</label><span className="quick-start-mapping-badge">{badge.label}</span></span>
        <select id={`qs-col-${field.key}`} value={pick} onChange={e=>setColumnPicks(current=>({...current,[field.key]:e.target.value}))} disabled={busy}>
         <option value="">Leave empty</option>
         <option value="row">Read from each row (AI)</option>

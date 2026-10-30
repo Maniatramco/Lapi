@@ -181,3 +181,10 @@ body:has(.quick-start) .operation-popup{display:none}
 .quick-start-mapping select{min-height:40px;border-radius:8px;border:1px solid var(--line,#cbd5e1);padding:0 8px;background:var(--panel,#fff);color:inherit;max-width:100%}
 .quick-start-mapping small{grid-column:2;color:var(--muted,#64748b);font-size:12px}
 @media (max-width:560px){.quick-start-mapping li{grid-template-columns:1fr}.quick-start-mapping small{grid-column:1}}
+.quick-start-mapping-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.quick-start-mapping-badge{flex:none;padding:3px 9px;border-radius:10px;font-size:12px;font-weight:700;background:#e8f0ff;color:#1e3a8a}
+.quick-start-mapping li[data-how=same] .quick-start-mapping-badge{background:#dcfce7;color:#14532d}
+.quick-start-mapping li[data-how=linked] .quick-start-mapping-badge{background:#ede9fe;color:#4c1d95}
+.quick-start-mapping li[data-how=row] .quick-start-mapping-badge{background:#ffedd5;color:#7c2d12}
+.quick-start-mapping li:is([data-how=none],[data-how=whole]) .quick-start-mapping-badge{background:#fef3c7;color:#78350f}
+.quick-start-mapping li[data-how=you] .quick-start-mapping-badge{background:#f1f5f9;color:#334155}

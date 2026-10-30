@@ -184,6 +184,15 @@ export function columnMapping(choices:Record<string,string>):Record<string,{shee
 }
 
 /** Why a column was chosen, in plain words. */
+/** A short badge for a field's column choice; the full sentence comes from howChosen. */
+export function howBadge(doc:TablePlanDocument,key:string,choice:string):{kind:string;label:string}{
+ if(choice==='row')return {kind:'row',label:'AI per row'};
+ if(!choice)return doc.whole_fields.includes(key)?{kind:'whole',label:'Ask in chat'}:{kind:'none',label:'No column'};
+ const found=doc.fields[key];
+ if(!found||columnValue(found.sheet,found.column)!==choice)return {kind:'you',label:'Your choice'};
+ if(found.via)return {kind:'linked',label:'Linked sheet'};
+ return found.how==='by meaning'?{kind:'meaning',label:'By meaning'}:found.how==='same name'?{kind:'same',label:'Same name'}:{kind:'similar',label:'Similar name'};
+}
 export function howChosen(doc:TablePlanDocument,key:string,choice:string):string{
  if(choice==='row')return 'Read from each row\'s cells, comments and images by the AI model';
  if(!choice)return doc.whole_fields.includes(key)?'About the whole table: ask in chat for an exact answer':'No matching column: left empty';
