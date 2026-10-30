@@ -35,7 +35,7 @@ import { AgentV2 } from "./agent-v2";
 import { AgentLogo } from "./agent-logo";
 import "./agent-shortcut.css";
 import { rememberAssistantDataset } from "./agent-prompt-selection";
-import {prepareFreshLoginChat} from './chat-login-session';
+import {prepareFreshLoginChat, startFresh} from './chat-login-session';
 import { fetchWithSessionCsrf } from "./session-request";
 import {pendingJobIds,mergeJobUpdates} from './workflow-polling';
 import { ToggleRight,
@@ -664,12 +664,9 @@ export default function App() {
       }
       setNeedsCode(false); setTotpCode("");
       prepareFreshLoginChat(sessionStorage,d.user.username,d.chat_session_id||'');
-      navigate("Home");
-      setUser(d.user);
-      setPasswordChangedNotice(false);
-      setRoleChangedNotice(false);
-      setCsrf(d.csrf_token || "");
       setPassword("");
+      // A full load, so this session runs the latest release with nothing left from the last one.
+      startFresh(window.location,sessionStorage,true);
     });
   const chooseTemplate = (id: string) => setTemplateId(id);
   const extract = () =>
@@ -872,7 +869,9 @@ export default function App() {
                   setUser(null);
                   setCsrf("");
                   // End the Keycloak session too, or the next sign-in would skip the password.
+                  sessionStorage.clear();
                   if (result?.logout_url) window.location.assign(result.logout_url);
+                  else startFresh(window.location,sessionStorage);
                 })
               }
             >

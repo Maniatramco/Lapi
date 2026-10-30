@@ -52,3 +52,9 @@ address lockouts with hashed keys, success clears only the username, trusted cli
 code required, replay refused, admin reset permissions, Keycloak re-check (role removed → signed out; revoked →
 "session has ended"), back-channel logout (bad token 400, nonce 400, valid ends the session), admin MFA required.
 Extend the fake Keycloak with a refresh-token grant, `sid` and `amr`.
+
+## Sign-in and sign-out start fresh (Lapi, after v26.1.16.41)
+A single-page app keeps its old code and state across a password sign-in or sign-out unless the page reloads, so people
+saw "changes not applied" after a deploy. `startFresh` (chat-login-session.ts) does a full page load to the site root after
+both; sign-out also clears sessionStorage. A tab left open without signing out still runs old code until it reloads.
+

@@ -10,3 +10,8 @@ export function prepareFreshLoginChat(storage:Pick<Storage,'getItem'|'setItem'|'
  storage.setItem(key+'-history','[]');storage.setItem(marker,sessionId);
  return true;
 }
+/** Signing in or out starts over: no chat or screen state carries across, and a full page load picks up the latest release. */
+export function startFresh(place:Pick<Location,'replace'|'pathname'>,storage:Pick<Storage,'clear'>,keepChat=false){
+ if(!keepChat)storage.clear();
+ place.replace(place.pathname);
+}
