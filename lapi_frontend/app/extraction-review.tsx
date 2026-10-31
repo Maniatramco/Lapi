@@ -32,7 +32,7 @@ export function OriginalPdfViewer({sourceBase,name,pageCount,evidencePage}:{sour
   const viewer=<><div className="review-pdf-toolbar"><button title={thumbnails?"Hide page thumbnails":"Show page thumbnails"} aria-label={thumbnails?"Hide page thumbnails":"Show page thumbnails"} aria-pressed={thumbnails} onClick={()=>setThumbnails(!thumbnails)}><FileText size={16}/></button><div className="review-page-controls"><button title="Previous original page" aria-label="Previous original page" disabled={page<=1} onClick={()=>setPage(p=>p-1)}><ChevronLeft size={16}/></button><label><span className="sr-only">Original PDF page</span><input aria-label="Original PDF page" type="number" min={1} max={count} value={page} onChange={event=>{const next=Number(event.target.value);if(Number.isInteger(next)&&next>=1&&(!count||next<=count))setPage(next);}}/></label><span>/ {count||'—'}</span><button title="Next original page" aria-label="Next original page" disabled={!count||page>=count} onClick={()=>setPage(p=>p+1)}><ChevronRight size={16}/></button></div><div className="review-zoom-controls"><ActionButton aria-label="Fit original page" aria-pressed={fit} onClick={()=>setFit(true)} label="Fit page" action="fit"/><button title="Zoom out original" aria-label="Zoom out original" disabled={zoom<=50} onClick={()=>{setFit(false);setZoom(z=>z-25);}}><Minus size={16}/></button><button aria-label="Reset original zoom" onClick={()=>{setFit(false);setZoom(100);}}>{zoom}%</button><button title="Zoom in original" aria-label="Zoom in original" disabled={zoom>=200} onClick={()=>{setFit(false);setZoom(z=>z+25);}}><Plus size={16}/></button></div><a href={`/api${sourceBase}/source#page=${page}`} target="_blank" rel="noopener" aria-label="Open original PDF" title="Open original PDF"><ExternalLink size={16}/></a><a href={`/api${sourceBase}/download`} download aria-label="Download unchanged original" title="Download unchanged original"><Download size={16}/></a><button title={expanded?'Close expanded document':'Expand document'} aria-label={expanded?'Close expanded document':'Expand document'} onClick={()=>setExpanded(!expanded)}>{expanded?<Minimize2 size={16}/>:<Maximize2 size={16}/>}</button></div><div className="review-pdf-body">{thumbnails&&<nav className="review-pdf-thumbnails" aria-label="Original PDF pages">{pages.map(p=><button title={`Show original page ${p}`} key={p} aria-label={`Show original page ${p}`} aria-current={p===page?'page':undefined} onClick={()=>setPage(p)}><img loading="lazy" src={`/api${sourceBase}/page-image?page=${p}`} alt=""/><span>{p}</span></button>)}</nav>}<div className="review-pdf-canvas">{failed?<div className="review-preview-error" role="alert"><FileText size={26}/><p>This page could not be displayed.</p><ActionButton onClick={()=>setRetry(r=>r+1)} label="Retry preview" action="retry"/><a href={`/api${sourceBase}/download`} download>Download original</a></div>:<img key={`${sourceBase}:${page}:${retry}`} className={`review-original-page${fit?" fit-page":""}`} alt={`Original ${name} page ${page}`} src={`/api${sourceBase}/page-image?page=${page}`} style={fit?undefined:{width:`${zoom}%`}} onError={()=>setFailed(true)}/>}</div></div></>;
   return <>{!expanded&&<div className="review-pdf-viewer">{viewer}</div>}{expanded&&<dialog className="review-document-dialog" ref={dialog} onClose={()=>setExpanded(false)}><h3>{name}</h3><div className="review-pdf-viewer">{viewer}</div></dialog>}</>;
 }
-export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirty,openRequest=0}:{extraction:Entity;datasetName?:string;documents:Entity[];jobs:Entity[];api:Api;onSaved:(value:Entity)=>void;onDirty:(dirty:boolean)=>void;openRequest?:number}) {
+export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirty,openRequest=0,access}:{extraction:Entity;datasetName?:string;documents:Entity[];jobs:Entity[];api:Api;onSaved:(value:Entity)=>void;onDirty:(dirty:boolean)=>void;openRequest?:number;access?:string}) {
   const heading=useRef<HTMLHeadingElement>(null);
   useEffect(()=>{
     const frame=requestAnimationFrame(()=>{
@@ -49,7 +49,11 @@ export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirt
   const [profile,setProfile]=useState(firstProfile);
   const swipe=useRef<{x:number;y:number}|null>(null);
   const [pane,setPane]=useState('fields');
-  const locked=e.review_status==='reviewed'||e.review_locked===true;
+  const reviewed=e.review_status==='reviewed'||e.review_locked===true;
+  // Viewers see the values but cannot change them; the API refuses their saves regardless.
+  const viewerOnly=Boolean(access)&&!['editor','owner'].includes(access as string);
+  const locked=reviewed||viewerOnly;
+  const [confirmingReview,setConfirmingReview]=useState(false);
   useEffect(()=>{setProfile(firstProfile);setSelected('');},[e.id]);
   const generation=useRef(0);
   const savedCallback=useRef(onSaved);savedCallback.current=onSaved;
@@ -87,7 +91,9 @@ export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirt
   useEffect(()=>{const current=++generation.current;setPreview(null);if(document&&e.status==='ready')api(`${sourceBase}/preview`,'GET',undefined,undefined,true).then(value=>{if(current===generation.current)setPreview(value);}).catch(err=>{if(current===generation.current)setPreview({error:err.message});});return()=>{generation.current++;};},[sourceBase,e.status,api]);
   const step=(delta:number)=>{if(!parsed?.records)return;const next=recordStep(profile,parsed.records.length,delta);if(next===null)return;setProfile(next);const key=Object.keys(parsed.records[Number(next)]?.fields||{})[0];setSelected(key?`/records/${next}/fields/${key}`:'');};
   const reload=async()=>{if(dirty&&!window.confirm("Discard unsaved changes and reload the latest saved values?"))return;setError("");try{onSaved(await api(`/extractions/${e.id}`));}catch(err){setError((err as Error).message);}};
-  const save=async()=>{if(saving||locked||parsed===undefined)return;setSaving(true);setError("");try{const result=JSON.parse(draft);onSaved(await api(`/extractions/${e.id}`,"PATCH",{result,version:e.version}));}catch(err){setError((err as Error).message);}finally{setSaving(false);}};
+  // Save keeps the result open; Mark reviewed saves any edits and locks it for good.
+  const save=async(review:boolean)=>{if(saving||locked||parsed===undefined)return;setSaving(true);setError("");try{const result=JSON.parse(draft);onSaved(await api(`/extractions/${e.id}`,"PATCH",{result,version:e.version,review}));setConfirmingReview(false);}catch(err){setError((err as Error).message);}finally{setSaving(false);}};
+  useEffect(()=>{setConfirmingReview(false);},[e.id,e.version]);
   const page=originalAsset?origin?.source_page:origin?.page;
   const exactEvidence=(e.evidence||[]).some((item:Entity)=>item.field===selected||selected.startsWith(item.field+'/'));
   return <section className="review-workspace" aria-label="Review extraction">
@@ -122,6 +128,21 @@ export function ExtractionReview({extraction:e,documents,jobs,api,onSaved,onDirt
           </details>
         </>:<p>No source document is available. This value has no verified location.</p>}
       </section>
-    </div><footer className="review-save-footer">{(locked||dirty)&&<div role="status" className={dirty?'review-unsaved':'review-saved'}>{locked?<><Check size={16}/>Reviewed · locked</>:<><span className="review-dirty-dot"/>{parsed===undefined?'Correct invalid JSON before review':`${changedCount} modified ${changedCount===1?'value':'values'} · Unsaved changes`}</>}</div>}<div className="review-actions">{!locked&&<button className="btn" disabled={!dirty||saving} onClick={()=>{setDraft(JSON.stringify(e.result,null,2));setError("");}}>Cancel</button>}<button className="btn primary" title={locked?"Reviewed and locked":"Save and permanently lock this result"} onClick={save} disabled={saving||locked||parsed===undefined}><Check size={16}/>{saving?"Marking Reviewed…":"Reviewed"}</button></div></footer></>}
+    </div><footer className="review-save-footer">
+      {reviewed?<div role="status" className="review-saved"><Check size={16}/>Reviewed · locked{e.reviewed_by?` by ${e.reviewed_by}`:''}</div>
+      :viewerOnly?<div role="status" className="review-saved">You have Viewer access to this collection, so values cannot be changed here. Ask the collection owner or an administrator for Editor access.</div>
+      :dirty?<div role="status" className="review-unsaved"><span className="review-dirty-dot"/>{parsed===undefined?'Correct invalid JSON before saving':`${changedCount} modified ${changedCount===1?'value':'values'} · Unsaved changes`}</div>
+      :(e.edited_fields||[]).length>0?<div role="status" className="review-saved">Edits saved · not yet reviewed</div>:null}
+      {!locked&&!confirmingReview&&<div className="review-actions">
+        <button className="btn" disabled={!dirty||saving} onClick={()=>{setDraft(JSON.stringify(e.result,null,2));setError("");}}>Cancel</button>
+        <button className="btn" title="Save the edited values as a new version. The result stays open for more changes." onClick={()=>void save(false)} disabled={saving||!dirty||parsed===undefined}>{saving?"Saving…":"Save changes"}</button>
+        <button className="btn primary" title="Save any edits and lock this result permanently" onClick={()=>setConfirmingReview(true)} disabled={saving||parsed===undefined}><Check size={16}/>Mark reviewed</button>
+      </div>}
+      {!locked&&confirmingReview&&<div className="review-confirm" role="alertdialog" aria-labelledby="review-confirm-title" aria-describedby="review-confirm-text">
+        <strong id="review-confirm-title">Mark this result as reviewed?</strong>
+        <p id="review-confirm-text">{changedCount>0?`${changedCount} modified ${changedCount===1?'value is':'values are'} saved first. `:'No values were changed. '}Reviewed results are locked permanently: nobody can edit them again, and later corrections need a new re-extraction. Exports keep the reviewed values.</p>
+        <div className="review-actions"><button className="btn" disabled={saving} onClick={()=>setConfirmingReview(false)}>Keep editing</button><button className="btn primary" disabled={saving} onClick={()=>void save(true)}><Check size={16}/>{saving?"Marking reviewed…":"Mark reviewed and lock"}</button></div>
+      </div>}
+    </footer></>}
   </section>;
 }

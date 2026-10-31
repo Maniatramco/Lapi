@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.54 - 31 October 2026
+
+Review saves without locking (UX review item H4)
+
+- `main.review_extraction`: `ReviewInput.review` (default true keeps the old one-call behaviour). With `review: false` the edits are saved as a new version with `edited_fields`, `edited_at` and `edited_by`, while `review_status` and `review_locked` are unchanged; a later call with `review: true` marks it Reviewed and locks it.
+- `extraction-review.tsx`: "Save changes" (new version, stays open) and "Mark reviewed", which opens an inline confirmation naming how many values are saved and that the lock is permanent, with "Keep editing" / "Mark reviewed and lock". The footer says "Edits saved · not yet reviewed" after a draft save and names who reviewed a locked result. A collection where the person is a Viewer (`access` from `my_access`, passed by `review-detail.tsx`) renders read-only with a note on who can grant Editor access.
+- Tests: draft save, second draft, review, and the lock afterwards (`test_review_workflow.py`).
+
 ## v26.1.16.53 - 31 October 2026
 
 Stop means stop, and a reload keeps your answer (UX review items H1–H3)

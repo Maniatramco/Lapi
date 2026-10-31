@@ -24,3 +24,8 @@ body .shell .review-detail-browser .review-workspace>div[role=status]{flex:1;min
  body .shell .review-detail-browser>.review-workspace{padding:4px 6px 0}
  body .shell .review-detail-browser .review-workspace .review-split{min-height:0}
 }
+
+/* Mark reviewed asks first: an inline confirmation in the footer, reachable at every width. */
+.review-save-footer .review-confirm{flex:1 1 100%;display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid #fdba74;border-radius:10px;background:#fff7ed}
+.review-save-footer .review-confirm p{margin:0;font-size:14px;line-height:1.4}
+.review-save-footer .review-confirm .review-actions{margin-left:0;justify-content:flex-end;flex-wrap:wrap}

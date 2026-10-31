@@ -1,6 +1,15 @@
 {
-  "version": "26.1.16.53",
+  "version": "26.1.16.54",
   "releases": [
+    {
+      "version": "26.1.16.54",
+      "date": "2026-10-31",
+      "title": "Review saves without locking",
+      "changes": [
+        "Review has a Save changes button that keeps the result open, and a separate Mark reviewed button that explains the permanent lock and asks before applying it.",
+        "People with Viewer access see the values without editable fields and are told who can grant Editor access."
+      ]
+    },
     {
       "version": "26.1.16.53",
       "date": "2026-10-31",

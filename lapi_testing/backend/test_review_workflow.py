@@ -130,3 +130,19 @@ def test_extraction_directory_counts_saved_profiles_without_returning_payload(sy
         row=next(x for x in s.api.get('/api/extractions').json() if x['id']==e['id'])
         assert row['profile_count']==count
         assert 'result' not in row
+
+
+def test_saving_edits_keeps_the_result_open_until_it_is_marked_reviewed(system):
+    s=system;_,_,e=extracted(s)
+    url='/api/extractions/'+e['id']
+    draft=s.api.patch(url,json={'version':e['version'],'result':{'owner':'Draft Alice'},'review':False})
+    assert draft.status_code==200,draft.text
+    saved=draft.json()
+    assert saved['version']==e['version']+1 and saved['result']=={'owner':'Draft Alice'}
+    assert saved['review_status']!='reviewed' and not saved.get('review_locked') and saved['edited_fields']==['/owner']
+    assert saved['edited_by']==s.owner and 'reviewed_at' not in saved
+    again=s.api.patch(url,json={'version':saved['version'],'result':{'owner':'Draft Alice II'},'review':False}).json()
+    assert again['version']==e['version']+2 and not again.get('review_locked')
+    final=s.api.patch(url,json={'version':again['version'],'result':again['result']}).json()
+    assert final['review_status']=='reviewed' and final['review_locked'] and final['reviewed_by']==s.owner
+    assert s.api.patch(url,json={'version':final['version'],'result':{'owner':'Late'},'review':False}).status_code==409

@@ -816,6 +816,9 @@ def merged_extraction_file(id:str,owner=Depends(auth)):
 class ReviewInput(BaseModel):
     result:Any
     version:int=Field(ge=1)
+    # True marks the result Reviewed and locks it for good; False saves the edits as a new
+    # version that stays open for more changes and a later review.
+    review:bool=True
 @app.patch('/api/extractions/{id}')
 def review_extraction(id:str,body:ReviewInput,owner=Depends(auth)):
     with document_lock(id):
@@ -836,7 +839,9 @@ def review_extraction(id:str,body:ReviewInput,owner=Depends(auth)):
         prior_evidence=data.get('evidence',[])
         data['original_evidence']=data.get('original_evidence',prior_evidence)
         data['evidence']=[item for item in prior_evidence if not any((item.get('field') or item.get('path') or item.get('json_pointer') or '')==path or path.startswith((item.get('field') or item.get('path') or item.get('json_pointer') or '')+'/') for path in changed)]
-        data.update(result=body.result,review_status='reviewed',review_locked=True,reviewed_at=time.time(),reviewed_by=owner,reviewed_extraction_version=r.version,evidence_notice='Edited fields are unverified; original quotes and source provenance are retained.',edited_fields=sorted(set(data.get('edited_fields',[]))|changed))
+        data.update(result=body.result,evidence_notice='Edited fields are unverified; original quotes and source provenance are retained.',edited_fields=sorted(set(data.get('edited_fields',[]))|changed))
+        if body.review:data.update(review_status='reviewed',review_locked=True,reviewed_at=time.time(),reviewed_by=owner,reviewed_extraction_version=r.version)
+        else:data.update(edited_at=time.time(),edited_by=owner)
         try:data.update(parquet_results.persist(r.id,r.version+1,data))
         except ValueError as error:raise HTTPException(503,str(error))
         r=routing.write_version(r,data)
