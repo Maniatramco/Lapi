@@ -127,6 +127,29 @@ def _headers(first, width):
     return names
 
 
+def _key_value(rows, width):
+    """Two columns where every row is a distinct text label with a value beside it, and the values
+    below the first row mix text with numbers or dates: a form such as "Project name | Falcon",
+    "Budget | 9200000", not a table with a header."""
+    rows = [r for r in rows if not all(_empty(v) for v in r)]
+    if width != 2 or not 2 <= len(rows) <= 60:
+        return False
+    labels = [r[0] for r in rows]
+    if not all(isinstance(l, str) and l.strip() for l in labels) or len({l.strip().lower() for l in labels}) != len(labels):
+        return False
+    below = [r[1] for r in rows[1:] if not _empty(r[1])]
+    texts = [v for v in below if not isinstance(v, bool) and _number(v) is None and _date(v) is None]
+    return 0 < len(texts) < len(below)
+
+
+TOTAL_ROW = re.compile(r'^(?:grand\s+|sub\s*)?totals?(?:\s*[:\-].*)?$', re.I)
+
+
+def _total_row(values):
+    """A row whose label is Total, Grand total or Subtotal: a sum of the others, not a data item."""
+    return any(isinstance(v, str) and TOTAL_ROW.match(v.strip()) for v in values[:2] if not _empty(v))
+
+
 def _looks_like_header(row, below):
     """A header row is mostly text, and the rows under it are not all text in the same places."""
     cells = [v for v in row if not _empty(v)]
@@ -217,11 +240,18 @@ def _sheet(name, rows, notes):
             and _looks_like_header(rows[start + 1], rows[start + 2:])):
         notes = notes + [f'title row: {first_cells[0][:120]}']
         start += 1
-    if _looks_like_header(rows[start], rows[start + 1:]):
+    if not rows[start + 1:] and width <= 3:
+        shape = 'one row only: read as values, not as a header'
+    elif _key_value(rows[start:], width):
+        shape = 'key-value sheet: labels in the first column, values in the second'
+    else:
+        shape = None
+    if shape is None and _looks_like_header(rows[start], rows[start + 1:]):
         columns, data, first_row = _headers(rows[start], width), rows[start + 1:], start + 2
     else:
-        columns, data, first_row = [f'Column {_column_letter(i)}' for i in range(width)], rows[start:], start + 1
-        notes = notes + ['no header row found: columns are named by letter']
+        columns = ['Label', 'Value'] if shape and shape.startswith('key-value') else [f'Column {_column_letter(i)}' for i in range(width)]
+        data, first_row = rows[start:], start + 1
+        notes = notes + [shape or 'no header row found: columns are named by letter']
     numbered = [(first_row + i, row) for i, row in enumerate(data) if not all(_empty(v) for v in row)]
     kinds = [_kind([row[i] for _, row in numbered]) for i in range(width)]
     return {'name': str(name)[:100], 'columns': columns, 'kinds': kinds, 'rows': numbered, 'notes': notes}
@@ -249,6 +279,8 @@ def record(sheet, number, values):
     cells = [f'{column}: {_display(value)}' for column, value in zip(sheet['columns'], values) if not _empty(value)]
     # Comments, links, colours and items attached to this row (workbook.attach_notes) stay with it.
     cells += sheet.get('row_notes', {}).get(number, [])
+    if cells and _total_row(values):
+        cells.append('total row (a sum of the rows above, not a data item)')
     return f'Row {number} · ' + ' · '.join(cells) if cells else ''
 
 
@@ -258,9 +290,11 @@ def header(sheet):
 
 def summary(sheet):
     """An overview of the sheet: size, and per column its type, filled count and range or examples."""
-    lines = [f'Sheet "{sheet["name"]}" summary: {len(sheet["rows"])} data rows, {len(sheet["columns"])} columns.']
+    data_rows = [(n, row) for n, row in sheet['rows'] if not _total_row(row)]
+    totals = len(sheet['rows']) - len(data_rows)
+    lines = [f'Sheet "{sheet["name"]}" summary: {len(data_rows)} data rows' + (f' and {totals} total row{"s" if totals > 1 else ""}' if totals else '') + f', {len(sheet["columns"])} columns.']
     for i, (column, kind) in enumerate(zip(sheet['columns'], sheet['kinds'])):
-        values = [row[i] for _, row in sheet['rows'] if not _empty(row[i])]
+        values = [row[i] for _, row in data_rows if not _empty(row[i])]
         if kind == 'number':
             numbers = [_number(v) for v in values]
             detail = f'number, {len(numbers)} filled, min {_display(min(numbers))}, max {_display(max(numbers))}, total {_display(round(sum(numbers), 6))}' if numbers else 'number, empty'

@@ -124,6 +124,9 @@ def agentic_problems(answer, sources, skip, allow_external=True):
     # Exact values calculated by Lapi (query_table, aggregates, workbook maps) are already verified
     # against the data; the judge checks sentences cited from document text only.
     computed = {s['index'] for s in sources if s.get('reading') is not None or s.get('rows') is not None or str(s.get('document_name', '')).startswith(('Calculated', 'Computed'))}
+    # A saved extraction value is a field record, not document text: the value check already matched
+    # it literally, and a text judge given only the record rejects true statements about the document.
+    computed |= {s['index'] for s in sources if s.get('kind') == 'extraction'}
     units = []
     for text, start, end in answer_check.sentences(answer):
         refs = [n for n in dict.fromkeys(answer_check.cited(text))]

@@ -2,6 +2,20 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.56 - 31 October 2026
+
+Attached files upload on request, and steadier answers (live scorecard findings)
+
+- `agentic_chat.attachment_intent`: every message with attached files goes straight to `prepare_workflow` (the confirmation card) with no model call: upload, plus extraction or re-extraction when the words ask for it; a confirmation typed after such a turn proposes it again. `agent_system.md` tells the model to propose processing requests in its first step instead of explaining. Fixes the agent explaining uploads instead of acting (QA D22).
+- `agentic_chat.execute`: `prepare_workflow` is refused with an explanation when the request has no attached files and no processing words, so a question never ends in an extraction card. `run_tool` retries `search_knowledge` after 3, 6 and 9 s while "Knowledge is updating" (the republish after an upload).
+- `answer_check._derivable`: a total of three or four known numbers counts as derived.
+- `answer_support.agentic_problems`: sentences cited only from saved extraction values skip the Decisions judge; the value check already matched them.
+- `spreadsheet._sheet`: a sheet with one row (up to three columns) is data, not a header; `_key_value` reads a two-column label/value sheet as `Label`/`Value` rows; `_total_row` marks Total, Grand total and Subtotal rows in the row text and leaves them out of `summary` statistics.
+- `table_extraction.propose`: no row-by-row plan when more than a third of the fields match nothing, when a field names a row of a text column (`_names_a_row`), or when half the fields are whole-table figures.
+- `api_documentation.NOTES`: entry for `POST /api/agent-v2/plans/{id}/stop` (added in v26.1.16.53 without one).
+- Scorecard tooling (`lapi_testing/eval/scorecard/`): generator, browser runner and README; refusal wording and stored answer length fixed.
+- Tests: upload intent (4), total of three numbers, saved-value judge skip, republish retry, plain-question guard, single-row and key-value sheets, total rows, row-naming templates.
+
 ## v26.1.16.55 - 31 October 2026
 
 Reading a document for fields asks first (UX review item H5)

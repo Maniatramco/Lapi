@@ -1,6 +1,17 @@
 {
-  "version": "26.1.16.55",
+  "version": "26.1.16.56",
   "releases": [
+    {
+      "version": "26.1.16.56",
+      "date": "2026-10-31",
+      "title": "Attached files upload on request, and steadier answers",
+      "changes": [
+        "Attach a file and send any message: the upload confirmation card appears at once, with extraction when you ask for it, instead of an explanation.",
+        "A plain question never turns into an extraction proposal, and a search that lands during re-indexing waits a few seconds instead of failing.",
+        "A total of three or four listed figures is kept in the answer, and answers quoting saved extraction values are no longer removed by the source check.",
+        "Spreadsheets: a single-row sheet and a label-and-value sheet keep their values, total rows are marked and left out of column statistics, and a template naming specific rows or whole-table figures is read by the model instead of row by row."
+      ]
+    },
     {
       "version": "26.1.16.55",
       "date": "2026-10-31",

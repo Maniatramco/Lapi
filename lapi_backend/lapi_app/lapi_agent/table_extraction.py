@@ -103,6 +103,18 @@ def sheets_of(document):
     return spreadsheet.tables(core.store, document.id), {p['sheet']: p for p in saved.get('profiles', [])}, saved.get('links', [])
 
 
+def _names_a_row(key, spec, entry, profiles):
+    """True when a word of the field's name or label is one of the row labels of a text column
+    (the field asks for one row's value, so a column mapping would repeat it on every row)."""
+    words = {w for name in _names(key, spec) for w in name if len(w) >= 4}
+    profile = profiles.get(entry['name']) or {}
+    for column in profile.get('columns', []):
+        for value in column.get('values') or column.get('examples') or []:
+            if isinstance(value, str) and _words(value) and set(_words(value)) <= words:
+                return True
+    return False
+
+
 def _profile_text(entry, profiles):
     profile = profiles.get(entry['name'])
     if profile:
@@ -178,6 +190,12 @@ def propose(schema, documents, ask=ask_model, override=None):
         row_fields = [k for k in fields if k not in mapping and (proposal.get(k) or {}).get('kind') == 'row']
         whole = [k for k in fields if k not in mapping and (proposal.get(k) or {}).get('kind') == 'whole']
         enough = len(mapping) >= max(1, math.ceil(MIN_SHARE * len(fields))) or (mapping and len(mapping) + len(row_fields) == len(fields))
+        unmatched = [k for k in fields if k not in mapping and k not in row_fields and k not in whole]
+        # Fields that name one row's value ("engineering_q1" when Engineering is a Department) or a
+        # whole-table figure are not columns: such a prompt describes the workbook, not its rows.
+        named_rows = [k for k in mapping if _names_a_row(k, fields[k], by_name[row_sheet], profiles)]
+        if not override and (len(unmatched) * 3 > len(fields) or named_rows or len(whole) * 2 >= len(fields)):
+            return None
         if not enough and not override:
             return None
         plans.append({'document': document, 'sheet': by_name[row_sheet], 'mapping': mapping, 'row_fields': row_fields, 'whole_fields': whole,

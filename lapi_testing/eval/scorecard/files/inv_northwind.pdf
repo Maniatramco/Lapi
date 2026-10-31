@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 567 >>
+stream
+BT /F1 11 Tf 50 790 Td 15 TL
+(Northwind Traders Pvt Ltd) Tj T*
+(TAX INVOICE) Tj T*
+() Tj T*
+(Invoice Number: INV-2026-0417) Tj T*
+(Invoice Date: 2 April 2026) Tj T*
+(Due Date: 13 April 2026) Tj T*
+(Bill To: Acme Retail LLP) Tj T*
+(Customer PO: PO-55120) Tj T*
+() Tj T*
+(Office chairs   qty 12   unit 2,250.00   amount 27,000.00) Tj T*
+(Standing desk   qty 1   unit 2,611.00   amount 2,611.00) Tj T*
+() Tj T*
+(Subtotal: 29,611.00) Tj T*
+(GST 18%: 5,329.98) Tj T*
+(TOTAL \(INR\): 34,940.98) Tj T*
+() Tj T*
+(Payment terms: Net 11 days. Late fee 1.5% per month.) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000185 00000 n 
+0000000803 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+929
+%%EOF

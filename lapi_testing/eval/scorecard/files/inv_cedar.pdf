@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 575 >>
+stream
+BT /F1 11 Tf 50 790 Td 15 TL
+(Cedar Grove Foods) Tj T*
+(TAX INVOICE) Tj T*
+() Tj T*
+(Invoice Number: CGF-009213) Tj T*
+(Invoice Date: 7 January 2026) Tj T*
+(Due Date: 22 January 2026) Tj T*
+(Bill To: Sunrise Hotels Pvt Ltd) Tj T*
+(Customer PO: SH-7741) Tj T*
+() Tj T*
+(Basmati rice 25kg   qty 40   unit 1,875.00   amount 75,000.00) Tj T*
+(Cooking oil 15L   qty 18   unit 2,040.00   amount 36,720.00) Tj T*
+() Tj T*
+(Subtotal: 111,720.00) Tj T*
+(GST 5%: 5,586.00) Tj T*
+(TOTAL \(INR\): 117,306.00) Tj T*
+() Tj T*
+(Payment terms: Net 15 days. Late fee 1.5% per month.) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000185 00000 n 
+0000000811 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+937
+%%EOF

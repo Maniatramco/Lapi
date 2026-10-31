@@ -43,6 +43,7 @@ NOTES = {
     'POST /api/agent-v2/plans/{id}/goal': 'Continue or control an authorized persistent request after its workflow actions.',
     'POST /api/agent-v2/plans/{id}/knowledge/retry': 'Retry pending knowledge publication for an authorized completed workflow.',
     'POST /api/agent-v2/plans/{id}/restart': 'Restart a failed authorized workflow while preserving files and completed results.',
+    'POST /api/agent-v2/plans/{id}/stop': 'Stop the answer of an owned plan at its next step; the partial text is kept.',
     'POST /api/extractions/{id}/resume': 'Resume an authorized interrupted extraction from its durable checkpoint.',
     'POST /api/knowledge/search': 'Search scoped unified knowledge with dataset authorization and freshness checks.',
     'POST /api/storage/database/activate': 'Administrator only: verify and migrate the current catalog and compatible vectors before activating a database destination.',

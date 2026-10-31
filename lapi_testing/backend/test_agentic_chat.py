@@ -299,3 +299,95 @@ def test_stable_prefix_is_marked_for_provider_caching():
     marked = converse.mark_cache(request)
     assert marked['system'][1] == {'cachePoint': {'type': 'default'}} and marked['toolConfig']['tools'][-1] == {'cachePoint': {'type': 'default'}}
     assert converse.mark_cache(dict(request, modelId='meta.llama3')) == dict(request, modelId='meta.llama3')
+
+
+# ------------------------------------------------- attached files are proposed, not explained
+def test_attached_file_with_upload_request_is_proposed_without_a_model_call(system, monkeypatch):
+    s = system; d, doc = indexed(s); agentic(monkeypatch)
+    before = s.api.get('/api/jobs').json()
+    monkeypatch.setattr(agent_model, 'complete', lambda *a, **k: pytest.fail('An upload request with attached files needs no model answer.'))
+    p = plan(s, d, text='can u upload one document for me', attached_filenames=['NOTICE.pdf'])
+    assert p['phase'] == 'awaiting_confirmation' and [c['tool'] for c in p['calls']] == ['upload']
+    assert 'has not run' in p['explanation'] and s.api.get('/api/jobs').json() == before
+
+
+def test_confirming_an_upload_in_the_next_turn_is_proposed_too(system, monkeypatch):
+    s = system; d, doc = indexed(s); agentic(monkeypatch)
+    monkeypatch.setattr(agent_model, 'complete', lambda *a, **k: pytest.fail('Attached files and a confirmation need no model answer.'))
+    first = plan(s, d, text='what can you do with this?', attached_filenames=['NOTICE.pdf'])
+    assert first['phase'] == 'awaiting_confirmation'
+    # Typing "yes" instead of pressing the card still proposes the upload; the web app keeps the files.
+    second = plan(s, d, text='yes i need to upload', conversation_id=first['conversation_id'])
+    assert second['phase'] == 'awaiting_confirmation' and [c['tool'] for c in second['calls']] == ['upload']
+
+
+def test_attached_file_with_extract_request_proposes_upload_then_extract(system, monkeypatch):
+    s = system; d, doc = indexed(s); t = template(s); agentic(monkeypatch)
+    monkeypatch.setattr(agent_model, 'complete', lambda *a, **k: pytest.fail('No model call expected.'))
+    p = plan(s, d, text='Extract the fields from this file', attached_filenames=['NOTICE.pdf'], template_id=t['id'])
+    assert p['phase'] == 'awaiting_confirmation' and [c['tool'] for c in p['calls']] == ['upload', 'extract']
+
+
+def test_upload_questions_without_attachments_still_go_to_the_model(system, monkeypatch):
+    s = system; d, doc = indexed(s); agentic(monkeypatch)
+    seen = scripted(monkeypatch, {'text': 'Uploads go to a collection [1].', 'calls': []})
+    p = plan(s, d, text='How does Lapi handle document uploads?')
+    assert p['phase'] != 'awaiting_confirmation' and len(seen) == 1
+
+
+# ----------------------------------------------------------- scorecard findings (31 October)
+def test_a_total_of_three_listed_numbers_is_derivable():
+    sources = [{'index': 1, 'text': 'Total 117,306.00'}, {'index': 2, 'text': 'Total 114,460.00'}, {'index': 3, 'text': 'Total 116,525.00'}]
+    answer = '- Cedar: INR 117,306.00 [1]\n- Vertex: INR 114,460.00 [2]\n- Ironbridge: INR 116,525.00 [3]\n\nThe combined total is INR 348,291.00.'
+    assert answer_check.check(answer, sources) == []
+
+
+def test_saved_field_values_are_not_sent_to_the_text_judge(monkeypatch):
+    from lapi_app.lapi_agent import answer_support
+    monkeypatch.setattr(answer_support.decisions, 'snapshot', lambda: {'model': 'x'})
+    monkeypatch.setattr(answer_support.decisions, 'ask', lambda *a, **k: pytest.fail('a saved field value needs no text judge'))
+    sources = [{'index': 11, 'kind': 'extraction', 'document_name': 'QA docx_offer', 'text': {'fields': {'manager': 'Arun Mehta'}}}]
+    problems, status = answer_support.agentic_problems('The reporting manager is Arun Mehta [11].', sources, set())
+    assert problems == [] and status['status'] == 'unavailable'
+
+
+def test_search_waits_through_a_knowledge_republish(monkeypatch):
+    from fastapi import HTTPException
+    calls = []; naps = []
+    class Tools:
+        def run(self, name, args):
+            calls.append(name)
+            if len(calls) < 3: raise HTTPException(409, 'Knowledge is updating for this scope. Retry after publication; I will not answer from an older revision.')
+            return {'data': 'ok'}
+    monkeypatch.setattr(agentic_chat.time, 'sleep', naps.append)
+    agent = agentic_chat.AgenticChat.__new__(agentic_chat.AgenticChat); agent.tools = Tools()
+    assert agent.run_tool('search_knowledge', {}) == {'data': 'ok'} and naps == [3, 6]
+    calls.clear()
+    with pytest.raises(HTTPException):
+        agent.run_tool('list_documents', {})
+
+
+def test_a_plain_question_never_gets_a_workflow_proposal(system, monkeypatch):
+    s = system; d, doc = indexed(s); agentic(monkeypatch)
+    seen = scripted(monkeypatch, tool('prepare_workflow', operation='extract'), {'text': 'The owner is Alice [1].', 'calls': []})
+    p = plan(s, d, text='Who is the owner named in invoice.txt?')
+    assert p['phase'] != 'awaiting_confirmation' and not p['calls']
+    refusal = next(m for m in seen[1]['messages'] if m.get('role') == 'tool' and m.get('tool_name') == 'prepare_workflow')
+    assert 'question, not a processing request' in refusal['content']
+
+
+@pytest.mark.parametrize('text, tools_expected', [
+    ('can u upload one document for me', ['upload']),
+    ('please add this to the collection', ['upload']),
+    ('index this file', ['upload']),
+    ('what does this document say?', ['upload']),
+    ('Extract the fields from this file', ['upload', 'extract']),
+    ('pull out the data from this invoice', ['upload', 'extract']),
+    ('re-extract this with the new template', ['upload', 'reextract']),
+])
+def test_every_attached_message_starts_the_right_workflow(system, monkeypatch, text, tools_expected):
+    s = system; d, doc = indexed(s); agentic(monkeypatch)
+    t = template(s) if 'extract' in tools_expected or 'reextract' in tools_expected else None
+    monkeypatch.setattr(agent_model, 'complete', lambda *a, **k: pytest.fail('attached files need no model answer'))
+    p = plan(s, d, text=text, attached_filenames=['NOTICE.pdf'], **({'template_id': t['id']} if t else {}))
+    assert p['phase'] == 'awaiting_confirmation' and [c['tool'] for c in p['calls']] == tools_expected

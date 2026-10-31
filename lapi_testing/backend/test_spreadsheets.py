@@ -205,3 +205,47 @@ def test_prompt_without_matching_columns_still_uses_the_model(system, monkeypatc
     assert worker.run_once()
     x = s.api.get('/api/extractions/' + e['id']).json()
     assert x['status'] == 'ready' and not x.get('table_rows') and 'records' not in x['result']
+
+
+def test_single_row_and_key_value_sheets_keep_their_values():
+    book = Workbook(); form = book.active; form.title = 'Project'
+    for row in (['Project name', 'Falcon Upgrade'], ['Sponsor', 'Dev Malhotra'], ['Budget INR', 9200000], ['Team size', 14], ['Status', 'Amber']):
+        form.append(row)
+    notes = book.create_sheet('Notes'); notes.append(['Contingency reserve', 'INR 15 lakh'])
+    out = io.BytesIO(); book.save(out)
+    project, note = spreadsheet.read('project.xlsx', out.getvalue())
+    assert project['columns'] == ['Label', 'Value'] and project['rows'][0] == (1, ['Project name', 'Falcon Upgrade'])
+    assert any(n.startswith('key-value sheet') for n in project['notes'])
+    assert note['rows'] == [(1, ['Contingency reserve', 'INR 15 lakh'])] and note['columns'] == ['Column A', 'Column B']
+    assert spreadsheet.record(note, 1, note['rows'][0][1]) == 'Row 1 · Column A: Contingency reserve · Column B: INR 15 lakh'
+    # A two-column table whose values are all numbers keeps its header.
+    sales = spreadsheet.read('sales.csv', b'Name,Amount\nAcme,10\nBeta,20\n')[0]
+    assert sales['columns'] == ['Name', 'Amount']
+
+
+def test_total_rows_are_marked_and_left_out_of_column_statistics():
+    sheet = spreadsheet.read('budget.csv', b'Department,Q1\nEngineering,120.5\nSales,88\nGrand total,208.5\n')[0]
+    text = spreadsheet.record(sheet, 4, sheet['rows'][2][1])
+    assert text.startswith('Row 4 · Department: Grand total · Q1: 208.5 · total row')
+    summary = spreadsheet.summary(sheet)
+    assert '2 data rows and 1 total row' in summary and 'Q1: number, 2 filled, min 88, max 120.5, total 208.5' in summary
+    assert 'Grand total' not in summary.split('Department:')[1].split('\n')[0]
+
+
+def test_fields_that_name_rows_or_whole_table_figures_use_the_model(system, monkeypatch):
+    s = system; d = dataset(s)
+    book = Workbook(); sheet = book.active; sheet.title = 'Budget'
+    sheet.append(['Department', 'Q1', 'Q2'])
+    for row in (['Engineering', 120.5, 134], ['Sales', 88, 92.5], ['Finance', 41, 39.5]): sheet.append(row)
+    out = io.BytesIO(); book.save(out)
+    doc = upload_sheet(s, d, 'budget.xlsx', out.getvalue()).json()['documents'][0]
+    assert worker.run_once()
+    schema = {'type': 'object', 'additionalProperties': False, 'required': ['engineering_q1', 'sales_q2', 'grand_total'],
+              'properties': {'engineering_q1': {'type': ['number', 'null'], 'description': 'Engineering Q1 budget'},
+                             'sales_q2': {'type': ['number', 'null'], 'description': 'Sales Q2 budget'},
+                             'grand_total': {'type': ['number', 'null'], 'description': 'Grand total of all departments'}}}
+    t = s.api.post('/api/templates', json={'name': 'Budget facts', 'schema': schema, 'instructions': '', 'dataset_id': d['id']}).json()
+    e = s.api.post('/api/extractions', json={'document_ids': [doc['id']], 'template_id': t['id'], 'dataset_id': d['id'], 'allow_external': True}).json()
+    assert worker.run_once()
+    x = s.api.get('/api/extractions/' + e['id']).json()
+    assert x['status'] == 'ready' and not x.get('table_rows') and 'records' not in x['result']

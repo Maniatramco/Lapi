@@ -207,9 +207,12 @@ class AgenticChat:
             result = envelope(None, self.seen[key].get('citations'), note='Identical to an earlier call this turn; use that result.')
         elif self.observed_bytes >= self.budget and name in READS:
             result = envelope(None, note='The evidence budget for this turn is used up. Answer from what you already read, or say what is missing.')
+        elif name == 'prepare_workflow' and not self.processing_requested():
+            result = {'error': 'This request is a question, not a processing request: answer it from the evidence. '
+                               'Upload, extraction and re-extraction are proposed only when the person asks for them or attaches files.'}
         else:
             try:
-                result = self.tools.run(name, args)
+                result = self.run_tool(name, args)
             except ValidationError as exc:
                 result = {'error': 'Invalid arguments: ' + '; '.join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:5])}
             except HTTPException as exc:
@@ -224,6 +227,20 @@ class AgenticChat:
                        'duration_ms': round((time.monotonic() - started) * 1000)}
         self.trace.append(observation)
         return content
+
+    def processing_requested(self):
+        """Attached files, or words that ask for processing, in the person's own request."""
+        body = self.tools.body
+        return bool(getattr(body, 'attached_filenames', None)) or bool(PROCESS_WORDS.search(getattr(body, 'text', '') or ''))
+
+    def run_tool(self, name, args):
+        """A search during the short republish after an upload waits instead of failing the turn."""
+        for pause in (3, 6, 9):
+            try: return self.tools.run(name, args)
+            except HTTPException as exc:
+                if name != 'search_knowledge' or 'Knowledge is updating' not in str(exc.detail): raise
+                time.sleep(pause)
+        return self.tools.run(name, args)
 
     def run_calls(self, calls):
         """Independent reads run in parallel; anything else runs in order."""
@@ -377,6 +394,32 @@ def catalog_reads(tools, text):
     return [('list_' + kind, {})]
 
 
+PROCESS_WORDS = re.compile(r"\b(?:upload|uploading|ingest|index|import|extract|extraction|re-?extract|re-?run|rerun|process|run|start)\b", re.I)
+UPLOAD_WORDS = re.compile(r"\b(?:upload|uploading|add|ingest|index|import|attach|process|load|save|store|put|bring|take|read)\b", re.I)
+EXTRACT_WORDS = re.compile(r"\b(?:extract|extraction|pull (?:out )?(?:the )?(?:fields|data|values)|fields?|re-?extract)\b", re.I)
+AFFIRMATIVE = re.compile(r"^\W*(?:yes|yeah|yep|ok(?:ay)?|sure|please|go ahead|proceed|do it|confirm|continue|upload(?: it| them| this| these)?)\b[\w\s,.!]{0,40}$", re.I)
+
+
+def attachment_intent(body, data):
+    """The workflow to propose when the person has attached files (upload, with extraction or
+    re-extraction when their words ask for it), or confirms such a request from the previous turn. None means
+    the turn is an ordinary question for the model. Nothing runs: prepare_workflow only
+    shows the confirmation card, and the person still confirms it."""
+    text = (getattr(body, 'text', '') or '').strip()
+    attached = list(getattr(body, 'attached_filenames', None) or [])
+    if not attached:
+        # "Yes, upload it" after a turn that carried the files: the web app still holds them.
+        users = [m for m in (data or {}).get('messages', []) if m.get('role') == 'user']
+        previous = users[-1] if users else {}
+        if not previous.get('attachments') or not (AFFIRMATIVE.match(text) or UPLOAD_WORDS.search(text)):
+            return None
+        if text.endswith('?') and not AFFIRMATIVE.match(text): return None
+    # With files attached, the person wants them in Lapi: nothing can be answered about a file
+    # before it is uploaded and indexed, so every attached message starts with the upload card.
+    if re.search(r"\bre-?extract", text, re.I): return 'reextract'
+    return 'upload_extract' if EXTRACT_WORDS.search(text) else 'upload'
+
+
 def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_progress=None):
     """Agentic replacement for agent_graph.run on a chat turn. Same return shape."""
     from .agent_graph import conversation
@@ -401,7 +444,17 @@ def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_pr
         if body.attached_filenames: text += '\nAttached document filenames: ' + json.dumps(body.attached_filenames)
         command = _optional('chat_commands', 'expand', tools, text, default=None) or {}
         preload = list(command.get('reads', [])) or catalog_reads(tools, body.text)
-        answer, follow_ups = agent.run(history, command.get('text') or text, question=body.text, preload=preload)
+        intent = None if command else attachment_intent(body, data)
+        if intent:
+            # Attached files with an upload or extraction request go straight to the confirmation
+            # card. The model used to answer these from the application guidance instead.
+            with progress.step('Preparing upload'):
+                tools.v2_prepare_workflow(intent)
+            agent.ended = 'proposal'
+            agent.validation['result'] = 'not_applicable'
+            answer, follow_ups = agent.ended_answer()
+        else:
+            answer, follow_ups = agent.run(history, command.get('text') or text, question=body.text, preload=preload)
         citations_text, citations = answer_check.rich(tools.sources, answer)
         answer = citations_text
         if on_delta:

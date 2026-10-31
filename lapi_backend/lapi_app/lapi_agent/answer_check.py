@@ -6,6 +6,7 @@ sentences are repaired once by the model, then removed, and the answer says how
 many were removed. No sentence is ever "fixed" by attaching a citation the
 model did not choose.
 """
+import itertools
 import json
 import re
 
@@ -118,6 +119,10 @@ def _derivable(value, known, constants=IMPLICIT_NUMBERS):
         for k in constants:
             if any(_close(value, c) for c in (a * k, a / k, a * (1 - k / 100), a * (1 + k / 100))): return True
         if _close(value, 1 - a / 100) or _close(value, 1 + a / 100): return True  # 15% off is "× 0.85"
+    # A total of three or four listed numbers ("117,306 + 114,460 + 116,525 = 348,291").
+    for size in (3, 4):
+        for combo in itertools.combinations(nums[:30], size):
+            if _close(value, sum(combo)): return True
     return False
 
 
