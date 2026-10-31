@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.53 - 31 October 2026
+
+Stop means stop, and a reload keeps your answer (UX review items H1–H3)
+
+- `agent_workspace.py`: `POST /api/agent-v2/plans/{id}/stop` sets a per-plan stop flag (`LIVE_ANSWERS`). The reply's `progress` and `delta` callbacks raise `STOPPED_MESSAGE` once it is set, so the turn ends at the next step boundary on both chat paths and the partial text is saved as `chat.status='aborted'`. A browser disconnect no longer sets the flag: the answer finishes and is saved to the conversation and plan. `plan_public` shows a live answer (`chat.status='streaming'` with the text so far and `answer_workflow`) while `phase='answering'`, and marks a plan left `answering` by a restart as `failed` with a reason; Stop on such a plan records it as aborted. Route policy: `signed_in`.
+- `agent-v2.tsx`: the AbortController exists before the plan request, so Stop is shown from the first moment; Stop posts `/stop` before closing the stream, then follows the plan until the server records its state. After a reload, a plan in `phase='answering'` is followed every 2.5 s with its progress and partial text, blocks the composer and keeps Stop available. The chip no longer defaults to "Response ready" while an answer is being written. Running upload or extraction calls get "Cancel workflow", which confirms what happens, cancels their jobs and refreshes the plan.
+- Tests: stop at the next step with partial text kept, live progress visible to a reload and the finished answer saved, and the stale-answer cases (`test_agent_stream.py`).
+
 ## v26.1.16.52 - 31 October 2026
 
 Extraction takes a second look

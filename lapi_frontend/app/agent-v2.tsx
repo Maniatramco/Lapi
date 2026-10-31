@@ -41,6 +41,8 @@ const goalWorkflow=(plan:Entity)=>{
 type AttachedPrompt=PromptUpload&{fileKey:string;datasetId:string;savedId?:string};
 type Api=(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;
 const active=(plan:Entity)=>plan.calls.some((call:Entity)=>['running','waiting'].includes(call.status))||['queued','running','retry_wait'].includes(plan.goal?.status);
+/** An answer the server is still writing for this plan (after a reload, or after Stop until the server records it). */
+const answerRunning=(plan:Entity)=>plan.phase==='answering'&&!plan.calls.length;
 const nextCall=(plan:Entity)=>plan.calls.findIndex((call:Entity)=>call.status!=='completed');
 const conversationScope=(plan:Entity)=>plan.runtime==='langgraph'?(plan.dataset_id||'general'):(plan.answer_mode==='general'?'general':plan.dataset_id);
 export const explainPlan=(plan:Entity)=>{
@@ -77,6 +79,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
  const [promptProgress,setPromptProgress]=useState<PromptProgress|null>(null);
  const [dragging,setDragging]=useState(false);const dragDepth=useRef(0);
  const [working,setWorking]=useState(''); const [error,setError]=useState(''); const [pendingRequest,setPendingRequest]=useState('');
+ const [liveAnswer,setLiveAnswer]=useState(''); const answeringId=useRef('');
  const [requestStartedAt,setRequestStartedAt]=useState(0);
  const consent=useAgentConsent(api);const approvals=useRef<Record<string,ConsentReceipt>>({});const consentPaused=useRef(new Set<string>());
  const [voiceSupported,setVoiceSupported]=useState(false); const [listening,setListening]=useState(false);
@@ -109,7 +112,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
  const effectivePlanner=chatModels.find((m:Entity)=>m.id===planner)?.id||chatModels.find((m:Entity)=>m.id===datasetConfig?.default_chat_model_id)?.id||chatModels[0]?.id||planner||'';
  const savedPrompt=catalog.templates.find((template:Entity)=>template.id===savedPromptId&&(!template.parent_id||template.parent_id===dataset));
  const clearSavedPrompt=()=>{rememberSavedPrompt(sessionStorage,key+'-prompts',dataset,'');setSavedPromptId('');setPromptNotice('');};
- const attachmentsBlocked=Boolean(working)||onboardingBusy||plans.some(active)||Boolean(promptPreview);
+ const attachmentsBlocked=Boolean(working)||onboardingBusy||plans.some(active)||plans.some(answerRunning)||Boolean(promptPreview);
  const documentFiles=files.filter(file=>!isJsonAttachment(file)||jsonDocuments[attachmentKey(file)]);
  const unresolvedJson=files.filter(file=>isJsonAttachment(file)&&!jsonDocuments[attachmentKey(file)]&&promptAttachment?.fileKey!==attachmentKey(file));
  const removeAttachment=(file:File)=>{
@@ -205,7 +208,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
    // Recover goals only when there is no saved chat choice for this session.
    if(!ids.length&&!opened&&saved===null){const goals=await api('/agent-v2/goals','GET',undefined,undefined,true);if(cancelled)return;ids=goals.filter((goal:Entity)=>!['completed','cancelled'].includes(goal.status)).map((goal:Entity)=>goal.id);if(!ids.length&&goals[0])ids=[goals[0].id];ids.reverse();}
    let lastPlan:Entity|undefined;
-   for(const id of ids){const plan=await api(`/agent-v2/plans/${id}`,'GET',undefined,undefined,true);if(cancelled)return;lastPlan=plan;replacePlan(plan);if(plan.conversation_id)conversations.current[conversationScope(plan)]=plan.conversation_id;setDataset(plan.dataset_id);setPlanner(plan.planner.id);setDocuments(plan.calls.some((c:Entity)=>c.tool==='upload')?[]:plan.document_ids||[]);}
+   for(const id of ids){const plan=await api(`/agent-v2/plans/${id}`,'GET',undefined,undefined,true);if(cancelled)return;lastPlan=plan;replacePlan(plan);if(answerRunning(plan))setLiveAnswer(plan.id);if(plan.conversation_id)conversations.current[conversationScope(plan)]=plan.conversation_id;setDataset(plan.dataset_id);setPlanner(plan.planner.id);setDocuments(plan.calls.some((c:Entity)=>c.tool==='upload')?[]:plan.document_ids||[]);}
    if(lastPlan?.template_id&&promptSelections(sessionStorage.getItem(key+'-prompts'))[lastPlan.dataset_id]===undefined){rememberSavedPrompt(sessionStorage,key+'-prompts',lastPlan.dataset_id,lastPlan.template_id);setSavedPromptId(restoreSavedPrompt(sessionStorage.getItem(key+'-prompts'),result.templates,lastPlan.dataset_id)?.id||'');}
    const preferred=assistantDatasetPreference(sessionStorage,username,result.datasets,lastPlan?.dataset_id||restoredDataset);
    setDataset(preferred);setDocuments(previous=>previous.filter(id=>result.documents.some((item:Entity)=>item.id===id&&item.parent_id===preferred)));setScopeReady(true);
@@ -292,8 +295,40 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
    return stream;
   });return()=>streams.forEach(stream=>stream.close());
  },[activeIds,replacePlan]);
+ // An answer the server is still writing (after a reload, or after Stop) is followed from the
+ // saved plan until the server records its final state; the Stop button stays available meanwhile.
+ useEffect(()=>{
+  if(!liveAnswer)return;
+  let ended=false;let timer:ReturnType<typeof setTimeout>|undefined;
+  const follow=async()=>{
+   try{
+    const plan=await api(`/agent-v2/plans/${liveAnswer}`,'GET',undefined,undefined,true);
+    if(ended)return;
+    // A plan the server has not written anything to yet must not replace what the page already shows.
+    if(plan.chat||plan.answer_workflow||plan.calls.length)replacePlan(plan);
+    if(answerRunning(plan)){timer=setTimeout(follow,2500);return;}
+    if(plan.conversation_id)conversations.current[conversationScope(plan)]=plan.conversation_id;
+   }catch(e){if(!ended)setError(e instanceof Error?e.message:'Could not follow the answer.');}
+   if(!ended)setLiveAnswer('');
+  };
+  timer=setTimeout(follow,0);
+  return()=>{ended=true;clearTimeout(timer);};
+ },[liveAnswer,api,replacePlan]);
+ const stopAnswer=async()=>{
+  const id=liveAnswer||answeringId.current;
+  // Tell the server first, so model and tool calls stop at the next step and the partial text is kept.
+  if(id){try{await api(`/agent-v2/plans/${id}/stop`,'POST',undefined,undefined,true);}catch{}}
+  // Closing the stream ends the send; its error path then follows the plan until the server records the stop.
+  answerController.current?.abort();
+ };
+ const cancelWorkflow=async(plan:Entity)=>{
+  if(!window.confirm('Cancel this workflow?\n\nQueued and running jobs are cancelled. Cancellation is best-effort: a request already sent to a model provider may continue and incur usage charges.\n\nUploaded documents and completed results are kept. You can retry from this request afterwards.'))return;
+  const ids=plan.calls.filter((call:Entity)=>['running','waiting'].includes(call.status)).flatMap((call:Entity)=>call.job_ids||[]);
+  for(const id of ids){try{await api(`/jobs/${id}/cancel`,'POST',undefined,undefined,true);}catch{}}
+  try{replacePlan(await api(`/agent-v2/plans/${plan.id}`,'GET',undefined,undefined,true));}catch(e){setError(e instanceof Error?e.message:'Could not refresh the workflow.');}
+ };
  const send=async()=>{
-  if(lock.current||onboardingBusy||promptPreview||(!text.trim()&&!files.length)||plans.some(active))return;
+  if(lock.current||onboardingBusy||promptPreview||(!text.trim()&&!files.length)||plans.some(active)||plans.some(answerRunning))return;
   if(isManageCommand(text)){if(!dataset){setError('Choose a collection above, then use /Manage to edit it here.');return;}setError('');setManaging(dataset);setText('');followLatest();return;}
   if(isStartCommand(text)){setText('');openQuickStart();return;}  // Guided first workflow, from the agent.
   const issue=agentInputIssue(text);if(issue){setError('');setMentionClosed(false);composer.current?.focus();return;}
@@ -336,10 +371,12 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
    const combined=documentFiles.length?mergeAgentAttachments(inherited,documentFiles,maxUploadMb):{files:inherited,error:''};if(combined.error)throw new Error(combined.error);
    const workflowFiles=combined.files;
    const earlierRequest=unfinished?`${unfinished.request}\nPending tools from the unfinished plan: ${unfinished.calls.filter((call:Entity)=>call.status==='pending').map((call:Entity)=>call.tool).join(', ')}`.slice(0,12000):'';
-   const plan=await api('/agent-v2/plans','POST',{text:request,agent_operation:requestedOperation||null,stream_answers:true,conversation_id:conversations.current[dataset||'general']||'',earlier_request:earlierRequest,completed_tools:unfinished?.calls.filter((call:Entity)=>call.status==='completed').map((call:Entity)=>call.tool)||[],attached_filenames:workflowFiles.map(file=>file.name),planner_model_id:effectivePlanner,dataset_id:unfinished?.dataset_id||dataset,document_ids:onboardingRequest?[]:references.length?references:unfinished?.document_ids||documents,answer_scope:documents.length?'documents':'auto',template_id:onboardingRequest?'':attachedTemplateId||unfinished?.template_id||'',submitted_prompt_id:onboardingRequest?'':promptAttachment?attachedTemplateId:retrySubmittedPrompt.current,allow_external:external},undefined,true);
+   // Stop is available from the first moment: the controller exists before the request is planned.
+   const planController=new AbortController();answerController.current=planController;
+   const plan=await api('/agent-v2/plans','POST',{text:request,agent_operation:requestedOperation||null,stream_answers:true,conversation_id:conversations.current[dataset||'general']||'',earlier_request:earlierRequest,completed_tools:unfinished?.calls.filter((call:Entity)=>call.status==='completed').map((call:Entity)=>call.tool)||[],attached_filenames:workflowFiles.map(file=>file.name),planner_model_id:effectivePlanner,dataset_id:unfinished?.dataset_id||dataset,document_ids:onboardingRequest?[]:references.length?references:unfinished?.document_ids||documents,answer_scope:documents.length?'documents':'auto',template_id:onboardingRequest?'':attachedTemplateId||unfinished?.template_id||'',submitted_prompt_id:onboardingRequest?'':promptAttachment?attachedTemplateId:retrySubmittedPrompt.current,allow_external:external},planController.signal,true);
    if(retryPlanId.current){const retried=retryPlanId.current;setPlans(previous=>previous.map(item=>item.id===retried?{...item,superseded:true}:item));}
    retrySubmittedPrompt.current='';retryPlanId.current='';
-   accepted=true;plan.messageAttachments=[...inherited,...outgoing].map(file=>({name:file.name,size:file.size}));
+   accepted=true;answeringId.current=plan.id;plan.messageAttachments=[...inherited,...outgoing].map(file=>({name:file.name,size:file.size}));
    if(plan.phase==='queued'||plan.calls.some((call:Entity)=>call.tool==='upload'))submittedFiles.current[plan.id]=workflowFiles;
    if(onboardingRequest&&promptAttachment)submittedOnboardingPrompts.current[plan.id]=promptAttachment;
    if(unfinished&&plan.calls.length)delete submittedFiles.current[unfinished.id];
@@ -348,7 +385,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
    const ids=plans.filter(p=>!p.historical).map(p=>p.id).concat(plan.id).slice(-30);sessionStorage.setItem(key+'-history',JSON.stringify(ids));sessionStorage.setItem(key,plan.id);replacePlan(plan);setPendingRequest('');setPendingFiles([]);setPromptProgress(null);
    if(plan.calls.length)return;
    answering=true;setWorking('Answering…');const connectedAt=Date.now();update(plan.id,{chat:{text:'',status:'streaming',citations:[]},answer_workflow:{status:'running',started_at:connectedAt,steps:[{id:'connecting',label:'Connecting to agent',status:'running',started_at:connectedAt}]}});
-   const controller=new AbortController();answerController.current=controller;
+   const controller=planController;
    const response=await stream(`/agent-v2/plans/${plan.id}/reply`,{conversation_id:conversations.current[conversationScope(plan)]||'',document_model_id:planner||null,allow_external:external},controller.signal);
    if(!response.ok){const data=await response.json();throw new Error(typeof data.detail==='string'?data.detail:'The answer could not start.');}
    if(!response.body)throw new Error('The answer stream is unavailable.');
@@ -377,10 +414,12 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
    if(!(e instanceof Error&&e.name==='AbortError'))setError(e instanceof Error?e.message:'The request could not finish.');
    const id=sessionStorage.getItem(key);if(answering&&id){
     setPlans(previous=>previous.map(p=>p.id===id&&p.chat?.status==='streaming'?{...p,chat:{...p.chat,status:e instanceof Error&&e.name==='AbortError'?'aborted':'failed'},answer_workflow:p.answer_workflow?{...p.answer_workflow,status:e instanceof Error&&e.name==='AbortError'?'aborted':'failed',steps:p.answer_workflow.steps.map((s:Entity)=>s.status==='running'?{...s,status:e instanceof Error&&e.name==='AbortError'?'cancelled':'failed',duration_ms:Math.max(0,Date.now()-s.started_at)}:s)}:undefined}:p));
-    try{const saved=await api(`/agent-v2/plans/${id}`,'GET',undefined,undefined,true);if(saved.chat)replacePlan(saved);if(saved.conversation_id)conversations.current[conversationScope(saved)]=saved.conversation_id;}catch{}
+    try{const saved=await api(`/agent-v2/plans/${id}`,'GET',undefined,undefined,true);if(saved.chat)replacePlan(saved);if(saved.conversation_id)conversations.current[conversationScope(saved)]=saved.conversation_id;
+     // After Stop the server still has to record the stopped state: follow the plan until it does.
+     if(answerRunning(saved))setLiveAnswer(id);}catch{}
    }
   }
-  finally{answerController.current=null;lock.current=false;if(mounted.current){setPendingRequest('');setPendingFiles([]);setWorking('');}}
+  finally{answerController.current=null;answeringId.current='';lock.current=false;if(mounted.current){setPendingRequest('');setPendingFiles([]);setWorking('');}}
  };
  const retryAnswer=(plan:Entity)=>{
   if(attachmentsBlocked)return;
@@ -422,7 +461,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
  };
  // The conversation rail and context panel only read state this screen already owns.
  const savedConversation=typeof sessionStorage==='undefined'?'':sessionStorage.getItem(key+'-conversation')||'';
- const busyNow=Boolean(working)||onboardingBusy||plans.some(active);
+ const busyNow=Boolean(working)||onboardingBusy||plans.some(active)||plans.some(answerRunning);
  useEffect(()=>{let live=true;void api('/conversations','GET',undefined,undefined,true).then(result=>{if(live&&Array.isArray(result))setHistory(result);}).catch(()=>{});return()=>{live=false;};},[api,plans.length,catalogRevision]);
  const openSaved=(conversation:Entity)=>void api(`/conversations/${conversation.id}`,'GET',undefined,undefined,true).then(saved=>{restoreConversation(saved);sessionStorage.setItem(key+'-conversation',conversation.id);sessionStorage.removeItem(key);sessionStorage.removeItem(key+'-history');setHistoryOpen(false);setError('');}).catch(e=>setError(e.message));
  const latestWorkflow=[...plans].reverse().find(plan=>plan.calls?.length);
@@ -488,7 +527,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
     const count=call?.tool==='upload'?uploadFiles.length:(plan.recovery_document_ids?.length?plan.document_ids.length:plan.calls.flatMap((c:Entity)=>c.uploaded_document_ids||[]).length||plan.document_ids.length);
     const hasExtraction=plan.calls.some((c:Entity)=>c.tool!=='upload');
     const failed=plan.calls.some((c:Entity)=>c.status==='failed');
-    return <article key={plan.id} className="agent-v2-exchange"><AgentRequest text={plan.request} attachments={plan.messageAttachments||(plan.attached_filenames||[]).map((name:string)=>({name}))}/><div className="agent-v2-response"><div className="agent-v2-speaker"><AgentPresence task={plan.superseded?null:planActivity(plan,['queued','running','retry_wait'].includes(plan.goal?.status)?goalWorkflow(plan):plan.answer_workflow||plan.chat?.answer_workflow)} size={24}/><strong>Lapi Agent</strong><AgentAnswerWorkflow workflow={['queued','running','retry_wait'].includes(plan.goal?.status)?goalWorkflow(plan):plan.answer_workflow||plan.chat?.answer_workflow} status={plan.chat?.status||'completed'}/><span title={plan.chat?.model_selection?.model_name||plan.planner.name}>{plan.chat?.model_selection?.model_name||plan.planner.name}</span></div>{(needInputs||(!plan.calls.length&&!plan.chat&&!plan.reply_started))&&<p className="agent-v2-reply">{explainPlan(plan)}</p>}
+    return <article key={plan.id} className="agent-v2-exchange"><AgentRequest text={plan.request} attachments={plan.messageAttachments||(plan.attached_filenames||[]).map((name:string)=>({name}))}/><div className="agent-v2-response"><div className="agent-v2-speaker"><AgentPresence task={plan.superseded?null:planActivity(plan,['queued','running','retry_wait'].includes(plan.goal?.status)?goalWorkflow(plan):plan.answer_workflow||plan.chat?.answer_workflow)} size={24}/><strong>Lapi Agent</strong><AgentAnswerWorkflow workflow={['queued','running','retry_wait'].includes(plan.goal?.status)?goalWorkflow(plan):plan.answer_workflow||plan.chat?.answer_workflow} status={plan.chat?.status||(answerRunning(plan)?'running':'completed')}/><span title={plan.chat?.model_selection?.model_name||plan.planner.name}>{plan.chat?.model_selection?.model_name||plan.planner.name}</span></div>{(needInputs||(!plan.calls.length&&!plan.chat&&!plan.reply_started))&&<p className="agent-v2-reply">{explainPlan(plan)}</p>}
      {plan.onboarding&&catalog.can_onboard_datasets&&<AgentOnboarding initialDocuments={submittedFiles.current[plan.id]||[]} initialPrompt={submittedOnboardingPrompts.current[plan.id]} onReview={onReview} api={api} models={catalog.models} proposal={onboardingDraft(plan.request||'',plan.onboarding)} planId={plan.id} workflowId={plan.onboarding_workflow_id||''} defaults={datasetConfig} storageKey={key+'-onboarding-'+plan.id} onBusy={setOnboardingBusy} onReady={()=>{onWorkspaceChanged?.();void loadCatalog().catch(e=>setError(e.message));void api(`/agent-v2/plans/${plan.id}`,'GET',undefined,undefined,true).then(replacePlan).catch(e=>setError(e.message));}} onEdit={id=>setManaging(id)} onUse={id=>{setDataset(id);setDocuments([]);setSavedPromptId('');rememberAssistantDataset(sessionStorage,username,id);}}/>}
      {['onboard_extract','reextract'].includes(plan.agent)&&plan.calls.some((call:Entity)=>call.publication_error)&&<div className="agent-v2-recovery"><p>Processing results are saved. Retry the knowledge update to finish this workflow.</p><ActionButton className="btn" disabled={Boolean(working)||onboardingBusy||plans.some(active)} onClick={()=>void retryKnowledge(plan)} label="Retry knowledge update" action="retry"/></div>}
      {plan.prompt_receipt&&<AgentPromptProgress progress={{name:plan.prompt_receipt.name,receipt:plan.prompt_receipt,phase:plan.chat?.status==='completed'||plan.calls.length?'completed':['failed','aborted'].includes(plan.chat?.status)?plan.chat.status:plan.chat?.status==='streaming'?'responding':'preparing'}}/>}
@@ -529,6 +568,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
       <button className="btn primary" disabled={attachmentsBlocked||!plan.dataset_id||(hasExtraction&&count>1&&!plan.extraction_mode)||(call.tool==='upload'?(!uploadFiles.length||(!boundFiles?.length&&Boolean(unresolvedJson.length))||(hasExtraction&&!plan.template_id)):(!count||!plan.template_id))} onClick={()=>void perform(plan,index)}>{call.tool==='upload'?(hasExtraction?(plan.calls.some((c:Entity)=>c.tool==='reextract')?'Confirm upload and re-extraction':'Confirm upload and extraction'):'Confirm upload'):call.tool==='reextract'?'Confirm re-extraction':'Confirm extraction'}</button>
      </div>}
      {plan.calls.some((call:Entity)=>['running','waiting'].includes(call.status))&&<ActionButton className="text-button" onClick={()=>void api(`/agent-v2/plans/${plan.id}`,'GET',undefined,undefined,true).then(replacePlan).catch(e=>setError(e.message))} label="Check status" action="status"/>}
+     {!plan.superseded&&plan.calls.some((call:Entity)=>['running','waiting'].includes(call.status)&&(call.job_ids||[]).length>0)&&<button className="text-button" onClick={()=>void cancelWorkflow(plan)}>Cancel workflow</button>}
      {plan.superseded&&<p className="small muted">Replaced by your next request. Pending tools will not start.</p>}
      {plan.goal?.answer&&<><div className="agent-v2-speaker"><AgentLogo size={20}/><strong>Lapi Agent</strong><AgentAnswerWorkflow workflow={plan.goal.answer.answer_workflow} status={plan.goal.answer.status}/></div><AgentChatAnswer message={plan.goal.answer} api={api} onError={setError} onReview={onReview}/></>}
     </div></article>;
@@ -584,7 +624,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
      <label className="agent-v2-model-control"><span>Agent Model</span><select aria-label="Agent Model" value={effectivePlanner} disabled={Boolean(working)||onboardingBusy||plans.some(active)||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading models…':catalogError?'Models unavailable':'Choose an Agent Model'):'Choose an Agent Model'}</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select>{catalogLoaded.current&&!catalogLoading&&!chatModels.length&&<small className="agent-v2-model-empty">{`No chat model is on for ${device==='phone'?'phones':'computers'}. An administrator can turn one on in Settings › Enabled models.`}</small>}</label>
      <div className="agent-v2-send-controls">
       <button className={`btn icon${listening?' primary':''}`} aria-label={listening?'Stop listening':'Speak your request'} title={voiceSupported?'Speech input':'Speech input unavailable in this browser'} disabled={!voiceSupported||Boolean(working)} onClick={toggleMic}><Mic size={20}/></button>
-      {working&&answerController.current?<button title="Stop answer" className="btn icon agent-v2-send" aria-label="Stop answer" onClick={()=>answerController.current?.abort()}><Square size={18}/></button>:<button title="Send agent request" className="btn icon agent-v2-send" aria-label="Send agent request" disabled={(!text.trim()&&!files.length)||Boolean(mention||commandMention)||attachmentsBlocked||Boolean(unresolvedJson.length)||Boolean(inputIssue)} onClick={()=>void send()}><ArrowUp size={21}/></button>}
+      {(working&&answerController.current)||liveAnswer?<button title="Stop answer" className="btn icon agent-v2-send" aria-label="Stop answer" onClick={()=>void stopAnswer()}><Square size={18}/></button>:<button title="Send agent request" className="btn icon agent-v2-send" aria-label="Send agent request" disabled={(!text.trim()&&!files.length)||Boolean(mention||commandMention)||attachmentsBlocked||Boolean(unresolvedJson.length)||Boolean(inputIssue)} onClick={()=>void send()}><ArrowUp size={21}/></button>}
      </div>
     </div>
    </div>

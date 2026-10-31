@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.52",
+  "version": "26.1.16.53",
   "releases": [
+    {
+      "version": "26.1.16.53",
+      "date": "2026-10-31",
+      "title": "Stop means stop, and a reload keeps your answer",
+      "changes": [
+        "Stop now reaches the server: model and tool calls end at the next step and the partial answer is kept, instead of running on unseen.",
+        "Closing or reloading the page no longer discards an answer in progress. The answer finishes, and the page picks it up again with its progress and lets you stop it.",
+        "Stop is available from the moment you send, and a running upload or extraction workflow has a Cancel workflow action that says what is kept."
+      ]
+    },
     {
       "version": "26.1.16.52",
       "date": "2026-10-31",

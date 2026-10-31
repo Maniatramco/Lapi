@@ -194,3 +194,55 @@ def test_partial_stream_failure_never_replays_visible_text(monkeypatch):
     monkeypatch.setattr(httpx,'Client',lambda **kwargs:original(transport=httpx.MockTransport(handle),**kwargs))
     with pytest.raises(providers.ProviderError) as caught:agent_stream.qwen_request({'model':'qwen3:4b'},60,pieces.append)
     assert len(seen)==1 and ''.join(pieces)=='Partial answer' and 'private' not in str(caught.value)
+
+
+def test_stop_request_ends_the_answer_at_the_next_step_and_keeps_partial_text(system,monkeypatch):
+    from lapi_app.lapi_agent import agent_workspace
+    s=system;d=dataset(s);setup_graph(monkeypatch);calls=[];ids={}
+    def complete(messages,tools,on_token=None):
+        calls.append(1);on_token('Partial ')
+        agent_workspace.LIVE_ANSWERS[ids['plan']]['stopped'].set()  # What POST /stop does while the answer runs.
+        return {'text':'Partial answer.','calls':[]}
+    monkeypatch.setattr(agent_model,'complete',complete)
+    p=plan(s,d,text='Say hello',stream_answers=True);ids['plan']=p['id']
+    frames=events(reply(s,p))
+    assert len(calls)==1 and 'conversation_id' not in frames[-1]
+    assert frames[-1]['message']['status']=='aborted' and frames[-1]['message']['text']=='Partial '
+    saved=s.api.get('/api/agent-v2/plans/'+p['id']).json()
+    assert saved['phase']=='aborted' and saved['chat']['status']=='aborted' and saved['chat']['text']=='Partial '
+    assert saved['answer_workflow']['status']=='aborted' and all(step['status']!='running' for step in saved['answer_workflow']['steps'])
+    assert p['id'] not in agent_workspace.LIVE_ANSWERS
+
+
+def test_a_reloaded_page_sees_the_answer_in_progress_and_the_finished_answer(system,monkeypatch):
+    from lapi_app.lapi_agent import agent_workspace
+    s=system;d=dataset(s);setup_graph(monkeypatch);seen={};ids={}
+    def complete(messages,tools,on_token=None):
+        on_token('Hello ')
+        seen['live']=agent_workspace.plan_public(main.get_record(ids['plan'],s.owner,'agent_plan'),main)
+        return {'text':'Hello world.','calls':[]}
+    monkeypatch.setattr(agent_model,'complete',complete)
+    p=plan(s,d,text='Say hello',stream_answers=True);ids['plan']=p['id']
+    frames=events(reply(s,p))
+    live=seen['live']
+    assert live['phase']=='answering' and live['chat']['status']=='streaming' and live['chat']['text']=='Hello '
+    assert live['answer_workflow']['steps'][-1]['label']=='Generating response' and live['answer_workflow']['steps'][-1]['status']=='running'
+    assert frames[-1]['message']['status']=='completed'
+    saved=s.api.get('/api/agent-v2/plans/'+p['id']).json()
+    assert saved['chat']['text']=='Hello world.' and saved['chat']['status']=='completed'
+
+
+def test_stop_marks_a_stale_answer_aborted_and_refuses_when_nothing_runs(system,monkeypatch):
+    s=system;d=dataset(s);setup_graph(monkeypatch)
+    p=plan(s,d,text='Say hello',stream_answers=True)
+    assert s.api.post('/api/agent-v2/plans/'+p['id']+'/stop').status_code==409
+    # A plan the service left 'answering' when it restarted: Stop records it as aborted.
+    record=main.get_record(p['id'],s.owner,'agent_plan');data=core.store.json(record.ref);data['phase']='answering';core.store.put_json(record.ref,data)
+    r=s.api.post('/api/agent-v2/plans/'+p['id']+'/stop');assert r.status_code==200 and r.json()['phase']=='aborted'
+    assert s.api.get('/api/agent-v2/plans/'+p['id']).json()['chat']['status']=='aborted'
+    # Reading such a plan shows a failed answer with a reason, and the state sticks.
+    data=core.store.json(record.ref);data.update(phase='answering',chat=None);core.store.put_json(record.ref,data)
+    shown=s.api.get('/api/agent-v2/plans/'+p['id']).json()
+    assert shown['phase']=='failed' and shown['chat']['status']=='failed' and 'restarted' in shown['chat']['error']['detail']
+    assert s.api.get('/api/agent-v2/plans/'+p['id']).json()['phase']=='failed'
+    assert s.api.post('/api/agent-v2/plans/'+p['id']+'/stop').status_code==409

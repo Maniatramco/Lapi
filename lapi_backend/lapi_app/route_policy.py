@@ -239,6 +239,7 @@ POLICY = {
     ('POST', '/api/agent-v2/plans'): 'signed_in',
     ('GET', '/api/agent-v2/plans/{id}'): 'signed_in',
     ('POST', '/api/agent-v2/plans/{id}/reply'): 'signed_in',
+    ('POST', '/api/agent-v2/plans/{id}/stop'): 'signed_in',
     ('GET', '/api/agent-v2/plans/{id}/events'): 'signed_in',
     ('POST', '/api/agent-v2/plans/{id}/knowledge/retry'): 'signed_in',
     ('POST', '/api/agent-v2/plans/{id}/goal'): 'signed_in',
