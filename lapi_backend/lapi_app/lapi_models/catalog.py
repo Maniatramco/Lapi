@@ -19,5 +19,7 @@ def choices():
              'region': {'bedrock': 'us-east-1', 'vertex': 'us-central1', 'oci': 'us-chicago-1'}.get(protocol, ''),
              'auth_modes': list(AUTH_MODES[protocol]),
              # OCR reads images through the OpenAI and Gemini adapters only.
-             'categories': ['chat'] if protocol == 'anthropic' else ['chat', 'extraction', 'embedding'] + (['ocr'] if id in ('openai', 'gemini') else [])}
+             'categories': ['chat'] if protocol == 'anthropic' else ['chat', 'extraction', 'embedding'] + (['ocr'] if id in ('openai', 'gemini') else [])
+                           # Decisions is an OpenAI API (POST /v1/decisions).
+                           + (['decisions'] if id == 'openai' else [])}
             for id, name, protocol, endpoint in PROVIDERS]

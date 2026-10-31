@@ -39,7 +39,7 @@ export function EnabledModels({models,api,onChanged,onRegistration}:{models:Enti
      <span className="enabled-models-uses">{usesOf(m).map((u:string)=><span key={u}>{u}</span>)}{roles.map(r=><span key={r} className="is-default">{r} Default</span>)}</span>
      {on&&<span className="enabled-models-devices" role="group" aria-label={`Where ${m.name} is offered`}>{(['phone','computer'] as Device[]).map(d=>{const pressed=devicesOf(m).includes(d),last=pressed&&devicesOf(m).length===1;const Icon=d==='phone'?Smartphone:Monitor;
       return <button key={d} type="button" aria-pressed={pressed} disabled={Boolean(saving)||last} title={last?'Offered on one device at least: turn the model off instead':undefined} onClick={()=>place(m,d)}><Icon size={16} aria-hidden="true"/>{d==='phone'?'Phone':'Computer'}</button>;})}</span>}
-     {locked&&<small>Choose another {roles.join(' and ')} Default before turning it off.</small>}
+     {locked&&<small>{roles.length===1&&roles[0]==='Decisions'?'Choose Stop using next to its Decisions Default in Model Registration before turning it off.':`Choose another ${roles.join(' and ')} Default before turning it off.`}</small>}
     </div>
     <button type="button" role="switch" aria-checked={on} aria-label={`${m.name} ${on?'on':'off'}`} className="enabled-models-switch" disabled={Boolean(saving)||locked} onClick={()=>void flip(m)}>
      <span aria-hidden="true"/>

@@ -4,7 +4,7 @@ type CostSummary={status?:string;totals?:{currency:string;amount:string}[];price
 type Usage={input_tokens?:unknown;output_tokens?:unknown;cached_input_tokens?:unknown;cache_write_tokens?:unknown;reasoning_tokens?:unknown;complete?:boolean;source?:string;model_calls?:number;reported_calls?:number;steps?:Step[];cost?:CostSummary};
 export type TokenStepRow={stage:string;model:string;input:string;cached:string;output:string;reasoning:string;latency:string;cost:string};
 
-export const STAGE_LABELS:Record<string,string>={prefetch_embedding:'Prefetch embedding',tool_step:'Tool step',final_answer:'Final answer',repair:'Repair',optimize:'Optimize',extraction:'Extraction',reindex:'Reindex',memory:'Memory',chat:'Chat'};
+export const STAGE_LABELS:Record<string,string>={prefetch_embedding:'Prefetch embedding',tool_step:'Tool step',final_answer:'Final answer',repair:'Repair',optimize:'Optimize',extraction:'Extraction',reindex:'Reindex',memory:'Memory',chat:'Chat',decisions:'Decisions'};
 const valid=(value:unknown):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
 const count=(value:unknown)=>valid(value)?value.toLocaleString('en-US'):null;
 const SYMBOLS:Record<string,string>={USD:'$',EUR:'€',GBP:'£',JPY:'¥',INR:'₹'};

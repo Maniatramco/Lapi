@@ -137,5 +137,6 @@ def validation_message(reason):
         'missing_citations':'The model did not attach source references to its answer.',
         'unknown_citations':'The model referenced sources outside the retrieved evidence.',
         'unsupported_completeness':'The model claimed completeness despite missing saved values.',
-        'incorrect_exact_count':'The model did not preserve the verified catalog count.'}
+        'incorrect_exact_count':'The model did not preserve the verified catalog count.',
+        'unsupported_claims':'The answer included statements its cited sources do not support.'}
     return descriptions.get(reason,'The answer could not be validated.')+' One repair attempt also failed. Retry the question; your data is unchanged.'

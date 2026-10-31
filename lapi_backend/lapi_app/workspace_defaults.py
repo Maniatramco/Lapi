@@ -1,6 +1,6 @@
 """Workspace Default models and the single active knowledge collection pointer.
 
-One Default per role (Chat, Extraction, Embedding, OCR) lives in one database row so
+One Default per role (Chat, Extraction, Embedding, OCR, Decisions) lives in one database row so
 every API pod and worker agree. Datasets may override Chat, Extraction and OCR; they
 never choose an embedding model. The Embedding Default builds the one knowledge
 index. Changing it deletes the current index immediately and reindexes every
@@ -20,7 +20,7 @@ from . import core
 from .database import timestamp_type
 
 WORKSPACE = 'workspace'
-ROLES = {'chat': 'chat_model_id', 'extraction': 'extraction_model_id', 'embedding': 'embedding_model_id', 'ocr': 'ocr_model_id'}
+ROLES = {'chat': 'chat_model_id', 'extraction': 'extraction_model_id', 'embedding': 'embedding_model_id', 'ocr': 'ocr_model_id', 'decisions': 'decisions_model_id'}
 CONFIRMATION = 'I understand the knowledge index will be deleted and rebuilt'
 
 
@@ -32,6 +32,8 @@ class WorkspaceDefaults(core.Base):
     embedding_model_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     # Added after the table existed; relational.upgrade_legacy adds it to older databases.
     ocr_model_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # OpenAI Decisions API model; optional. Unset means every caller keeps its own rules.
+    decisions_model_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     # Pinned model/profile versions of the Embedding Default (references only, no secrets).
     embedding_snapshot_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     # The only knowledge collection any code path may write or read.
@@ -62,7 +64,7 @@ def _read():
     with core.Session() as session:
         row = session.get(WorkspaceDefaults, WORKSPACE)
         if row is None: return {}
-        return {'chat': row.chat_model_id, 'extraction': row.extraction_model_id, 'embedding': row.embedding_model_id, 'ocr': row.ocr_model_id,
+        return {'chat': row.chat_model_id, 'extraction': row.extraction_model_id, 'embedding': row.embedding_model_id, 'ocr': row.ocr_model_id, 'decisions': row.decisions_model_id,
                 'embedding_snapshot': json.loads(_text(row.embedding_snapshot_json)) if row.embedding_snapshot_json else None,
                 'active_collection': row.active_collection,
                 'reindex': json.loads(_text(row.reindex_json)) if row.reindex_json else None,
@@ -143,7 +145,8 @@ def unset_message():
 
 def current():
     saved = _read(); pinned = embedding()
-    return {'chat': saved.get('chat'), 'extraction': saved.get('extraction'), 'embedding': pinned['model_id'] if pinned else None, 'ocr': saved.get('ocr')}
+    return {'chat': saved.get('chat'), 'extraction': saved.get('extraction'), 'embedding': pinned['model_id'] if pinned else None, 'ocr': saved.get('ocr'),
+            'decisions': saved.get('decisions')}
 
 
 def default_id(role):
@@ -205,6 +208,10 @@ def require_eligible(model, role):
         from .lapi_models import cloud_ocr
         if not cloud_ocr.ready(data, {'settings': cfg, 'provider_model': data['provider_model']}):
             raise HTTPException(409, model.name + ' cannot be the OCR Default yet. OCR needs an OpenAI or Gemini model whose Test connection read the sample image; test it with OCR ticked and save.')
+    if role == 'decisions':
+        from .lapi_models import decisions
+        if not decisions.openai_connection(cfg):
+            raise HTTPException(409, model.name + ' cannot be the Decisions Default. ' + decisions.PROVIDERS)
     return data
 
 
@@ -466,12 +473,13 @@ def public(actor=None):
     values = current()
     status = knowledge.index_status(actor)
     return {'chat_model_id': values['chat'], 'extraction_model_id': values['extraction'], 'embedding_model_id': values['embedding'], 'ocr_model_id': values['ocr'],
+            'decisions_model_id': values['decisions'],
             'index': status, 'impact': impact(), 'confirmation': CONFIRMATION}
 
 
 class DefaultInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    role: Literal['chat', 'extraction', 'embedding', 'ocr']
+    role: Literal['chat', 'extraction', 'embedding', 'ocr', 'decisions']
     acknowledge_index_rebuild: bool = False
     allow_external: bool = False
 
@@ -520,6 +528,14 @@ def install(app, auth):
     def choose(id: str, body: DefaultInput, actor=Depends(auth)):
         access.require_admin(actor)
         set_default(id, body.role, actor, body.acknowledge_index_rebuild, body.allow_external)
+        return public(actor)
+
+    @app.delete('/api/workspace/defaults/decisions')
+    def stop_decisions(actor=Depends(auth)):
+        """Decisions is optional: clearing it returns every caller to its own rules."""
+        access.require_admin(actor)
+        with core.document_lock('workspace-defaults'):
+            _write(actor, decisions_model_id=None)
         return public(actor)
 
     @app.put('/api/model-registrations/{id}/enabled')

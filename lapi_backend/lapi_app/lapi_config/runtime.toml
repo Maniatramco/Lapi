@@ -94,6 +94,14 @@ LAPI_OCR_FORCE_CPU = false
 LAPI_OCR_KEEP_ALIVE = "0"
 # Dataset-mapped Gemini OCR still uses its pinned extraction registration.
 
+[decisions]
+# OpenAI Decisions API (POST /v1/decisions), used only when a Decisions Default is set.
+LAPI_DECISIONS_TIMEOUT = 20 # seconds per request
+LAPI_DECISIONS_MAX_CLAIMS = 40 # cited sentences checked per answer
+LAPI_DECISIONS_SUPPORT_PERCENT = 50 # a cited sentence below this probability is unsupported
+LAPI_DECISIONS_KNOWLEDGE_PERCENT = 30 # Dashboard chat looks up knowledge at or above this
+LAPI_DECISIONS_CHOICE_PERCENT = 60 # set-up chat accepts a choice at or above this confidence
+
 [profiles.local]
 LAPI_OLLAMA_BATCH_SIZE = "128"
 LAPI_RERANKER = "local"
@@ -149,6 +157,11 @@ LAPI_GOAL_MAX_ATTEMPTS = [1, 10]
 LAPI_GOAL_LEASE_SECONDS = [60, 7200]
 LAPI_MAX_UPLOAD_MB = [1, 100]
 LAPI_OCR_TIMEOUT = [30, 3600]
+LAPI_DECISIONS_TIMEOUT = [3, 120]
+LAPI_DECISIONS_MAX_CLAIMS = [1, 400]
+LAPI_DECISIONS_SUPPORT_PERCENT = [1, 99]
+LAPI_DECISIONS_KNOWLEDGE_PERCENT = [1, 99]
+LAPI_DECISIONS_CHOICE_PERCENT = [1, 99]
 LAPI_OCR_MAX_TOKENS = [512, 8192]
 LAPI_OCR_CONTEXT = [2560, 32768]
 LAPI_OCR_INPUT_HEADROOM_TOKENS = [2048, 32768]

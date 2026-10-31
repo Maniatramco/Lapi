@@ -1,6 +1,18 @@
 {
-  "version": "26.1.16.46",
+  "version": "26.1.16.47",
   "releases": [
+    {
+      "version": "26.1.16.47",
+      "date": "2026-10-31",
+      "title": "Answers checked against their sources",
+      "changes": [
+        "Model Registration has a Decisions use for OpenAI connections. It uses OpenAI's Decisions API (gpt-6-luna), which returns probabilities and choices instead of text. Test connection asks two questions with known answers. Decisions is registered on its own and has its own optional workspace Default, with Stop using to turn it off.",
+        "With a Decisions Default, both chats check each cited sentence against the sources it cites before showing the answer. A sentence the sources do not support is sent back for one rewrite from the same evidence; if it still is not supported, the answer is not shown. The saved trace records whether the check passed, failed, was unavailable or was not set up.",
+        "Dashboard chat asks Decisions whether a question needs your knowledge before answering it directly. Decisions can only send a question to knowledge lookup; it never skips lookup.",
+        "The set-up chat reads yes, no and which-option answers with Decisions when it is set. Unclear answers go to the chat model or the screen's own rules as before.",
+        "Without a Decisions Default, every chat and the set-up chat work exactly as before."
+      ]
+    },
     {
       "version": "26.1.16.46",
       "date": "2026-10-31",
