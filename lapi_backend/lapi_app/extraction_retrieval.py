@@ -10,12 +10,12 @@ def questions(schema):
             for key, value in properties.items()] or [('result', schema.get('description') or 'Find the requested structured fields')]
 
 
-def retrieve(schema, documents, snapshot, sources, *, source_key=None, progress=None):
+def retrieve(schema, documents, snapshot, sources, *, source_key=None, progress=None, widen=1):
     testing = os.getenv('LAPI_ALLOW_MOCK') == 'true' and snapshot['settings']['embedding_provider'] == 'mock'
     if snapshot['settings']['model_provider'] != 'mock' and not testing and not reranker.enabled():
         raise providers.ProviderError('Extraction requires a semantic reranker. Configure LAPI_RERANKER=local and install the pinned assets, then retry.')
     started = time.monotonic(); selected = {}; coverage = {}; diagnostics = []
-    top_k=runtime_config.get('LAPI_EXTRACTION_CHUNKS_PER_FIELD')
+    top_k=runtime_config.get('LAPI_EXTRACTION_CHUNKS_PER_FIELD')*widen
     neighbors=runtime_config.get('LAPI_EXTRACTION_NEIGHBOR_CHUNKS')
     eligible = {c['id']: c for c in sources if source_key is None or c.get('source_key') == source_key}
     with core.execution_context(snapshot.get('embedding_execution', snapshot)):

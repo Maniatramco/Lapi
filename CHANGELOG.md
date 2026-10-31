@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.52 - 31 October 2026
+
+Extraction takes a second look
+
+- `lapi_agent/extraction_repair.py`: `generate_valid` retries once with the schema error and still fails on a second invalid output. `fill_missing` asks once more for empty top-level fields and keeps a value only with a verified quote and a valid merged result. `cover_sources` adds chunks for a source the ranking left out. `unread_sources` names requested files with no text.
+- `extractor_agent.run`: the generate node uses these for single and per-record extractions; a failed second look keeps the valid first result. The retrieve node saves `sources_added` and `sources_without_text` in `retrieval`, and `filled_fields` is saved on the extraction. Pipeline signature 2, so unfinished jobs restart from a clean checkpoint.
+- `extraction_retrieval.retrieve`: `widen` multiplies the chunks per field for the second look.
+- An extraction with an empty field now makes one extra model call. Not yet measured with a real model.
+- Tests: `test_extraction_repair.py` and two job-level tests in `test_merged_documents.py`.
+
 ## v26.1.16.51 - 31 October 2026
 
 English answers, calculations kept, top row found

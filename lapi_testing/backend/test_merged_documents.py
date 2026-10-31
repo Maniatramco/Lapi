@@ -133,3 +133,30 @@ def test_a_plain_upload_keeps_good_files_and_names_the_rejected_ones(system):
     body=r.json()
     assert r.status_code==200 and [x['name'] for x in body['documents']]==['a.txt']
     assert [x['name'] for x in body['rejected']]==['b.json','c.txt'] and 'empty' in body['rejected'][1]['reason']
+
+
+def test_empty_field_gets_a_second_look_and_needs_a_quote(system,monkeypatch):
+    seen=[]
+    def extract(text,schema,sources):
+        seen.append(schema)
+        if len(seen)==1:return {'owner':''},[]
+        return {'owner':'Alice'},[{'field':'/owner','chunk_id':sources[0]['id'],'quote':'Alice'}]
+    monkeypatch.setattr(providers,'extract_with_evidence',extract)
+    p,_,_=merged_flow(system,'single')
+    assert all(worker.run_once() for _ in range(4))
+    entry=system.api.get('/api/agent-v2/plans/'+p['id']).json()['calls'][1]['result']['extractions'][0]
+    assert entry['status']=='completed' and len(seen)==2
+    e=system.api.get('/api/extractions/'+entry['extraction_id']).json()
+    assert e['result']['owner']=='Alice'
+
+
+def test_invalid_output_is_retried_inside_the_job(system,monkeypatch):
+    seen=[]
+    def extract(text,schema,sources):
+        seen.append(text)
+        return ({'owner':5} if len(seen)==1 else {'owner':'Alice'}),[]
+    monkeypatch.setattr(providers,'extract_with_evidence',extract)
+    p,_,_=merged_flow(system,'single')
+    assert all(worker.run_once() for _ in range(4))
+    entry=system.api.get('/api/agent-v2/plans/'+p['id']).json()['calls'][1]['result']['extractions'][0]
+    assert entry['status']=='completed' and len(seen)==2 and 'required schema' in seen[1]

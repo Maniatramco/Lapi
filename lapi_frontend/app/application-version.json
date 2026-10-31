@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.51",
+  "version": "26.1.16.52",
   "releases": [
+    {
+      "version": "26.1.16.52",
+      "date": "2026-10-31",
+      "title": "Extraction takes a second look",
+      "changes": [
+        "When a model's extraction does not match the template, Lapi tells it what was wrong and tries once more.",
+        "Fields left empty get a second look with more of the document, and a value is kept only when the model quotes it from the source.",
+        "Every file in a combined extraction now reaches the model, and files with no readable text are recorded with the result."
+      ]
+    },
     {
       "version": "26.1.16.51",
       "date": "2026-10-31",
