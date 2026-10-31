@@ -2,6 +2,15 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.57 - 31 October 2026
+
+Faster, steadier restarts (fixes the restart loop after the v26.1.16.56 deployment)
+
+- `relational.upgrade_legacy`: start-up projects only catalog rows missing from their tables. It used to read a file from storage for almost every record, in the api and again in the worker while holding the schema lock, so start-up grew with the number of records.
+- `relational.sync_item`: returns before reading a file for kinds with no table, such as conversations.
+- `containers.tf`: api health check initial delay 60 s to 240 s, so a slow start is not killed and restarted.
+- Tests: `test_startup_reads_files_only_for_catalog_rows_missing_from_their_tables`.
+
 ## v26.1.16.56 - 31 October 2026
 
 Attached files upload on request, and steadier answers (live scorecard findings)

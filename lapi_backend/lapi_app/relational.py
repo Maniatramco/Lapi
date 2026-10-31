@@ -179,7 +179,10 @@ def payload(row):
     try:return core.store.json(row.ref)
     except FileNotFoundError:return {}
 
+CATALOG_KINDS=('model','knowledge_base','document','template','extraction')
+
 def sync_item(connection, row, data=None, *, history=True):
+    if row.kind not in CATALOG_KINDS:return  # Conversations and the like have no table: do not read their files.
     data=payload(row) if data is None else data
     common={k:getattr(row,k) for k in ('created_by','updated_by','created_via','updated_via','created_at','updated_at')}
     values={'owner_id':row.owner,**common}
@@ -343,13 +346,19 @@ def upgrade_legacy(connection, bootstrap_assignments=False):
             connection.execute(table.update().where(table.c.access_level==None).values(access_level='editor'))
         if model in (core.User,core.Login):
             connection.execute(table.update().where(table.c.created_at==None).values(created_at=time.time(),updated_at=time.time()))
-    # Fresh tables need no backfill. Existing catalog rows are projected in
-    # dependency order, keeping their IDs and storage references.
+    # Catalog rows missing from their tables are projected in dependency order, keeping their IDs
+    # and storage references. Rows already there stay current through the `project` listener, so
+    # start-up reads no files for them: its cost must not grow with the number of records.
     from types import SimpleNamespace
-    rows=connection.execute(select(core.Record.__table__)).mappings().all()
-    rank={'model':0,'knowledge_base':1,'document':2,'template':3,'extraction':4}
-    for value in sorted(rows,key=lambda r:rank.get(r['kind'],4)):
-        sync_item(connection,SimpleNamespace(**value))
+    records=core.Record.__table__
+    rows=connection.execute(select(records).where(records.c.kind.in_(CATALOG_KINDS))).mappings().all()
+    projected={kind:set(connection.scalars(select(column))) for kind,column in (
+        ('model',ModelConfig.model_id),('knowledge_base',Dataset.dataset_id),('document',Document.document_id),
+        ('template',Prompt.prompt_id),('extraction',Extraction.extract_id))}
+    rank={kind:i for i,kind in enumerate(CATALOG_KINDS)}
+    for value in sorted(rows,key=lambda r:rank[r['kind']]):
+        if value['id'] not in projected[value['kind']]:
+            sync_item(connection,SimpleNamespace(**value))
     if bootstrap_assignments:
         for value in rows:
             if value['kind']!='knowledge_base':continue

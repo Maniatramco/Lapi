@@ -173,7 +173,8 @@ resource "oci_container_instances_container_instance" "lapi" {
       health_check_type        = "HTTP"
       port                     = 8000
       path                     = "/ready"
-      initial_delay_in_seconds = 60
+      # The api waits for the worker's schema step on start-up; killing it early only restarts that wait.
+      initial_delay_in_seconds = 240
       interval_in_seconds      = 30
       failure_threshold        = 5
     }

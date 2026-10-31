@@ -234,3 +234,23 @@ def test_keycloak_groups_become_team_memberships(accounts):
     kc_team = teams.keycloak_team_id('Finance')
     refused = accounts.put('/api/teams/' + kc_team + '/members', json={'user_ids': []})
     assert refused.status_code == 409 and 'Keycloak' in refused.json()['detail']
+
+
+def test_startup_reads_files_only_for_catalog_rows_missing_from_their_tables(system, monkeypatch):
+    from lapi_app import core, relational
+    from types import SimpleNamespace
+    s = system; d = dataset(s)
+    now = 1.0
+    with core.Session.begin() as session:
+        session.add(core.Record(id='chat-1', owner=s.owner, kind='conversation', name='chat', ref='chats/chat-1.json', status='ready', created_at=now, updated_at=now))
+        session.add(core.Record(id='tpl-new', owner=s.owner, kind='template', name='new.json', ref='templates/new.json', parent_id=d['id'], status='ready', created_at=now, updated_at=now))
+    table = relational.Prompt.__table__
+    with core.engine.begin() as connection:
+        connection.execute(table.delete().where(table.c.prompt_id == 'tpl-new'))
+    reads = []
+    monkeypatch.setattr(core.store, 'json', lambda ref: reads.append(ref) or {})
+    with core.engine.begin() as connection:
+        relational.upgrade_legacy(connection)
+    assert reads == ['templates/new.json']
+    with core.engine.begin() as connection:
+        assert connection.scalar(relational.select(table.c.prompt_id).where(table.c.prompt_id == 'tpl-new')) == 'tpl-new'

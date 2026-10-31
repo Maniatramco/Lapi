@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.56",
+  "version": "26.1.16.57",
   "releases": [
+    {
+      "version": "26.1.16.57",
+      "date": "2026-10-31",
+      "title": "Faster, steadier restarts",
+      "changes": [
+        "Restarting Lapi no longer slows down as conversations and documents grow, and the service gets more time to start before it is restarted."
+      ]
+    },
     {
       "version": "26.1.16.56",
       "date": "2026-10-31",
