@@ -2,6 +2,7 @@
 import json
 import re
 import math
+import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 import httpx
@@ -12,6 +13,9 @@ from .parameters import check_budget, validate_parameters, ParameterError, for_s
 from .validation import ConnectionError, PROTOCOLS, AUTH_MODES, validate_endpoint, validate_connection, validate_credentials, credentials
 from .provider_registry import provider
 from ..lapi_agent import token_usage
+
+# Provider replies that mean "try again shortly", not "wrong credentials or model".
+RETRY_STATUSES = {429, 502, 503, 504}
 
 _KEY_LIKE = re.compile(r'(sk-[A-Za-z0-9_\-]{6,}|Bearer\s+\S+|[A-Za-z0-9_\-]{32,})')
 # Provider error bodies can echo request content (prompts, document text), so they are
@@ -70,6 +74,12 @@ class ModelConnection:
         try:
             with httpx.Client(timeout=self.timeout, trust_env=False, follow_redirects=False) as client:
                 response = client.post(self.c['endpoint'] + path, json=payload, headers=headers)
+                # A provider that is briefly overloaded (429, 502, 503, 504) is retried twice with a
+                # short pause before the request is reported as failed.
+                for pause in (1.5, 4.0):
+                    if response.status_code not in RETRY_STATUSES: break
+                    time.sleep(pause)
+                    response = client.post(self.c['endpoint'] + path, json=payload, headers=headers)
             if response.status_code >= 300:
                 reason = provider_reason(response, self.secret) if _explain_errors.get() else ''
                 raise ConnectionError('Model request failed (HTTP ' + str(response.status_code) + ')'

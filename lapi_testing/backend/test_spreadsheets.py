@@ -55,6 +55,15 @@ def test_every_chunk_keeps_values_with_their_column_names_and_rows_are_never_cut
     assert 'Amount: number, 3 filled, min -10, max 1234.5, total 1344.5' in summary
 
 
+def test_a_merged_title_row_above_the_header_is_a_note_not_the_header():
+    book = Workbook(); sheet = book.active; sheet.title = 'Budget'
+    sheet.append(['FY2026 Budget']); sheet.merge_cells('A1:C1'); sheet.append(['Department', 'Q1', 'Q2']); sheet.append(['Engineering', 120, 135])
+    out = io.BytesIO(); book.save(out)
+    read = spreadsheet.read('budget.xlsx', out.getvalue())[0]
+    assert read['columns'] == ['Department', 'Q1', 'Q2'] and 'title row: FY2026 Budget' in read['notes']
+    assert read['rows'] == [(3, ['Engineering', 120, 135])]
+
+
 def test_exact_calculations_group_filter_and_refuse_wrong_columns():
     store = Store(); spreadsheet.save(store, 'd', spreadsheet.read('sales.xlsx', workbook()))
     by_region = spreadsheet.query(store, 'd', {'group_by': ['Region'], 'metrics': [{'op': 'sum', 'column': 'Revenue'}], 'sort': {'by': 'sum of Revenue', 'desc': True}})
@@ -63,6 +72,11 @@ def test_exact_calculations_group_filter_and_refuse_wrong_columns():
     assert by_month['rows'] == [['2026-01', 180.0, 2], ['2026-02', 190.0, 2]]
     listed = spreadsheet.query(store, 'd', {'filters': [{'column': 'Revenue', 'op': '>=', 'value': 100}], 'columns': ['Region', 'Revenue']})
     assert listed['rows'] == [['North', 100.0], ['North', 150.0]] and listed['row_numbers'] == [2, 3]
+    # A derived figure (revenue = quantity × price, here Revenue × 2) is one metric, calculated row by row.
+    doubled = spreadsheet.query(store, 'd', {'group_by': ['Region'], 'metrics': [{'op': 'sum', 'column': 'Revenue * 2'}]})
+    assert doubled['columns'] == ['Region', 'sum of Revenue * 2'] and sorted(doubled['rows']) == [['North', 500.0], ['South', 240.0]]
+    scaled = spreadsheet.query(store, 'd', {'columns': ['Region', 'Revenue / 100'], 'sort': {'by': 'Revenue / 100', 'desc': True}, 'limit': 1})
+    assert scaled['rows'] == [['North', 1.5]]
     assert spreadsheet.query(store, 'd', {'sheet': 'Notes', 'filters': [{'column': 'owner', 'op': '=', 'value': 'PRIYA'}]})['matched_rows'] == 1
     for bad, message in (({'metrics': [{'op': 'sum', 'column': 'Region'}]}, 'not a number column'),
                          ({'filters': [{'column': 'Nope', 'op': '=', 'value': 1}]}, 'no column "Nope"'),

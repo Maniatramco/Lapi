@@ -129,7 +129,7 @@ export function AccessMap({api}:{api:Api}){
  }
  const list=mode==="person"
   ?data.users.filter(u=>u.username.toLowerCase().includes(lower)).map(u=>{const n=Object.keys(draft[u.id]||{}).length,teamCount=(u.team_ids||[]).length;
-   return {id:u.id,label:u.username,detail:u.is_admin?"Administrator · every collection":[`${n} collection${n===1?"":"s"}`,teamCount?`${teamCount} team${teamCount===1?"":"s"}`:"",u.is_contributor?"Contributor · every collection":"",u.is_auditor?"Auditor":"",u.sign_in==="keycloak"?"Keycloak":""].filter(Boolean).join(" · "),
+   return {id:u.id,label:u.username,detail:u.is_admin?"Administrator · every collection":[`${n} collection${n===1?"":"s"}`,teamCount?`${teamCount} team${teamCount===1?"":"s"}`:"",u.is_contributor?"Contributor · can create collections":"",u.is_auditor?"Auditor":"",u.sign_in==="keycloak"?"Keycloak":""].filter(Boolean).join(" · "),
     warn:Boolean(u.openfga&&!u.openfga.in_step),dirty:pending.includes(u.id)};})
   :mode==="dataset"?data.datasets.filter(d=>d.name.toLowerCase().includes(lower)).map(d=>{const count=data.users.filter(u=>effective(u,draft,teams,teamDraft,d.id).access!=="none").length;
    return {id:d.id,label:d.name,detail:`${count} ${count===1?"person":"people"}`,warn:data.users.some(u=>!u.is_admin&&openfgaDifference(u,d.id)),dirty:data.users.some(u=>changed(u,draft,d.id))||teams.some(t=>changedCell(t.grants,teamDraft,t.id,d.id))};})

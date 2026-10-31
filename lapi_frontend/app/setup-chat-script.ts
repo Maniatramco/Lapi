@@ -6,7 +6,10 @@ import {SUPPORT_NAME} from './support';
 import {fieldKey,type Field,type FieldType} from './quick-start-flow';
 
 type Entity=Record<string,any>;
-export type Stage='help'|'email'|'sent'|'name'|'team'|'team-name'|'choose'|'collection'|'type'|'interest'|'fields'|'change'|'documents'|'consent'|'reading'|'extracting'|'results'|'done';
+export type Stage='help'|'email'|'sent'|'name'|'team'|'team-name'|'choose'|'collection'|'type'|'interest'|'fields'|'change'|'documents'|'consent'|'reading'|'extracting'|'retry'|'results'|'done';
+
+/** "a Invoices collection" → "an Invoices collection". */
+export const article=(word:string)=>/^[aeiou]/i.test(word.trim())?'an':'a';
 export type Quick={label:string;value:string};
 export type Prompt={text:string;quick?:Quick[];typing?:boolean};
 
@@ -106,7 +109,7 @@ export function prompt(stage:Stage,ctx:{name:string;workspaces:Entity[];current?
   case 'email':return {text:`${ctx.lastError?`I saw this: "${ctx.lastError}". `:''}Tell me what happened, or what you need, and I'll put it in an email to ${SUPPORT_NAME} with the details.`,typing:true};
   case 'sent':return {text:`I've opened your email app with everything filled in. Send it and ${SUPPORT_NAME} will get back to you. Anything else?`,quick:[{label:'No, thanks',value:'close'},{label:'Something else',value:'help'}]};
   case 'name':return {text:"Hi, I'm Lapi. I'll set things up with you in a minute. What should I call you?",typing:true};
-  case 'team':return {text:`Nice to meet you, ${me}. Your own workspace, ${ctx.current?.name||`${me}'s workspace`}, is ready for your documents. Would you also like a team workspace, to share collections with other people?`,quick:[{label:'Yes, a team workspace',value:'yes'},{label:'Not now',value:'no'}]};
+  case 'team':return {text:`Nice to meet you, ${me}. Your own workspace, ${ctx.current?.audience==='personal'||!ctx.current?`${me}'s workspace`:ctx.current.name}, is ready for your documents. Would you also like a team workspace, to share collections with other people?`,quick:[{label:'Yes, a team workspace',value:'yes'},{label:'Not now',value:'no'}]};
   case 'team-name':return {text:'What should the team workspace be called? For example: Finance team.',typing:true};
   case 'choose':return {text:`Which workspace do you want to use${me?`, ${me}`:''}?`,quick:ctx.workspaces.map(w=>({label:w.name,value:w.id}))};
   case 'collection':return {text:`A collection holds related documents in ${ctx.current?.name||'your workspace'}. What should your first one be called? For example: Invoices 2026.`,quick:[{label:'Skip for now',value:'skip'}],typing:true};
@@ -118,6 +121,7 @@ export function prompt(stage:Stage,ctx:{name:string;workspaces:Entity[];current?
   case 'consent':return {text:`Got ${ctx.files?.length||0} ${ctx.files?.length===1?'file':'files'}: ${(ctx.files||[]).join(', ')}. Can I send ${ctx.files?.length===1?'it':'them'} to the AI services set up for ${ctx.collectionName||'this collection'} to read and index?`,quick:[{label:'Yes, read them',value:'yes'},{label:'Add more first',value:'more'},{label:'Start over',value:'no'}]};
   case 'reading':return {text:ctx.progress||'Reading your documents… this usually takes under a minute.'};
   case 'extracting':return {text:ctx.progress||`Pulling out ${fieldList(ctx.fields||[])}…`};
+  case 'retry':return {text:`That did not finish: ${ctx.lastError||'the model did not answer'}. Your documents are saved. I can try the extraction again, or you can finish now and run it later from the Review page.`,quick:[{label:'Try again',value:'retry'},{label:'Finish for now',value:'finish'}]};
   case 'results':return {text:ctx.results||'Done.',quick:[{label:'Open Review',value:'review'},{label:'Finish',value:'finish'}]};
   case 'done':return {text:`All set${me?`, ${me}`:''}. Add more documents whenever you're ready, and ask me anything about them.`,quick:[{label:"Let's go",value:'go'}]};
  }
@@ -130,7 +134,7 @@ export function after(stage:Stage,ctx:{workspaces:Entity[];current?:Entity;canCr
  let i=order.indexOf(base)+1;
  for(;i<order.length;i++){
   const next=order[i];
-  if(next==='team'&&!ctx.canCreateTeam)continue;
+  if(next==='team'&&(!ctx.canCreateTeam||ctx.workspaces.some(w=>w.audience==='team'&&w.mine)))continue;  // One team workspace already: no need to offer another.
   if(next==='choose'&&(ctx.workspaces.length<2||ctx.chosen))continue;
   if(next==='collection'&&(!ctx.current||ctx.current.collection_count>0||!['owner','editor'].includes(ctx.current.my_access)))continue;
   if(next==='interest'&&!ctx.created)continue;  // The guided first round follows a collection made here.

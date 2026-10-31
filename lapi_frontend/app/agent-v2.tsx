@@ -65,7 +65,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
  const [caret,setCaret]=useState(0);const [mentionClosed,setMentionClosed]=useState(false);const [mentionIndex,setMentionIndex]=useState(0);
  const [text,setText]=useState(''); const [files,setFiles]=useState<File[]>([]);
  // Keep bytes bound to the submitted request until its confirmed upload succeeds.
- const submittedFiles=useRef<Record<string,File[]>>({});const [pendingFiles,setPendingFiles]=useState<File[]>([]);
+ const submittedFiles=useRef<Record<string,File[]>>({});const [pendingFiles,setPendingFiles]=useState<File[]>([]);const lastSentFiles=useRef<File[]>([]);
  const submittedOnboardingPrompts=useRef<Record<string,AttachedPrompt>>({});
  const retrySubmittedPrompt=useRef('');
  const retryPlanId=useRef('');
@@ -256,8 +256,9 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
    if(!permission){consentPaused.current.add(plan.id);return;}consentPaused.current.delete(plan.id);approvals.current[plan.id]=permission;const external=permission.required;
    let result;
    if(call.tool==='upload'){
-    const bound=submittedFiles.current[plan.id];const uploadFiles=bound?.length?bound:documentFiles;
-    if(!uploadFiles.length||(!bound?.length&&unresolvedJson.length))throw new Error('Attach documents and choose how to use each JSON attachment before uploading.');
+    // The files sent with the request are reused for its confirmation; nobody attaches them twice.
+    const bound=submittedFiles.current[plan.id];const uploadFiles=bound?.length?bound:documentFiles.length?documentFiles:lastSentFiles.current;
+    if(!uploadFiles.length||(!bound?.length&&documentFiles.length&&unresolvedJson.length))throw new Error('Attach documents and choose how to use each JSON attachment before uploading.');
     const data=new FormData();for(const file of uploadFiles)data.append('files',file);data.append('dataset_id',plan.dataset_id);data.append('allow_external',String(external));data.append('confirmed','true');
     if(!plan.calls.some((c:Entity)=>c.tool==='extract'||c.tool==='reextract')&&plan.extraction_mode==='merge'&&uploadFiles.length>1)data.append('extraction_mode','merge');  // Stitch into one document.
     if(plan.calls.some((c:Entity)=>c.tool==='extract'||c.tool==='reextract')){data.append('continue_extraction','true');data.append('template_id',plan.template_id);if(plan.extraction_mode)data.append('extraction_mode',plan.extraction_mode);data.append('merge_strategy',plan.merge_strategy||'records');data.append('display_name',plan.display_name||'');}
@@ -305,7 +306,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
   setGuide(null);
   const requestedOperation=agentOperation(text)||guidedOperation(intent);const onboardingRequest=requestedOperation==='onboard';
   if(onboardingRequest&&!catalog.can_onboard_datasets){setError('Only the administrator can onboard collections.');return;}
-  if(unresolvedJson.length){setError('Is each JSON attachment a prompt template or a document? Choose below its filename.');return;}
+  if(unresolvedJson.length){setError('Is each JSON attachment a prompt template or a document? Choose below its filename.');if(typeof document!=='undefined')document.querySelector('.agent-v2-json-card')?.scrollIntoView({block:'nearest'});return;}
   if(promptAttachment&&promptAttachment.datasetId!==dataset){setError('Attach the prompt again for the selected collection.');return;}
   followLatest();
   const savePromptOnly=Boolean(promptAttachment)&&!text.trim()&&!documentFiles.length;
@@ -314,7 +315,9 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
   // Chat/proposals use configured providers directly. File processing approval
   // is requested only by the confirmed workflow submission/onboarding paths.
   const external=true;
-  const outgoing=files;let answering=false,accepted=false;let receipt:PromptProgress['receipt'];lock.current=true;setRequestStartedAt(Date.now());setPendingRequest(request);setPendingFiles(outgoing);setFiles([]);setText('');setWorking(promptAttachment&&!promptAttachment.savedId&&!onboardingRequest?'Saving prompt.':'Checking collection and request.');setError('');
+  const outgoing=files;let answering=false,accepted=false;let receipt:PromptProgress['receipt'];lock.current=true;setRequestStartedAt(Date.now());setPendingRequest(request);setPendingFiles(outgoing);if(outgoing.length)lastSentFiles.current=outgoing;setFiles([]);setText('');
+  if(device==='phone')composer.current?.blur?.();  // Give the keyboard's space back to the answer and the tab bar.
+  setWorking(promptAttachment&&!promptAttachment.savedId&&!onboardingRequest?'Saving prompt.':'Checking collection and request.');setError('');
   if(promptAttachment&&!onboardingRequest)setPromptProgress({name:promptAttachment.fileName,phase:promptAttachment.savedId?'preparing':'saving'});else setPromptProgress(null);
   try{
    let attachedTemplateId=promptAttachment?.savedId||savedPrompt?.id||retrySubmittedPrompt.current||'';
@@ -479,7 +482,7 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
    {plans.map(plan=>{
     const index=nextCall(plan);const call=index>=0?plan.calls[index]:null;
     const needInputs=call?.status==='pending'&&!plan.superseded;const uploaded=plan.calls.some((c:Entity)=>c.uploaded_document_ids?.length);
-    const boundFiles=submittedFiles.current[plan.id];const uploadFiles=boundFiles?.length?boundFiles:documentFiles;
+    const boundFiles=submittedFiles.current[plan.id];const uploadFiles=boundFiles?.length?boundFiles:documentFiles.length?documentFiles:lastSentFiles.current;
     const docs=catalog.documents.filter((d:Entity)=>d.parent_id===plan.dataset_id);
     const templates=catalog.templates.filter((t:Entity)=>!t.parent_id||t.parent_id===plan.dataset_id);
     const count=call?.tool==='upload'?uploadFiles.length:(plan.recovery_document_ids?.length?plan.document_ids.length:plan.calls.flatMap((c:Entity)=>c.uploaded_document_ids||[]).length||plan.document_ids.length);
@@ -570,9 +573,9 @@ export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,o
      if(mention){
       if(e.key==='Escape'){e.preventDefault();setMentionClosed(true);return;}
       if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();setMentionIndex(index=>mentionDocuments.length?(index+(e.key==='ArrowDown'?1:-1)+mentionDocuments.length)%mentionDocuments.length:0);return;}
-      if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(mentionDocuments[mentionIndex])chooseMention(mentionDocuments[mentionIndex]);return;}
+      if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){if(mentionDocuments[mentionIndex]){e.preventDefault();chooseMention(mentionDocuments[mentionIndex]);return;}setMentionClosed(true);}  // No matching document: Enter sends as usual.
      }
-     if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}
+     if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(busyNow){setError('Lapi is still answering. Wait for it to finish, or press Stop, then send your message.');return;}void send();}
     }}/></div></div>
     <div className="agent-v2-compose-controls">
      <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json,.xlsx,.csv,.tsv,.png,.jpg,.jpeg,.webp" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>

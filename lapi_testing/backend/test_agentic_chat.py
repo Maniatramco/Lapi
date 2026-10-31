@@ -33,10 +33,34 @@ def test_uncited_and_unknown_citations_are_flagged_but_questions_and_greetings_a
 def test_failing_sentences_are_removed_and_counted():
     text = 'The total is 5,400 [1]. The notice period is 45 days [2].'
     answer, removed = answer_check.remove(text, answer_check.check(text, SOURCES))
-    assert removed == 1 and '45' not in answer and '5,400 [1]' in answer and '1 statement removed' in answer
+    assert removed == 1 and '45' not in answer and '5,400 [1]' in answer and '1 statement was removed' in answer
     only_bad = 'The notice period is 45 days [2].'
     answer, removed = answer_check.remove(only_bad, answer_check.check(only_bad, SOURCES))
     assert removed == 1 and answer.startswith("I couldn't find enough evidence")
+
+
+def test_dates_match_by_meaning_and_calculations_verify_step_by_step():
+    # The source says 13/04/2026; the model may write it as a month name or ISO.
+    sources = [{'index': 1, 'document_name': 'invoice.pdf', 'text': 'Due Date: 13/04/2026. Pro plan INR 1,299 per month. Annual billing gives a 15% discount.'}]
+    assert answer_check.check('The invoice is due on 13 April 2026 [1].', sources) == []
+    assert answer_check.check('The invoice is due on 2026-04-13 [1].', sources) == []
+    assert answer_check.check('The invoice is due on 14 April 2026 [1].', sources)[0]['reason'] == 'unsupported_value'
+    # Arithmetic shown with its cited inputs passes, and each result feeds the next step.
+    calc = 'The Pro plan costs INR 1,299 per month [1]. 1,299 × 12 = 15,588 per year [1]. With the 15% discount: 15,588 × 0.85 = 13,249.80 [1].'
+    assert answer_check.check(calc, sources) == []
+    # A bare number with no arithmetic in the sentence is still not derivable.
+    assert answer_check.check('The yearly price is 15,588 [1].', sources)[0]['reason'] == 'unsupported_value'
+
+
+def test_rows_from_tool_results_and_facts_the_person_stated_are_kept():
+    table = [{'index': 2, 'document_name': 'Calculated from sales.csv · sheet sales', 'reading': {}, 'rows': [],
+              'text': '{"columns": ["region", "sum of revenue"], "rows": [["North", 1305648.81], ["South", 1140021.92]]}'}]
+    answer = 'Revenue by region [2]:\n| Region | Revenue |\n|---|---|\n| North | 1,305,648.81 |\n| South | 1,140,021.92 |'
+    assert answer_check.check(answer, table) == []  # table rows carry no [n] but every value is in the tool result
+    assert answer_check.check(answer.replace('1,140,021.92', '1,140,999.00'), table)[0]['reason'] == 'uncited_claim'
+    context = 'Remember: our client is Apex Logistics and the PO number is PO-7781.'
+    assert answer_check.check('Reference: Apex Logistics, PO-7781.', SOURCES, context=context) == []
+    assert answer_check.check('Reference: Apex Logistics, PO-7781.', SOURCES)[0]['reason'] == 'uncited_claim'
 
 
 def test_rich_citations_are_renumbered_by_first_use_with_short_snippets():
@@ -152,7 +176,7 @@ def test_unsupported_value_gets_one_repair_then_is_removed(system, monkeypatch):
     p = plan(s, d, text='Who owns the invoice and what is the total?')
     m = thread_message(s, p)
     assert len(seen) == 2 and 'failed the citation check' in seen[1][-1]['content']
-    assert '99' not in m['text'] and 'Alice is the owner [1].' in m['text'] and '1 statement removed' in m['text']
+    assert '99' not in m['text'] and 'Alice is the owner [1].' in m['text'] and '1 statement was removed' in m['text']
     assert m['request_route']['validation']['result'] == 'removed' and m['request_route']['answer_revised']
 
 

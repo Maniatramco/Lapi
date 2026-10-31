@@ -125,3 +125,11 @@ def test_verified_quote_retains_original_page_and_export_provenance(system,monke
     data={'merge_records':True,'merge':{'document_id':'merged','sources':[{'key':'1'},{'key':'2'}]},'result':{'records':[{'fields':{'owner':'Alice'}},{'fields':{'owner':'Bob'}}]},'sources':[{'document_id':'merged','source_key':'1','page':1},{'document_id':'merged','source_key':'2','page':5}]}
     rows=list(result_exports.rows(SimpleNamespace(id='extract',version=1),data))
     assert len(rows)==2 and rows[0][7]==1 and rows[1][7]==5
+
+
+def test_a_plain_upload_keeps_good_files_and_names_the_rejected_ones(system):
+    s=system;d=dataset(s)
+    r=s.api.post('/api/documents/upload',data={'dataset_id':d['id']},files=[('files',('a.txt',b'Valid text','text/plain')),('files',('b.json',b'{"broken"','application/json')),('files',('c.txt',b'','text/plain'))])
+    body=r.json()
+    assert r.status_code==200 and [x['name'] for x in body['documents']]==['a.txt']
+    assert [x['name'] for x in body['rejected']]==['b.json','c.txt'] and 'empty' in body['rejected'][1]['reason']

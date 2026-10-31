@@ -72,6 +72,7 @@ export function DatasetDashboard({username,datasets,documents,loading,search,onC
  const includedIds=workspace?workspaceIds:[selectedId];
  const setSources=(ids:string[])=>setSelection({datasetId:selectedId,ids});
  const landing=!chatOpen||overview,summary=dashboardSummary(datasets,documents);
+ const settling=loading&&!datasets.length;  // Counts show a dash until the first load, never a false zero.
  const openChat=()=>{setChatOpen(true);setOverview(false);setMobilePanel('chat');};
  const expandChat=()=>{setChatFocused(true);setSourcesCollapsed(true);setMobilePanel('chat');};
  const restoreDashboard=()=>{setChatFocused(false);setSourcesCollapsed(false);setAutoRoom(false);};
@@ -100,7 +101,7 @@ export function DatasetDashboard({username,datasets,documents,loading,search,onC
   {landing&&<div className="dashboard-hero">
    <div className="dashboard-hero-main">
     <h1 className="dashboard-greeting">{greeting(new Date().getHours())}, {username}</h1>
-    <p className="dashboard-hero-lead">{summary.datasets?`Ask across your ${summary.datasets} authorized collection${summary.datasets===1?'':'s'} and ${summary.indexed} indexed source${summary.indexed===1?'':'s'}. Answers cite their evidence and stay within your access.`:'Your collections appear here once they are assigned to you.'}</p>
+    <p className="dashboard-hero-lead">{settling?'Loading your collections and indexed sources…':summary.datasets?`Ask across your ${summary.datasets} authorized collection${summary.datasets===1?'':'s'} and ${summary.indexed} indexed source${summary.indexed===1?'':'s'}. Answers cite their evidence and stay within your access.`:'Your collections appear here once they are assigned to you.'}</p>
     <form className="dashboard-ask" onSubmit={ask}>
      <label htmlFor="dashboard-ask-input" className="sr-only">Ask about your knowledge</label>
      <textarea id="dashboard-ask-input" rows={2} placeholder="Ask about your knowledge…" value={draft} disabled={busy||!summary.datasets} onChange={event=>setDraft(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}}}/>
@@ -122,10 +123,10 @@ export function DatasetDashboard({username,datasets,documents,loading,search,onC
     <div className="dashboard-suggestions">{DASHBOARD_SUGGESTIONS.map(prompt=><button key={prompt} type="button" disabled={busy||!summary.datasets} onClick={()=>{setDraft(prompt);document.getElementById('dashboard-ask-input')?.focus();}}>{prompt}</button>)}<button type="button" className="dashboard-new-knowledge" onClick={addNew}><CloudUpload size={15}/>Add new knowledge</button></div>
    </div>
    <dl className="dashboard-stats" aria-label="Knowledge summary">
-    <div><dt>Collections</dt><dd>{summary.datasets}</dd><span>{summary.empty?`${summary.empty} without documents`:'authorized'}</span></div>
-    <div><dt>Indexed sources</dt><dd>{summary.indexed}</dd><span>ready to ask</span></div>
-    <div data-tone={summary.attention?'warn':undefined} className={summary.attention?'screen-tile-actionable':undefined}><dt>Need attention</dt><dd>{summary.attention}</dd><span>failed or need reindex</span>{summary.attention>0&&<button type="button" className="screen-tile-cta attention-trigger dashboard-attention-cta" onClick={()=>openAttention()}>Review and fix</button>}</div>
-    <div><dt>Processing</dt><dd>{summary.processing}</dd><span>{summary.processing?'indexing now':'nothing running'}</span></div>
+    <div><dt>Collections</dt><dd>{settling?'—':summary.datasets}</dd><span>{settling?'loading…':summary.empty?`${summary.empty} without documents`:'authorized'}</span></div>
+    <div><dt>Indexed sources</dt><dd>{settling?'—':summary.indexed}</dd><span>ready to ask</span></div>
+    <div data-tone={summary.attention?'warn':undefined} className={summary.attention?'screen-tile-actionable':undefined}><dt>Need attention</dt><dd>{settling?'—':summary.attention}</dd><span>failed or need reindex</span>{summary.attention>0&&<button type="button" className="screen-tile-cta attention-trigger dashboard-attention-cta" onClick={()=>openAttention()}>Review and fix</button>}</div>
+    <div><dt>Processing</dt><dd>{settling?'—':summary.processing}</dd><span>{settling?'loading…':summary.processing?'indexing now':'nothing running'}</span></div>
    </dl>
   </div>}
   </div>

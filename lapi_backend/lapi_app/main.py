@@ -321,23 +321,18 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
     external_check(allow_external,True,snapshot['settings']);result=[];jobs=[]
     if not files:raise HTTPException(400,'Choose at least one file')
     limit=settings()['max_upload_mb']*1024*1024
+    # Every file is checked on its own: the good ones are stored and the bad ones are reported by
+    # name, so one broken JSON never blocks the Word file uploaded with it.
+    accepted=[];rejected=[];size_problems=0
     for file in files:
         name=(file.filename or '').replace('\\','/').split('/')[-1]
-        if not file_formats.supported(name):raise HTTPException(400,'Only '+file_formats.SUPPORTED_LABEL+' files are supported')
-        raw=await file.read(limit+1);await file.seek(0)
-        if not raw or len(raw)>limit:raise HTTPException(413,'A file is empty or exceeds the upload size limit')
-        if name.lower().endswith('.txt'):
-            try:raw.decode('utf-8-sig')
-            except UnicodeDecodeError:raise HTTPException(400,'TXT must use UTF-8 encoding')
-        if name.lower().endswith('.json'):
-            try:json_document_text(raw)
-            except ValueError as error:raise HTTPException(400,str(error))
-        if (problem:=file_formats.problem(name,raw)) and file_formats.plain_text(name,raw) is None:raise HTTPException(400,problem)
-        if file_formats.extension(name) in file_formats.SPREADSHEETS:
-            # Read it now so a broken or oversized sheet is refused before anything is stored.
-            from . import spreadsheet
-            try:spreadsheet.read(name,raw)
-            except spreadsheet.SpreadsheetError as error:raise HTTPException(400,f'"{name}": {error}')
+        problem,about_size=await _upload_problem(file,name,limit)
+        if problem:rejected.append({'name':name,'reason':problem});size_problems+=about_size
+        else:accepted.append(file)
+    # A merge makes one document from all its parts, so one bad part refuses the whole merge.
+    if not accepted or (rejected and merge_files is True):
+        raise HTTPException(413 if size_problems==len(rejected) else 400,rejected[0]['reason'] if len(rejected)==1 else '; '.join(f'"{r["name"]}": {r["reason"]}' for r in rejected))
+    files=accepted
     merged = None; original_parts = []
     if merge_files is True and len(files)>1 and any(file_formats.extension(f.filename or '') in file_formats.SPREADSHEETS for f in files):
         raise HTTPException(422,'Spreadsheets are not merged with other files: their rows and columns stay a table. Upload them as separate documents.')
@@ -368,7 +363,29 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
             merged_documents.save(id,merged,original_parts)
         with Session.begin() as s:s.add(r)
         j=enqueue(owner,'index',id,allow_external,snapshot);result.append(routing.document_public(r));jobs.append(job_repr(j))
-    return {'documents':result,'jobs':jobs}
+    return {'documents':result,'jobs':jobs,**({'rejected':rejected} if rejected else {})}
+
+async def _upload_problem(file,name,limit):
+    """(reason, about_size) for one uploaded file, or (None, False). Each reason names the file and says what to do;
+    about_size marks empty and oversized files, which answer 413 rather than 400."""
+    mb=limit//(1024*1024)
+    if not file_formats.supported(name):return 'Only '+file_formats.SUPPORTED_LABEL+' files are supported',False
+    raw=await file.read(limit+1);await file.seek(0)
+    if not raw:return f'"{name}" is empty (0 bytes). Choose the file again.',True
+    if len(raw)>limit:return f'"{name}" exceeds the {mb} MB upload limit. Split it or compress it.',True
+    if name.lower().endswith('.txt'):
+        try:raw.decode('utf-8-sig')
+        except UnicodeDecodeError:return 'TXT must use UTF-8 encoding',False
+    if name.lower().endswith('.json'):
+        try:json_document_text(raw)
+        except ValueError as error:return str(error),False
+    if (problem:=file_formats.problem(name,raw)) and file_formats.plain_text(name,raw) is None:return problem,False
+    if file_formats.extension(name) in file_formats.SPREADSHEETS:
+        # Read it now so a broken or oversized sheet is refused before anything is stored.
+        from . import spreadsheet
+        try:spreadsheet.read(name,raw)
+        except spreadsheet.SpreadsheetError as error:return f'"{name}": {error}',False
+    return None,False
 @app.get('/api/documents/{id}')
 def document(id:str,owner=Depends(auth)):return routing.document_public(get_record(id,owner,'document'))
 @app.get('/api/documents/{id}/preview')

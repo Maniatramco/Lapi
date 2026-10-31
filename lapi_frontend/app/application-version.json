@@ -1,6 +1,20 @@
 {
-  "version": "26.1.16.48",
+  "version": "26.1.16.49",
   "releases": [
+    {
+      "version": "26.1.16.49",
+      "date": "2026-10-31",
+      "title": "QA fixes: answers keep their numbers, set-up chat never traps you, uploads report per file",
+      "changes": [
+        "Lapi Agent keeps correct answers: dates match by meaning (13/04/2026 is 13 April 2026), a calculation that shows its steps is accepted, table rows and summaries built from exact spreadsheet results are kept, and facts you typed in the conversation (a client name, a PO number, a correction) count as evidence. A judge's doubt no longer deletes a sentence whose values are all in its sources.",
+        "Spreadsheet questions: revenue, margin and similar figures are calculated row by row as one derived metric (\"quantity * unit_price\"), listed and sorted like any column.",
+        "Set-up chat: a failed extraction becomes a step with Try again or Finish for now; Close always works; each document gets its own extraction instead of one merged record; the reading counter shows the final count.",
+        "Uploading through the agent reuses the files sent with the request; a # followed by a space is ordinary text; Enter while Lapi is answering explains what to do; the account button and attachment list fit phones.",
+        "Uploads check every file on its own and report the rejected ones by name; empty and oversized files get separate messages; a model that answers 429, 502, 503 or 504 is retried twice before an error.",
+        "Workbooks: a merged title row above the header is no longer taken as the column names. Files & processing no longer flags image documents as needing a reindex when the workspace Default OCR model read them.",
+        "Dashboard counters show a dash while loading and greet you by the name you chose; Needs attention stage names are readable; the Access map describes Contributors correctly; the default \"your documents\" collection is reused instead of created again; Caddy sends HSTS, nosniff, frame-ancestors and referrer headers."
+      ]
+    },
     {
       "version": "26.1.16.48",
       "date": "2026-10-31",

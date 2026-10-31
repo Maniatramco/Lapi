@@ -6,7 +6,8 @@ export function matchingDocuments(documents:Entity[],query:string){
  const search=query.trim().toLocaleLowerCase();return documents.filter(d=>d.name.toLocaleLowerCase().includes(search));
 }
 export function documentMention(text:string,caret:number){
- const before=text.slice(0,caret);const match=/(?:^|\s)#([^\n#]*)$/.exec(before);
+ // "#invoice" suggests documents; a "#" followed by a space ("# what does this do") is ordinary text.
+ const before=text.slice(0,caret);const match=/(?:^|\s)#([^\n#\s]*)$/.exec(before);
  if(!match)return null;
  return {start:before.lastIndexOf('#'),end:caret,query:match[1]};
 }

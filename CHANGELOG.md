@@ -2,6 +2,22 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.49 - 31 October 2026
+
+QA fixes from the 31 October end-to-end run (`lapi_docs/qa/2026-10-31-lapi-qa-report.md`)
+
+- `answer_check.unsupported_values`: dates compare by meaning (`_date_keys`: ISO, day-first and month-first numeric, and month names), numbers that are one arithmetic step from cited numbers or from numbers already accepted earlier in the answer pass (`_derivable`), and what the person wrote this conversation (`context`) counts as evidence. `check` keeps an uncited sentence whose values all appear in a source read this turn (table rows and summaries from `query_table`), and uncited prose with nothing checkable when the answer cites elsewhere. The removal note no longer uses markdown underscores.
+- `agentic_chat.run`: after the one repair, only citation and value failures are removed; sentences the Decisions judge doubts are kept and counted in `validation.kept_despite_judge`. `answer_support.agentic_problems` skips sentences cited only from Lapi's own calculations.
+- `spreadsheet.query`: a metric or listed column may be a derived expression of two number columns or a number (`quantity * unit_price`, `price - cost`, `amount / 100`), appended as a column and summed, listed or sorted like any other (`_derived`). The agent prompt says so and asks for step-by-step arithmetic and answers in the person's language; the `TableMetric` description documents the syntax.
+- `spreadsheet._sheet`: a lone title or a merged range filled across the first row is skipped when the next row looks like the header; the title becomes a sheet note.
+- `connection.post`: 429, 502, 503 and 504 are retried twice (1.5 s, 4 s) before "Model request failed".
+- `main._upload_documents`: every file is validated on its own (`_upload_problem`); accepted files are stored and `rejected: [{name, reason}]` is returned; only an all-rejected batch is an error (413 for size, else 400). Empty and oversized files have separate messages.
+- `admin_documents.recorded_mapping_matches`: a collection without its own OCR model is compared against the workspace Default OCR model.
+- `containers.tf` Caddyfile: Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options, Content-Security-Policy frame-ancestors, Referrer-Policy and Permissions-Policy headers.
+- `setup-chat.tsx`: reading and extraction are separate steps; a failed extraction moves to the new `retry` stage (Try again / Finish for now) with the documents kept; Close is never disabled; one extraction per document; the reading counter reports the final count; "an Invoices collection". `setup-chat-script.after` skips the team-workspace offer when one is already owned; the team line names the personal workspace by the chosen name.
+- `agent-v2.tsx`: the files sent with a request are reused for its upload confirmation (`lastSentFiles`); Enter with a `#` and no matching document sends the message; Enter while an answer is in progress explains what to do; the JSON-type alert scrolls to the chip; the composer blurs after sending on phones so the tab bar returns. `agent-document-selection.documentMention` stops at a space.
+- `quick-start.tsx` reuses an existing collection with the default name. `dataset-dashboard.tsx` shows dashes until the first load and greets by display name. `needs-attention.tsx` stage names read "Writing output". Access map: "Contributor · can create collections". Users & passwords: "with a Lapi account". Phone account button 44 px; attachment list up to 40 dvh.
+
 ## v26.1.16.48 - 31 October 2026
 
 Decisions checks Lapi Agent answers too

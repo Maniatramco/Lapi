@@ -156,7 +156,7 @@ class TableGroup(_Strict):
 
 class TableMetric(_Strict):
     op: Literal['count', 'sum', 'avg', 'min', 'max', 'count_distinct'] = Field(description='Calculation.')
-    column: str = Field(default='', max_length=200, description='Column to calculate on; empty only for count of rows.')
+    column: str = Field(default='', max_length=200, description='Column to calculate on; empty only for count of rows. A derived value is written as two number columns with an operator, for example "quantity * unit_price" (revenue), "price - cost" or "amount / 100".')
 
 
 class ChartSpec(_Strict):

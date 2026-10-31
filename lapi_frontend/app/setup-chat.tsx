@@ -4,7 +4,7 @@ import {ArrowUp,Mic,X} from 'lucide-react';
 import {SUPPORT_NAME,helpMailto} from './support';
 import {AgentLogo} from './agent-logo';
 import {ACCEPT,fieldsToSchema,fileState,openReviewPage,pickFiles,recordCount,resultRows,type Field} from './quick-start-flow';
-import {after,applyChange,cleanName,fieldList,helpWish,matchType,matchWorkspace,no,prompt,suggestFields,yes,type Quick,type Stage} from './setup-chat-script';
+import {after,applyChange,article,cleanName,fieldList,helpWish,matchType,matchWorkspace,no,prompt,suggestFields,yes,type Quick,type Stage} from './setup-chat-script';
 import {fieldKey} from './quick-start-flow';
 import './setup-chat.css';
 
@@ -28,9 +28,9 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
  const [text,setText]=useState(''),[busy,setBusy]=useState(false),[listening,setListening]=useState(false),[error,setError]=useState('');
  const [teamName,setTeamName]=useState(''),[collectionName,setCollectionName]=useState(''),[collectionType,setCollectionType]=useState(''),[collectionId,setCollectionId]=useState('');
  const [promptName,setPromptName]=useState(''),[fields,setFields]=useState<Field[]>([]),[files,setFiles]=useState<File[]>([]);
- const [progress,setProgress]=useState(''),[results,setResults]=useState(''),[extractionId,setExtractionId]=useState('');
- const input=useRef<HTMLInputElement|null>(null),thread=useRef<HTMLDivElement|null>(null),recognizer=useRef<any>(null),camera=useRef<HTMLInputElement|null>(null),picker=useRef<HTMLInputElement|null>(null),live=useRef(true);
- const said=prompt(stage,{name,workspaces,current,canCreateTeam,teamName,collectionName,collectionType,fields,files:files.map(f=>f.name),progress,results,lastError});
+ const [progress,setProgress]=useState(''),[results,setResults]=useState(''),[extractionId,setExtractionId]=useState(''),[retryError,setRetryError]=useState('');
+ const input=useRef<HTMLInputElement|null>(null),thread=useRef<HTMLDivElement|null>(null),recognizer=useRef<any>(null),camera=useRef<HTMLInputElement|null>(null),picker=useRef<HTMLInputElement|null>(null),live=useRef(true),readyRef=useRef<string[]>([]);
+ const said=prompt(stage,{name,workspaces,current,canCreateTeam,teamName,collectionName,collectionType,fields,files:files.map(f=>f.name),progress,results,lastError:stage==='retry'?retryError:lastError});
  const voice=typeof window!=='undefined'&&Boolean((window as any).SpeechRecognition||(window as any).webkitSpeechRecognition);
 
  useEffect(()=>()=>{live.current=false;},[]);
@@ -50,6 +50,7 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
   const form=new FormData();files.forEach(file=>form.append('files',file,file.name));
   form.append('dataset_id',collectionId);form.append('allow_external','true');
   const uploaded=await api('/documents/upload','POST',form);
+  if(uploaded.rejected?.length)tell(`I could not take ${uploaded.rejected.length===1?'one file':`${uploaded.rejected.length} files`}: ${(uploaded.rejected||[]).map((r:Entity)=>r.reason).join(' ')}`);
   let docs:Entity[]=(uploaded.documents||[]).map((d:Entity)=>({id:d.id,name:d.name||d.filename||'Document',state:fileState(d.status)}));
   setFiles([]);onChanged?.();
   const started=Date.now();
@@ -59,22 +60,38 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
    const ready=docs.filter(d=>d.state==='ready').length;setProgress(`Reading your documents… ${ready} of ${docs.length} ready.`);
   }
   const readyIds=docs.filter(d=>d.state==='ready').map(d=>d.id);
+  setProgress(`Reading your documents… ${readyIds.length} of ${docs.length} ready.`);  // The last poll's count, not the one before it.
   if(!readyIds.length)throw new Error('I could not read those files. Try a clearer photo, or different files.');
+  readyRef.current=readyIds;
   if(!fields.length){move('done');return;}
   setProgress('');move('extracting');
+  await extract(readyIds);
+ };
+ /** Pull the fields out of the documents that were read. A failure is a conversation step with
+  * Try again, never a dead end: the documents stay saved and Close always works. */
+ const extract=async(readyIds:string[])=>{
+  try{
   const template=await api('/templates','POST',{name:(promptName||'Extraction').slice(0,200),schema:fieldsToSchema(fields),instructions:'',dataset_id:collectionId});
-  const created=await api('/extractions','POST',{document_ids:readyIds.slice(0,20),template_id:template.id,dataset_id:collectionId,allow_external:true});
-  const id=created.id||created.extraction_id;let currentRun:Entity=created;const begun=Date.now();
-  while(!['ready','failed','cancelled'].includes(currentRun.status)&&Date.now()-begun<POLL_LIMIT_MS&&live.current){
-   await wait(POLL_MS);currentRun=await api(`/extractions/${encodeURIComponent(id)}`,'GET',undefined,undefined,true);
-   setProgress(`Pulling out ${fieldList(fields)}… ${currentRun.status==='saved'||currentRun.status==='queued'?'waiting for the model':currentRun.status}.`);
+  // One extraction per document: two invoices are two records, never one merged "document".
+  const runs:Entity[]=[];
+  for(const documentId of readyIds.slice(0,20))runs.push(await api('/extractions','POST',{document_ids:[documentId],template_id:template.id,dataset_id:collectionId,allow_external:true}));
+  const ids=runs.map(r=>r.id||r.extraction_id);let current:Entity[]=runs;const begun=Date.now();
+  const finished=(r:Entity)=>['ready','failed','cancelled'].includes(r.status);
+  while(!current.every(finished)&&Date.now()-begun<POLL_LIMIT_MS&&live.current){
+   await wait(POLL_MS);
+   current=await Promise.all(current.map(async(r,i)=>finished(r)?r:api(`/extractions/${encodeURIComponent(ids[i])}`,'GET',undefined,undefined,true).catch(()=>r)));
+   const done=current.filter(finished).length;
+   setProgress(`Pulling out ${fieldList(fields)}… ${done} of ${current.length} ${current.length===1?'document':'documents'} done.`);
   }
   onChanged?.();
-  if(currentRun.status!=='ready')throw new Error(currentRun.error||'The extraction did not finish. You can see it on the Review page.');
-  const rows=resultRows(currentRun.result,fields);const count=recordCount(currentRun.result);
+  const ready=current.filter(r=>r.status==='ready');
+  if(!ready.length)throw new Error(current.find(r=>r.error)?.error||'The extraction did not finish. You can see it on the Review page.');
+  const rows=resultRows(ready[0].result,fields);const count=ready.reduce((n,r)=>n+recordCount(r.result),0);
+  const id=ids[current.indexOf(ready[0])];
   setExtractionId(id);
   setResults(`Done: ${count} ${count===1?'record':'records'} from ${readyIds.length} ${readyIds.length===1?'document':'documents'}.\n${rows.map(r=>`${r.label}: ${r.value}`).join('\n')}${count>1?`\n(That is record 1 of ${count}; the Review page has them all.)`:''}`);
   move('results');
+  }catch(e){setRetryError(e instanceof Error?e.message:'The extraction did not finish.');setProgress('');move('retry');}
  };
 
  /** Fields the model proposed, as the screen's own field records. */
@@ -128,7 +145,7 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
     const made=await api('/datasets','POST',{name:collectionName,description:'',collection_type:type,workspace_id:current?.id||''});
     await api(`/datasets/${encodeURIComponent(made.id)}/migrate-settings`,'POST',{});
     setCollectionId(made.id);onCollectionCreated(made.id);
-    tell(`${collectionName} is ready${type?` as a ${type} collection`:''}.`);
+    tell(`${collectionName} is ready${type?` as ${article(type)} ${type} collection`:''}.`);
     move(after('type',{...ctx,created:true}));
    }else if(stage==='interest'){
     if(isNo){setFields([]);move('documents');return;}
@@ -151,6 +168,8 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
     if(isNo){setFiles([]);move('documents');return;}
     if(!isYes)throw unclear('Say yes to read them, or start over.');
     setProgress('');move('reading');await readAndExtract();
+   }else if(stage==='retry'){
+    if(value==='retry'||isYes){setRetryError('');move('extracting');await extract(readyRef.current);}else onDone();
    }else if(stage==='results'){
     if(value==='review'&&extractionId){openReviewPage(extractionId);onDone();}else onDone();
    }else if(stage==='done'){
@@ -173,7 +192,7 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
 
  const working=stage==='reading'||stage==='extracting';
  return <div className="setup-chat-backdrop"><div className="setup-chat" role="dialog" aria-modal="true" aria-label="Set up with Lapi">
-  <header className="setup-chat-head"><AgentLogo size={34} label="Lapi"/><div><strong>Lapi</strong><small>{busy||working?'Working…':listening?'Listening…':entry==='setup'?'Setting you up':'Here to help'}</small></div><button type="button" className="setup-chat-close" aria-label="Close" disabled={working} onClick={onDone}><X size={20}/></button></header>
+  <header className="setup-chat-head"><AgentLogo size={34} label="Lapi"/><div><strong>Lapi</strong><small>{busy||working?'Working…':listening?'Listening…':entry==='setup'?'Setting you up':'Here to help'}</small></div><button type="button" className="setup-chat-close" aria-label="Close" title={working?'Reading continues in the background':'Close'} onClick={onDone}><X size={20}/></button></header>
   <div ref={thread} className="setup-chat-thread" aria-live="polite">
    {lines.map((line,i)=><p key={i} className={`setup-chat-line is-${line.who}`}>{line.text}</p>)}
    {error&&<p className="setup-chat-line is-lapi is-error" role="alert">{error}</p>}

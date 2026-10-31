@@ -105,14 +105,20 @@ export function QuickStart({api,user,datasets,sources=[],initialFiles=[],quickEx
   let target=datasetId;
   if(target==='new'){  // Phones skip the collection step: the collection is made as the documents go in.
    const name=newName.trim()||defaultDatasetName(user?.username);
-   const created=await api('/datasets','POST',{name,description:newDescription.trim(),collection_type:newType.trim()});
-   await api(`/datasets/${encodeURIComponent(created.id)}/migrate-settings`,'POST',{});
-   target=created.id;setDatasetId(created.id);onChanged();
+   // The default "<name>'s documents <month>" collection is reused, not created again on every run.
+   const existing=datasets.find(d=>d.active!==false&&String(d.name||'').trim().toLowerCase()===name.toLowerCase());
+   if(existing){target=existing.id;setDatasetId(existing.id);}
+   else{
+    const created=await api('/datasets','POST',{name,description:newDescription.trim(),collection_type:newType.trim()});
+    await api(`/datasets/${encodeURIComponent(created.id)}/migrate-settings`,'POST',{});
+    target=created.id;setDatasetId(created.id);onChanged();
+   }
   }
   const form=new FormData();files.forEach(file=>form.append('files',file,file.name));
   form.append('dataset_id',target);form.append('allow_external','true');
   if(merging)form.append('merge_files','true');
   const result=await api('/documents/upload','POST',form);
+  if(result.rejected?.length)setNote(`Not added: ${(result.rejected as Entity[]).map(r=>r.reason).join(' ')}`);
   setUploaded((result.documents||[]).map((doc:Entity)=>({id:doc.id,name:doc.name||doc.filename||'Document',state:fileState(doc.status),error:''})));
   setFiles([]);setMergeTouched(false);onChanged();go('processing');
  });

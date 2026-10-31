@@ -242,7 +242,7 @@ def test_agentic_chat_repairs_then_removes_a_sentence_decisions_rejects(system, 
     p = plan(s, d, text='Who owns and approved the invoice?')
     m = thread_message(s, p)
     assert len(seen) == 2 and 'is not supported by the sources it cites' in seen[1][-1]['content']
-    assert 'Bob approved' not in m['text'] and 'Alice is the owner [1].' in m['text'] and '1 statement removed' in m['text']
+    assert 'Bob approved' not in m['text'] and 'Alice is the owner [1].' in m['text'] and '1 statement was removed' in m['text']
     validation = m['request_route']['validation']
     assert validation['result'] == 'removed' and validation['answer_support']['status'] == 'unsupported'
     assert validation['attempts'][0]['reason'] == 'not_supported'
@@ -268,3 +268,8 @@ def test_an_answer_decisions_matches_to_no_choice_is_asked_again_without_the_cha
     monkeypatch.setattr(suggest, 'call_model', lambda *a, **k: pytest.fail('Decisions already decided; the chat model is not asked.'))
     reply = admin.post('/api/setup/interpret', json={'stage': 'help', 'answer': 'hi', 'options': ['Add a collection', 'A team workspace']}).json()
     assert reply == {'decision': 'unclear'}
+
+
+def test_a_doubted_sentence_is_kept_only_when_its_values_are_verified():
+    from lapi_app.lapi_agent import answer_check
+    assert answer_check.has_values('There are 81 blank rows [1].') and not answer_check.has_values('Bob approved it [1].')

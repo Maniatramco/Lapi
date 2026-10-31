@@ -43,6 +43,16 @@ locals {
     	# /_next/static files keep their long cache. ">" applies it after the web server's own header.
     	@pages not path /_next/static/* /api/*
     	header @pages >Cache-Control "no-cache"
+    	# Browser protections: no framing by other sites, no MIME sniffing, no referrer leaks,
+    	# HTTPS remembered for a year, and no camera/microphone/location for embedded content.
+    	header {
+    		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    		X-Content-Type-Options "nosniff"
+    		X-Frame-Options "DENY"
+    		Content-Security-Policy "frame-ancestors 'none'"
+    		Referrer-Policy "strict-origin-when-cross-origin"
+    		Permissions-Policy "camera=(self), microphone=(self), geolocation=()"
+    	}
     	reverse_proxy 127.0.0.1:3000
     }
     http:// {

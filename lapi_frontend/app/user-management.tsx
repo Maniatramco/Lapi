@@ -106,7 +106,7 @@ export function UserManagement({api,user,keycloak=false,onPasswordChanged,onRole
   </form>}
   {!operation&&error&&<div role="alert" className="notice error">{error}</div>}
   {canRead&&accounts.length>0&&<SummaryTiles label="User summary" tiles={[
-   {label:"People",value:accounts.length,detail:"with an Lapi account",tone:""},
+   {label:"People",value:accounts.length,detail:"with a Lapi account",tone:""},
    {label:"Administrators",value:accounts.filter(a=>a.is_admin).length,detail:"access every collection",tone:"info"},
    {label:"Auditors",value:accounts.filter(a=>a.is_auditor).length,detail:"read-only access review",tone:""},
    {label:"Users",value:accounts.filter(a=>!a.is_admin).length,detail:"access assigned collections",tone:"ok"},

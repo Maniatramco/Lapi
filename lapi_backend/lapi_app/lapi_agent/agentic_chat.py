@@ -306,7 +306,7 @@ class AgenticChat:
     def checked(self, answer):
         """Citation and value checks, then (with a Decisions Default) whether each cited
         sentence is supported by the sources it cites. The Decisions status is saved."""
-        problems = answer_check.check(answer, self.tools.sources)
+        problems = answer_check.check(answer, self.tools.sources, context=getattr(self, 'context_text', ''))
         if not self.decisions:
             return problems
         with self.progress.step('Checking the sources support the answer'):
@@ -317,6 +317,9 @@ class AgenticChat:
 
     def run(self, history, text, question=None, preload=()):
         messages = self.system() + history + [{'role': 'user', 'content': text}]
+        # What the person wrote this conversation is evidence for the value check: a fact they
+        # stated ("our PO number is PO-7781") may be repeated back without a document citation.
+        self.context_text = '\n'.join(str(m.get('content') or '') for m in history if m.get('role') == 'user' and isinstance(m.get('content'), str)) + '\n' + text
         messages += self.prefetch(question or text, preload)
         answer = self.loop(messages, self.max_steps)
         if self.ended: return self.ended_answer()
@@ -339,8 +342,15 @@ class AgenticChat:
             answer = repaired or answer
             problems = self.checked(answer)
             self.validation['attempts'].append({'reason': problems[0]['reason'] if problems else 'passed', 'problems': len(problems)})
-            if problems:
-                answer, removed = answer_check.remove(answer, problems)
+            # After one repair, failing sentences are removed. One exception: a sentence the Decisions
+            # judge doubts but which states numbers, dates or names that all passed the value check is
+            # kept and counted, so a correct exact answer does not vanish on a judge's doubt. A doubted
+            # claim with nothing checkable ("Bob approved it") has no such proof and is removed.
+            hard = [p for p in problems if p['reason'] != 'not_supported' or not answer_check.has_values(p['sentence'])]
+            if len(hard) < len(problems):
+                self.validation['kept_despite_judge'] = len(problems) - len(hard)
+            if hard:
+                answer, removed = answer_check.remove(answer, hard)
                 self.validation['removed_sentences'] = removed
             if self.revise: self.revise()
         self.validation['result'] = 'passed' if len(self.validation['attempts']) == 1 else 'repaired' if not self.validation.get('removed_sentences') else 'removed'

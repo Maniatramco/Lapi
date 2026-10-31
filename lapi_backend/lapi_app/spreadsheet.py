@@ -210,6 +210,13 @@ def _sheet(name, rows, notes):
     if width > MAX_COLUMNS:
         raise SpreadsheetError(f'Sheet "{name}" has {width} columns; Lapi reads up to {MAX_COLUMNS}.')
     start = next(i for i, row in enumerate(rows) if not all(_empty(v) for v in row))
+    # A title above the header - one cell, or a merged range filled across the width ("FY2026
+    # Budget" in A1:D1) - is not the header row: the first row with distinct values is.
+    first_cells = [_display(v) for v in rows[start] if not _empty(v)]
+    if (len(set(first_cells)) == 1 and start + 1 < len(rows) and len([v for v in rows[start + 1] if not _empty(v)]) > 1
+            and _looks_like_header(rows[start + 1], rows[start + 2:])):
+        notes = notes + [f'title row: {first_cells[0][:120]}']
+        start += 1
     if _looks_like_header(rows[start], rows[start + 1:]):
         columns, data, first_row = _headers(rows[start], width), rows[start + 1:], start + 2
     else:
@@ -386,6 +393,41 @@ def _column(entry, name):
     raise SpreadsheetError(f'Sheet "{entry["name"]}" has no column "{name}". Columns: ' + ', '.join(c['name'] for c in entry['columns']))
 
 
+DERIVED = re.compile(r'^\s*(.+?)\s*([*×x/+\-])\s*(.+?)\s*$')
+
+
+def _derived(table, entry, name):
+    """A column, or a value derived from two number columns ("quantity * unit_price", "price - cost",
+    "amount / 100") appended to the table so it can be summed, listed and sorted like any column.
+    Revenue, margin and similar figures are calculated exactly, row by row, instead of being guessed
+    from separate column totals."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    text = str(name or '').strip()
+    if text.lower() in {c['name'].lower() for c in entry['columns']} or not DERIVED.match(text):
+        return table, _column(entry, text)
+    left, operator, right = DERIVED.match(text).groups()
+    operator = {'×': '*', 'x': '*'}.get(operator, operator)
+    operands = []
+    for part in (left, right):
+        try:
+            number = float(part.replace(',', ''))
+            operands.append(pa.scalar(number, pa.float64()))
+        except ValueError:
+            column = _column(entry, part)
+            if column['type'] != 'number':
+                raise SpreadsheetError(f'"{column["name"]}" is not a number column, so it cannot be used in "{text}".')
+            operands.append(pc.cast(table[column['name']], pa.float64()))
+    label = f'{left.strip()} {operator} {right.strip()}'
+    if label in table.column_names:
+        return table, {'name': label, 'type': 'number'}
+    function = {'*': pc.multiply, '/': pc.divide, '+': pc.add, '-': pc.subtract}[operator]
+    values = function(operands[0], operands[1])
+    if not isinstance(values, pa.ChunkedArray) and not isinstance(values, pa.Array):
+        values = pa.array([values.as_py()] * table.num_rows, pa.float64())
+    return table.append_column(label, values), {'name': label, 'type': 'number'}
+
+
 def _scalar(column, value):
     if column['type'] == 'number':
         number = _number(value)
@@ -514,7 +556,7 @@ def query(store, document_id, spec):
             if op == 'count' and not metric.get('column'):
                 aggregations.append(('__row', 'count')); labels.append('Count')
                 continue
-            column = _column(entry, metric.get('column'))
+            table, column = _derived(table, entry, metric.get('column'))
             if op in ('sum', 'avg') and column['type'] != 'number':
                 raise SpreadsheetError(f'"{column["name"]}" is not a number column, so it cannot be summed or averaged.')
             arrow_op = {'avg': 'mean', 'count_distinct': 'count_distinct'}.get(op, op)
@@ -531,7 +573,11 @@ def query(store, document_id, spec):
             result = pa.table({label: [value] for label, value in zip(labels, values)})
         row_numbers = []
     else:
-        chosen = [_column(entry, c)['name'] for c in (spec.get('columns') or [])] or [c['name'] for c in entry['columns']]
+        chosen = []
+        for c in (spec.get('columns') or []):
+            table, column = _derived(table, entry, c)
+            chosen.append(column['name'])
+        chosen = chosen or [c['name'] for c in entry['columns']]
         row_numbers = table['__row'].to_pylist()[:limit]
         result = table.select(chosen)
     sort = spec.get('sort') or {}

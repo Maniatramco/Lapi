@@ -62,6 +62,73 @@ def _norm(text):
     return re.sub(r'\s+', ' ', str(text)).casefold()
 
 
+MONTHS = {m: i for i, m in enumerate(['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'], 1)}
+# Everyday constants a calculation may use without a source: months in a year, percent, days, lakh, crore.
+IMPLICIT_NUMBERS = (1, 2, 3, 4, 5, 6, 7, 10, 12, 24, 30, 52, 60, 100, 365, 1000, 100000, 10000000)
+
+
+def _date_keys(token):
+    """Canonical YYYY-MM-DD forms of a date, so "13 April 2026", "13/04/2026" and "2026-04-13" agree.
+    Numeric dates give both day-first and month-first readings."""
+    t = token.strip().replace(',', '')
+    m = re.fullmatch(r'(\d{4})-(\d{2})-(\d{2})', t)
+    if m: return {f'{m[1]}-{m[2]}-{m[3]}'}
+    m = re.fullmatch(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})', t)
+    if m:
+        a, b, y = int(m[1]), int(m[2]), int(m[3]); y = y + 2000 if y < 100 else y
+        return {f'{y:04d}-{b:02d}-{a:02d}', f'{y:04d}-{a:02d}-{b:02d}'}
+    m = re.fullmatch(r'([A-Za-z]+)\.? (\d{1,2})(?:st|nd|rd|th)? (\d{4})', t) or re.fullmatch(r'(\d{1,2})(?:st|nd|rd|th)? ([A-Za-z]+)\.? (\d{4})', t)
+    if m:
+        p = m.groups()
+        month, day, year = (p[0], p[1], p[2]) if p[0][0].isalpha() else (p[1], p[0], p[2])
+        n = MONTHS.get(month[:3].lower())
+        if n: return {f'{int(year):04d}-{n:02d}-{int(day):02d}'}
+    return {_norm(token)}
+
+
+def _numbers(text):
+    """The numeric values a text states (dates excluded)."""
+    out = []
+    for m in NUMBER.finditer(DATE.sub(' ', text)):
+        try: out.append(float(m[0].strip('$€£₹ %').replace(',', '')))
+        except ValueError: pass
+    return out
+
+
+def _close(a, b):
+    return abs(a - b) <= max(0.011, abs(b) * 1e-4)
+
+
+CALC = re.compile(r'[×*=+/−]|(?<=\d)\s*-\s*(?=\d)|\b(?:total|sum|subtotal|difference|minus|plus|times|multiplied|divided|per (?:month|year|site|day|unit)|average|discount|combined|together|altogether|add(?:ed|ing)? (?:up|to)|calculat|works out|comes to|equals)\b', re.I)
+
+
+def _derivable(value, known, constants=IMPLICIT_NUMBERS):
+    """True when value is one arithmetic step away from known numbers: a sum, difference, product,
+    ratio or percentage of two of them, or a known number times or divided by an everyday constant
+    (12 months, 100 percent, 365 days). Two constants alone never make a value. A calculation that
+    shows its intermediate results verifies step by step, because every accepted sentence adds its
+    numbers to the known pool."""
+    nums = list(dict.fromkeys(round(n, 6) for n in known))[:120]
+    if any(_close(value, n) for n in nums): return True
+    for i, a in enumerate(nums):
+        for b in nums[i:]:
+            if any(_close(value, c) for c in (a + b, a - b, b - a, a * b, a * b / 100, a * (1 - b / 100), a * (1 + b / 100), b * (1 - a / 100), b * (1 + a / 100))):
+                return True
+            if (b and _close(value, a / b)) or (a and _close(value, b / a)): return True
+        for k in constants:
+            if any(_close(value, c) for c in (a * k, a / k, a * (1 - k / 100), a * (1 + k / 100))): return True
+    return False
+
+
+def _source_text(s):
+    return s.get('text', '') if isinstance(s.get('text'), str) else json.dumps(s.get('text'), ensure_ascii=False)
+
+
+def has_values(text):
+    s = _plain(text)
+    return bool(NUMBER.search(s) or DATE.search(s) or [m for m in NAME.finditer(s) if re.split(r'[ -]', m[1])[0] not in STOP_NAMES])
+
+
 def _number_forms(token):
     raw = token.strip('$€£₹ %')
     plain = raw.replace(',', '')
@@ -75,32 +142,49 @@ def _number_forms(token):
     return {f for f in forms if f}
 
 
-def unsupported_values(text, sources):
-    """Numbers, dates and multi-word names in text that no cited source contains."""
-    corpus = _norm(' '.join(s.get('text', '') if isinstance(s.get('text'), str) else json.dumps(s.get('text'), ensure_ascii=False)
-                            for s in sources) + ' ' + ' '.join(str(s.get('document_name', '')) for s in sources))
+def unsupported_values(text, sources, context='', verified=(), strict_names=False):
+    """Numbers, dates and multi-word names in text that no cited source contains.
+
+    `context` is what the person wrote this conversation (their own facts count as a source for
+    them); `verified` holds numbers already accepted earlier in the same answer, so a calculation
+    that shows its steps passes step by step. Dates match by meaning (13/04/2026 = 13 April 2026),
+    numbers by any common formatting, or as one arithmetic step from known numbers."""
+    corpus = _norm(' '.join(_source_text(s) for s in sources) + ' ' + ' '.join(str(s.get('document_name', '')) for s in sources) + ' ' + str(context or ''))
     digits = corpus.replace(',', '')
+    corpus_dates = {key for m in DATE.finditer(corpus) for key in _date_keys(m[0])}
+    known = _numbers(corpus) + list(verified)
     missing = []
     body = _plain(text)
     body = re.sub(r'^\s*(?:[-*]|\d+[.)])\s+', '', body)  # list markers are not values
+    calculation = bool(CALC.search(body))  # Only a sentence that presents arithmetic may state a derived number.
     for m in DATE.finditer(body):
-        if _norm(m[0]) not in corpus: missing.append(m[0])
+        if _norm(m[0]) not in corpus and not (_date_keys(m[0]) & corpus_dates): missing.append(m[0])
     body_wo_dates = DATE.sub(' ', body)
     for m in NUMBER.finditer(body_wo_dates):
         token = m[0]
         if re.fullmatch(r'\d', token.strip('%')): continue  # single digits ("2 documents") are often counted, verified below
-        if not any(f.casefold() in corpus or f.casefold() in digits for f in _number_forms(token)): missing.append(token)
+        if any(f.casefold() in corpus or f.casefold() in digits for f in _number_forms(token)): continue
+        try: value = float(token.strip('$€£₹ %').replace(',', ''))
+        except ValueError: missing.append(token); continue
+        if not (calculation and _derivable(value, known)): missing.append(token)
     for m in NAME.finditer(body):
         name = m[1]
-        if re.split(r'[ -]', name)[0] in STOP_NAMES or m.start() == len(body) - len(body.lstrip()): continue
+        # A capitalised sentence start is not a name, except when nothing cites the sentence (strict).
+        if re.split(r'[ -]', name)[0] in STOP_NAMES or (not strict_names and m.start() == len(body) - len(body.lstrip())): continue
         if _norm(name) not in corpus: missing.append(name)
     return list(dict.fromkeys(missing))
 
 
-def check(answer, sources, weak_score=None):
-    """Return problems: [{sentence, reason, detail}] for one answer."""
+def check(answer, sources, weak_score=None, context=''):
+    """Return problems: [{sentence, reason, detail}] for one answer.
+
+    A cited sentence must state only values its sources contain (or derive in one step). An uncited
+    sentence is kept when every value it states is in a source read this turn - table rows and
+    summaries built from tool results - or when it states nothing checkable and the answer cites
+    elsewhere. Facts the person wrote this conversation (`context`) count as evidence."""
     by_index = {s['index']: s for s in sources}
-    problems = []
+    grounded = bool(cited(answer))
+    problems = []; verified = []
     for text, start, end in sentences(answer):
         refs = cited(text)
         unknown = [n for n in refs if n not in by_index]
@@ -108,12 +192,18 @@ def check(answer, sources, weak_score=None):
             problems.append({'sentence': text.strip(), 'start': start, 'end': end, 'reason': 'unknown_citation', 'detail': unknown}); continue
         if not refs:
             if needs_citation(text):
-                problems.append({'sentence': text.strip(), 'start': start, 'end': end, 'reason': 'uncited_claim', 'detail': None})
+                if has_values(text):
+                    if unsupported_values(text, sources, context, verified, strict_names=True):
+                        problems.append({'sentence': text.strip(), 'start': start, 'end': end, 'reason': 'uncited_claim', 'detail': None}); continue
+                    verified += _numbers(_plain(text))
+                elif not grounded:
+                    problems.append({'sentence': text.strip(), 'start': start, 'end': end, 'reason': 'uncited_claim', 'detail': None})
             continue
         chosen = [by_index[n] for n in refs]
-        missing = unsupported_values(text, chosen)
+        missing = unsupported_values(text, chosen, context, verified)
         if missing:
             problems.append({'sentence': text.strip(), 'start': start, 'end': end, 'reason': 'unsupported_value', 'detail': missing[:5]}); continue
+        verified += _numbers(_plain(text))
         if weak_score is not None:
             scores = [s['score'] for s in chosen if isinstance(s.get('score'), (int, float))]
             if scores and len(scores) == len(chosen) and max(scores) < weak_score:
@@ -151,7 +241,7 @@ def remove(answer, problems):
     if not re.search(r'\w', _plain(text)):
         return ("I couldn't find enough evidence in your sources to answer that reliably. "
                 'Try naming the document or field, or check that the documents have finished indexing.'), removed
-    note = f'\n\n_{removed} statement{"s" if removed != 1 else ""} removed because {"they" if removed != 1 else "it"} could not be matched to a cited source._'
+    note = f'\n\nNote: {removed} statement{"s were" if removed != 1 else " was"} removed because {"they" if removed != 1 else "it"} could not be matched to a cited source.'
     return text + note, removed
 
 

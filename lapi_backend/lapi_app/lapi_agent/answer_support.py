@@ -121,9 +121,13 @@ def agentic_problems(answer, sources, skip, allow_external=True):
     if not allow_external:
         return [], {'status': 'skipped', 'reason': 'External data transmission was not confirmed for this question.'}
     by_index = {s['index']: s for s in sources}
+    # Exact values calculated by Lapi (query_table, aggregates, workbook maps) are already verified
+    # against the data; the judge checks sentences cited from document text only.
+    computed = {s['index'] for s in sources if s.get('reading') is not None or s.get('rows') is not None or str(s.get('document_name', '')).startswith(('Calculated', 'Computed'))}
     units = []
     for text, start, end in answer_check.sentences(answer):
         refs = [n for n in dict.fromkeys(answer_check.cited(text))]
+        if refs and all(n in computed for n in refs): continue
         if refs and (start, end) not in skip and all(n in by_index for n in refs):
             plain = re.sub(r'\s*' + answer_check.CITE.pattern, '', text).strip(' -*>#\t')
             if len(re.sub(r'\W', '', plain)) >= 2:

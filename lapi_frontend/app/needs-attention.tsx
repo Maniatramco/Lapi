@@ -29,7 +29,7 @@ export function adviceFor(error:string,kind:'failed'|'reindex'):AttentionItem['a
 
 const kindName=(kind='')=>({index:'Indexing',extract:'Extraction',reextract:'Re-extraction',upload:'Upload'} as Record<string,string>)[kind]||'Processing';
 const failedStage=(job?:Entity)=>{const stages=job?.workflow?.stages||{};const name=Object.keys(stages).find(key=>stages[key]?.status==='failed');return name||job?.stage||kindName(job?.kind);};
-const stageName=(name:string)=>({upload:'Upload',extract:'Read text',ocr:'OCR',index:'Index',ready:'Ready',prepare:'Prepare',retrieving:'Retrieve',reranking:'Rerank',generating:'Extract',validating:'Validate'} as Record<string,string>)[name]||name.charAt(0).toUpperCase()+name.slice(1);
+const stageName=(name:string)=>({upload:'Upload',extract:'Read text',ocr:'OCR',index:'Index',ready:'Ready',prepare:'Prepare',retrieving:'Retrieve',reranking:'Rerank',generating:'Extract',validating:'Validate'} as Record<string,string>)[name]||(name.charAt(0).toUpperCase()+name.slice(1)).replace(/_/g,' ');
 
 /** Everything that needs a person: failed or cancelled processing, and files whose index is out of date. */
 export function attentionItems(documents:Entity[],jobs:Entity[],datasets:Entity[],scope:AttentionScope={}):AttentionItem[]{

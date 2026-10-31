@@ -96,7 +96,10 @@ def recorded_mapping_matches(row,index,configuration,models):
     model=models.get(selected.get('model_id'))
     if not model or selected.get('model_version')!=model.version:return False
     if index.get('uses_ocr'):
-        ocr=index.get('ocr_selection') or {};current=configuration.get('ocr_model_id') or configuration.get('default_extraction_model_id')
+        # A collection without its own OCR model reads images with the workspace Default OCR model,
+        # so that is the model the saved index is compared with (not an unrelated extraction model).
+        from . import workspace_defaults
+        ocr=index.get('ocr_selection') or {};current=configuration.get('ocr_model_id') or workspace_defaults.current().get('ocr') or configuration.get('default_extraction_model_id')
         model=models.get(current)
         if ocr.get('model_id')!=current or not model or ocr.get('model_version')!=model.version:return False
     return True
