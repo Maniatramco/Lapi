@@ -182,11 +182,13 @@ def test_setup_yes_no_and_options_are_read_by_decisions(accounts, monkeypatch):
     assert picked.json() == {'decision': 'answer', 'pick': 'Finance team'}
 
 
-def test_setup_low_confidence_or_none_falls_back_to_the_rules(accounts, monkeypatch):
+def test_setup_low_confidence_falls_back_and_a_confident_no_match_asks_again(accounts, monkeypatch):
     admin = accounts; login(admin)
     use_decisions(monkeypatch, choose('yes', confidence=0.4))
     assert admin.post('/api/setup/interpret', json={'stage': 'consent', 'answer': 'hmm'}).json() == {'decision': 'rules'}
     use_decisions(monkeypatch, choose('__none__'))
+    assert admin.post('/api/setup/interpret', json={'stage': 'help', 'answer': 'what is this'}).json() == {'decision': 'unclear'}
+    use_decisions(monkeypatch, choose('__none__', confidence=0.3))
     assert admin.post('/api/setup/interpret', json={'stage': 'help', 'answer': 'what is this'}).json() == {'decision': 'rules'}
     # Stages that need written answers (a name) never use Decisions.
     use_decisions(monkeypatch, lambda q, e: pytest.fail('Names are not a fixed choice.'))
@@ -203,3 +205,66 @@ def test_setup_field_changes_go_to_the_chat_model_when_there_is_one(accounts, mo
         {'label': 'Total', 'type': 'number', 'description': 'Invoice total.'}, {'label': 'Due date', 'type': 'date', 'description': 'Payment due date.'}]}))
     reply = admin.post('/api/setup/interpret', json={'stage': 'fields', 'answer': 'add the due date', 'fields': ['Total']}).json()
     assert reply['decision'] == 'change' and [f['label'] for f in reply['fields']] == ['Total', 'Due date']
+
+
+# --------------------------------------------- Lapi Agent agentic chat (production path)
+
+def agentic_answer(monkeypatch, sentence_after_owner):
+    from test_agentic_chat import agentic, prefetch_index
+    agentic(monkeypatch)
+    seen = []
+    def complete(messages, tools, on_token=None):
+        seen.append(messages); n = prefetch_index([{'messages': messages}])
+        return {'text': f'Alice is the owner [{n}].' + (f' {sentence_after_owner} [{n}].' if sentence_after_owner else ''), 'calls': []}
+    monkeypatch.setattr(agent_model, 'complete', complete)
+    return seen
+
+
+def test_agentic_chat_checks_cited_sentences_with_decisions(system, monkeypatch):
+    from test_agentic_chat import indexed, thread_message
+    s = system; d, doc = indexed(s)
+    asked = use_decisions(monkeypatch, lambda q, e: {'type': 'predicate', 'probability': 0.93})
+    agentic_answer(monkeypatch, None)
+    p = plan(s, d, text='Who is the owner of the invoice?')
+    m = thread_message(s, p)
+    support = m['request_route']['validation']['answer_support']
+    assert support['status'] == 'passed' and support['checked'] == 1
+    evidence, questions = asked[0]
+    assert '"Alice is the owner."' in questions[0]['instructions'] and 'Alice' in evidence[0]['content'][1]['text']
+    assert 'Checking the sources support the answer' in [step['label'] for step in m['answer_workflow']['steps']]
+
+
+def test_agentic_chat_repairs_then_removes_a_sentence_decisions_rejects(system, monkeypatch):
+    from test_agentic_chat import indexed, thread_message
+    s = system; d, doc = indexed(s)
+    use_decisions(monkeypatch, lambda q, e: {'type': 'predicate', 'probability': 0.04 if 'approved' in q['instructions'] else 0.95})
+    seen = agentic_answer(monkeypatch, 'Bob approved it')  # passes the value check: no numbers, dates or full names
+    p = plan(s, d, text='Who owns and approved the invoice?')
+    m = thread_message(s, p)
+    assert len(seen) == 2 and 'is not supported by the sources it cites' in seen[1][-1]['content']
+    assert 'Bob approved' not in m['text'] and 'Alice is the owner [1].' in m['text'] and '1 statement removed' in m['text']
+    validation = m['request_route']['validation']
+    assert validation['result'] == 'removed' and validation['answer_support']['status'] == 'unsupported'
+    assert validation['attempts'][0]['reason'] == 'not_supported'
+
+
+def test_agentic_chat_without_decisions_says_so_and_sends_nothing(system, monkeypatch):
+    from test_agentic_chat import indexed, thread_message
+    s = system; d, doc = indexed(s)
+    monkeypatch.setattr(decisions, 'ask', lambda *x, **y: pytest.fail('No Decisions Default, so no Decisions request.'))
+    agentic_answer(monkeypatch, None)
+    m = thread_message(s, plan(s, d, text='Who is the owner of the invoice?'))
+    assert m['request_route']['validation']['answer_support'] == {'status': 'not_configured'}
+    assert m['request_route']['validation']['result'] == 'passed'
+    assert 'Checking the sources support the answer' not in [step['label'] for step in m['answer_workflow']['steps']]
+
+
+
+def test_an_answer_decisions_matches_to_no_choice_is_asked_again_without_the_chat_model(accounts, monkeypatch):
+    admin = accounts; login(admin)
+    use_decisions(monkeypatch, choose('__none__'))
+    monkeypatch.setattr(setup_assist, 'chat_snapshot', lambda: {'settings': {}})
+    import lapi_app.prompt_suggest as suggest
+    monkeypatch.setattr(suggest, 'call_model', lambda *a, **k: pytest.fail('Decisions already decided; the chat model is not asked.'))
+    reply = admin.post('/api/setup/interpret', json={'stage': 'help', 'answer': 'hi', 'options': ['Add a collection', 'A team workspace']}).json()
+    assert reply == {'decision': 'unclear'}

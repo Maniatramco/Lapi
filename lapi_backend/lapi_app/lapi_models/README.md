@@ -211,6 +211,8 @@ With the Default set:
 - `lapi_agent/answer_support.py` checks each cited sentence of a chat answer
   against the sources it cites, after citation validation. Unsupported answers
   get one repair from the same evidence and are refused if still unsupported.
+  In the Lapi Agent's agentic chat, rejected sentences are repaired once and
+  then removed, like other citation-check failures.
 - `dataset_chat_general.knowledge_check` can send a Dashboard chat request to
   knowledge lookup before a direct answer. It never skips lookup.
 - `setup_assist.decide` reads yes, no and option answers in the set-up chat.

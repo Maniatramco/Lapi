@@ -2,6 +2,16 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.48 - 31 October 2026
+
+Decisions checks Lapi Agent answers too
+
+- `agentic_chat.AgenticChat.checked`: the Lapi Agent's production chat path (`routing_mode: agentic`) runs `answer_support.agentic_problems` after `answer_check.check` when a Decisions Default is set. Cited sentences that passed the citation and value checks become Decisions predicates, sending only the sources they cite; rejected ones are problems with reason `not_supported` and go through the existing repair-then-remove handling. `request_route.validation.answer_support` records the status. 26.1.16.47 checked only Dashboard chat and the vector-only Chat Agent, so live Agent answers were never checked.
+- `answer_check.feedback` builds each reason's text only for that reason; a numeric `detail` (`weak_support`, `not_supported`) no longer raises.
+- `setup_assist.decide`: a confident Decisions "none of these" returns `{decision: unclear}` so the screen asks again; the chat model is not asked. The system prompt tells the chat model never to quote the answer back or say it "does not match the given options".
+- `setup-chat.tsx`: re-asks (`AskAgain`) show as Lapi's next line; the error style stays for real failures.
+- Tests: agentic pass, repair-then-remove and not-configured cases, and the set-up no-match case. Backend 1558 passed, 11 skipped; frontend unit failures are the same 19 as before.
+
 ## v26.1.16.47 - 31 October 2026
 
 Answers checked against their sources (OpenAI Decisions API)

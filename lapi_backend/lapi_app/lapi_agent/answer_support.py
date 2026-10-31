@@ -102,3 +102,52 @@ def correction(result):
     return ('These sentences are not supported by the sources they cite:\n' + lines +
             '\nRewrite the answer from the SAME evidence. Remove or correct each one, keep only statements the cited sources '
             'say, and keep valid [n] citations. If the evidence does not answer the question, say so. No tools. /no_think')
+
+
+def agentic_problems(answer, sources, skip, allow_external=True):
+    """Decisions check for the Lapi Agent's agentic chat (answer_check sentences and sources).
+
+    Checks cited sentences that passed the citation and value checks (`skip` holds the
+    spans that already failed). Returns (problems in answer_check's shape with reason
+    'not_supported', status). Only the sources a sentence cites are sent.
+    """
+    from . import answer_check
+    try:
+        snap = decisions.snapshot()
+    except Exception:
+        return [], {'status': 'unavailable', 'reason': 'The Decisions Default could not be loaded.'}
+    if snap is None:
+        return [], {'status': 'not_configured'}
+    if not allow_external:
+        return [], {'status': 'skipped', 'reason': 'External data transmission was not confirmed for this question.'}
+    by_index = {s['index']: s for s in sources}
+    units = []
+    for text, start, end in answer_check.sentences(answer):
+        refs = [n for n in dict.fromkeys(answer_check.cited(text))]
+        if refs and (start, end) not in skip and all(n in by_index for n in refs):
+            plain = re.sub(r'\s*' + answer_check.CITE.pattern, '', text).strip(' -*>#\t')
+            if len(re.sub(r'\W', '', plain)) >= 2:
+                units.append({'text': plain[:2000], 'cited': refs, 'start': start, 'end': end, 'sentence': text.strip()})
+    if not units:
+        return [], {'status': 'unavailable', 'reason': 'The answer has no cited sentences to check.'}
+    checked = units[:runtime_config.get('LAPI_DECISIONS_MAX_CLAIMS')]
+    used = sorted({n for u in checked for n in u['cited']})
+    records = [{'citation_index': n, 'title': by_index[n].get('document_name') or by_index[n].get('title'), 'data': by_index[n].get('text')} for n in used]
+    try:
+        answers = decisions.ask(snap, evidence(records), [question(i, u) for i, u in enumerate(checked)])
+    except decisions.DecisionsError as exc:
+        return [], {'status': 'unavailable', 'reason': str(exc)[:300]}
+    threshold = decisions.percent('LAPI_DECISIONS_SUPPORT_PERCENT')
+    problems, refused, lowest = [], 0, None
+    for unit, result in zip(checked, answers):
+        if result['type'] == 'refusal':
+            refused += 1; continue
+        probability = float(result['probability'])
+        lowest = probability if lowest is None else min(lowest, probability)
+        if probability < threshold:
+            problems.append({'sentence': unit['sentence'], 'start': unit['start'], 'end': unit['end'], 'reason': 'not_supported', 'detail': round(probability, 3)})
+    status = {'status': 'unsupported' if problems else 'passed', 'model': snap['provider_model'], 'checked': len(checked) - refused,
+              'refused': refused, 'not_checked': len(units) - len(checked), 'threshold': threshold,
+              'lowest_probability': None if lowest is None else round(lowest, 3),
+              'unsupported': [{'text': p['sentence'][:300], 'probability': p['detail']} for p in problems]}
+    return problems, status

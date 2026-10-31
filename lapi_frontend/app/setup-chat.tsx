@@ -17,6 +17,9 @@ const wait=(ms:number)=>new Promise(resolve=>window.setTimeout(resolve,ms));
 /** First sign-in as a chat with Lapi: your name, a team workspace if you want one, which workspace
  * to use, your first collection, what to pull out (fields prefilled from your words), your first
  * documents, reading, extraction and the results. Answers can be typed, tapped or spoken. */
+/** Lapi asks again in the chat (an unclear answer), as opposed to something that failed. */
+class AskAgain extends Error{}
+
 export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,needName,entry='setup',dataset,lastError='',page='',version='',onNamed,onTeamCreated,onChoose,onCollectionCreated,onChanged,onDone}:{api:Api;user:Entity;workspaces:Entity[];canCreateTeam:boolean;current?:Entity;chosen:boolean;needName:boolean;entry?:'setup'|'help'|'email';dataset?:Entity;lastError?:string;page?:string;version?:string;onNamed:(name:string)=>void;onTeamCreated:(workspace:Entity)=>void;onChoose:(id:string)=>void;onCollectionCreated:(id:string)=>void;onChanged?:()=>void;onDone:()=>void}){
  const ctx={workspaces,current,canCreateTeam,chosen};
  const [name,setName]=useState<string>(user.display_name||'');
@@ -39,7 +42,8 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
  const say=(value:string)=>setLines(previous=>[...previous,{who:'you',text:value}]);
  const tell=(value:string)=>setLines(previous=>[...previous,{who:'lapi',text:value}]);
  const move=(next:Stage)=>setStage(next);
- const run=async(work:()=>Promise<void>)=>{setBusy(true);setError('');try{await work();}catch(e){setError(e instanceof Error?e.message:'That did not work. Please try again.');}finally{setBusy(false);}};
+ // Asking again is part of the conversation, not an error: it shows as Lapi's next line.
+ const run=async(work:()=>Promise<void>)=>{setBusy(true);setError('');try{await work();}catch(e){if(e instanceof AskAgain)tell(e.message);else setError(e instanceof Error?e.message:'That did not work. Please try again.');}finally{setBusy(false);}};
 
  /** Upload, then read until every file is ready or has failed, then extract. */
  const readAndExtract=async()=>{
@@ -88,7 +92,7 @@ export function SetupChat({api,user,workspaces,canCreateTeam,current,chosen,need
    const d=read?.decision;
    const isYes=d==='yes'||(!d||d==='answer'||d==='unclear')&&yes(value);
    const isNo=d==='no'||d==='skip'||(!d||d==='answer'||d==='unclear')&&no(value);
-   const unclear=(fallback:string)=>new Error(read?.message||fallback);
+   const unclear=(fallback:string)=>new AskAgain(read?.message||fallback);
    if(stage==='help'){
     const wish=(['collection','team','extract','email'].includes(read?.pick||'')?read?.pick:label?value:helpWish(value)) as string;
     if(wish==='collection')move('collection');

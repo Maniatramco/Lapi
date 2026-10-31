@@ -40,7 +40,8 @@ SYSTEM = '''You help Lapi, a document AI tool, understand one answer in its set-
 with typos and extra words. Read what they mean and reply with JSON only, matching this schema:
 ''' + json.dumps(OUTPUT) + '''
 Only the fields the stage asks for. Never invent a name, option or field the person did not mean. Keep any message
-to one short, kind sentence in plain English.'''
+to one short, kind sentence in plain English. Never quote their answer back, never say it "does not match" anything, and never
+call the choices "the given options": say what they can do next, for example "Tap one of the options below".'''
 
 
 class InterpretInput(BaseModel):
@@ -112,9 +113,13 @@ def decide(body, chat_available):
         answer = decisions.ask(snap, evidence, [question])[0]
     except decisions.DecisionsError:
         return None
-    if answer['type'] != 'choice' or answer['choice'] == NONE or answer['confidence'] < decisions.percent('LAPI_DECISIONS_CHOICE_PERCENT'):
+    if answer['type'] != 'choice' or answer['confidence'] < decisions.percent('LAPI_DECISIONS_CHOICE_PERCENT'):
         return None
     value = answer['choice']
+    if value == NONE:
+        # Decisions is confident the answer is none of the choices (a greeting, a question,
+        # something else): the screen asks again in its own words.
+        return {'decision': 'unclear'}
     if body.stage == 'fields' and value == 'change' and chat_available:
         return None  # The chat model can also write the changed field list.
     if body.stage in ('help', 'choose'):
