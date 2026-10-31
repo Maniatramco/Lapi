@@ -78,3 +78,7 @@ Upload flow on the live site: "can u upload one document for me" with a file att
 Remaining failure: the sum of three invoices (2 of 2 attempts). The sum sentence is still removed: three-number totals are tried only on the first 30 known numbers, and the source text fills that list before the numbers stated in the answer.
 
 The second-look extraction step filled no fields, so it is still unproven. The test files are simulated and made for this test, so these scores can be higher than on real documents.
+
+## Sum fix on v26.1.16.58 (31 October 2026)
+
+The sum of three invoices passed 3 of 3 live, with no sentences removed. The two-number sum and the percent calculation also gave the right figure, but the percent answer still lost one sentence to the citation check and wrote its working in LaTeX. Only these 5 turns were run, so the full scorecard has not been repeated on this version.
