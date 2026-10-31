@@ -342,15 +342,10 @@ class AgenticChat:
             answer = repaired or answer
             problems = self.checked(answer)
             self.validation['attempts'].append({'reason': problems[0]['reason'] if problems else 'passed', 'problems': len(problems)})
-            # After one repair, failing sentences are removed. One exception: a sentence the Decisions
-            # judge doubts but which states numbers, dates or names that all passed the value check is
-            # kept and counted, so a correct exact answer does not vanish on a judge's doubt. A doubted
-            # claim with nothing checkable ("Bob approved it") has no such proof and is removed.
-            hard = [p for p in problems if p['reason'] != 'not_supported' or not answer_check.has_values(p['sentence'])]
-            if len(hard) < len(problems):
-                self.validation['kept_despite_judge'] = len(problems) - len(hard)
-            if hard:
-                answer, removed = answer_check.remove(answer, hard)
+            # After one repair, every failing sentence is removed, including those the Decisions judge
+            # rejects: a value appearing in a source does not prove the sentence answers correctly.
+            if problems:
+                answer, removed = answer_check.remove(answer, problems)
                 self.validation['removed_sentences'] = removed
             if self.revise: self.revise()
         self.validation['result'] = 'passed' if len(self.validation['attempts']) == 1 else 'repaired' if not self.validation.get('removed_sentences') else 'removed'

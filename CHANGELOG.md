@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.50 - 31 October 2026
+
+Rejected sentences are removed again; month-name dates match
+
+- `agentic_chat.run`: removes the `kept_despite_judge` exception added in v26.1.16.49, which kept a wrong answer the Decisions judge had scored 0 because its value appeared in a cited source.
+- `answer_support.agentic_problems`: skips sentences with a number their sources do not contain literally (`answer_check.has_derived_number`); the value check has verified those.
+- `answer_check.unsupported_values`: source dates are parsed before casefolding, so month-name dates match.
+
 ## v26.1.16.49 - 31 October 2026
 
 QA fixes from the 31 October end-to-end run (`lapi_docs/qa/2026-10-31-lapi-qa-report.md`)

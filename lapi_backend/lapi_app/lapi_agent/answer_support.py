@@ -128,6 +128,7 @@ def agentic_problems(answer, sources, skip, allow_external=True):
     for text, start, end in answer_check.sentences(answer):
         refs = [n for n in dict.fromkeys(answer_check.cited(text))]
         if refs and all(n in computed for n in refs): continue
+        if refs and all(n in by_index for n in refs) and answer_check.has_derived_number(text, [by_index[n] for n in refs]): continue
         if refs and (start, end) not in skip and all(n in by_index for n in refs):
             plain = re.sub(r'\s*' + answer_check.CITE.pattern, '', text).strip(' -*>#\t')
             if len(re.sub(r'\W', '', plain)) >= 2:

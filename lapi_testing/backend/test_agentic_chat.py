@@ -45,6 +45,11 @@ def test_dates_match_by_meaning_and_calculations_verify_step_by_step():
     assert answer_check.check('The invoice is due on 13 April 2026 [1].', sources) == []
     assert answer_check.check('The invoice is due on 2026-04-13 [1].', sources) == []
     assert answer_check.check('The invoice is due on 14 April 2026 [1].', sources)[0]['reason'] == 'unsupported_value'
+    # A month name in the source counts too, in every spelling; a different day does not.
+    scan = [{'index': 1, 'document_name': 'scan.pdf', 'text': 'Deadline for remediation: 15 Mar 2026'}]
+    for same in ('March 15, 2026', '15 March 2026', '15 Mar 2026', '2026-03-15'):
+        assert answer_check.check(f'The deadline is {same} [1].', scan) == []
+    assert answer_check.check('The deadline is March 16, 2026 [1].', scan)[0]['reason'] == 'unsupported_value'
     # Arithmetic shown with its cited inputs passes, and each result feeds the next step.
     calc = 'The Pro plan costs INR 1,299 per month [1]. 1,299 × 12 = 15,588 per year [1]. With the 15% discount: 15,588 × 0.85 = 13,249.80 [1].'
     assert answer_check.check(calc, sources) == []

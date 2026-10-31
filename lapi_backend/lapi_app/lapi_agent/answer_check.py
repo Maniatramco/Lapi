@@ -129,6 +129,16 @@ def has_values(text):
     return bool(NUMBER.search(s) or DATE.search(s) or [m for m in NAME.finditer(s) if re.split(r'[ -]', m[1])[0] not in STOP_NAMES])
 
 
+def has_derived_number(text, sources):
+    """True when the sentence states a number its sources do not contain literally: a calculated
+    result the value check has already verified, which a text judge cannot confirm from the source."""
+    corpus = _norm(' '.join(_source_text(s) for s in sources)); digits = corpus.replace(',', '')
+    for m in NUMBER.finditer(DATE.sub(' ', _plain(text))):
+        if re.fullmatch(r'\d', m[0].strip('%')): continue
+        if not any(f.casefold() in corpus or f.casefold() in digits for f in _number_forms(m[0])): return True
+    return False
+
+
 def _number_forms(token):
     raw = token.strip('$€£₹ %')
     plain = raw.replace(',', '')
@@ -151,7 +161,9 @@ def unsupported_values(text, sources, context='', verified=(), strict_names=Fals
     numbers by any common formatting, or as one arithmetic step from known numbers."""
     corpus = _norm(' '.join(_source_text(s) for s in sources) + ' ' + ' '.join(str(s.get('document_name', '')) for s in sources) + ' ' + str(context or ''))
     digits = corpus.replace(',', '')
-    corpus_dates = {key for m in DATE.finditer(corpus) for key in _date_keys(m[0])}
+    # Dates are read before casefolding: DATE matches capitalised month names.
+    raw = ' '.join(_source_text(s) for s in sources) + ' ' + str(context or '')
+    corpus_dates = {key for m in DATE.finditer(raw) for key in _date_keys(m[0])}
     known = _numbers(corpus) + list(verified)
     missing = []
     body = _plain(text)

@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.49",
+  "version": "26.1.16.50",
   "releases": [
+    {
+      "version": "26.1.16.50",
+      "date": "2026-10-31",
+      "title": "Rejected sentences are removed again; month-name dates match",
+      "changes": [
+        "A sentence the answer check rejects is always removed, even when its number appears in a source. In 26.1.16.49 such a sentence could stay and show a wrong answer.",
+        "Calculated results that passed the value check are no longer sent to that check, which cannot confirm them from source text.",
+        "Dates written with month names now match: March 15, 2026 agrees with a source's 15 Mar 2026."
+      ]
+    },
     {
       "version": "26.1.16.49",
       "date": "2026-10-31",

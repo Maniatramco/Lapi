@@ -31,3 +31,17 @@ Steps 1–3 take the score to about 78; steps 4–7 to the mid-80s. The measurem
 
 - Add the 26 prompts and their expected values to `lapi_testing/backend/test_agentic_chat.py` as offline fixtures: the validator functions (`unsupported_values`, `check`, `_derivable`, `_date_keys`) are pure and can be tested without a model.
 - Track `validation.removed_sentences` and `kept_despite_judge` in Token usage: a rise in removals is the early warning that a prompt or validator change regressed.
+
+## Measured re-test on live v26.1.16.49 (31 October 2026)
+
+Score: about 66/100 (46 before). This is a judgement over the 22 prompts re-run, not the full 39.
+
+Now correct: invoice total and due date, payment terms, blank-row count (81), revenue per region (matches ground truth), Pro-plan calculation (13,249.80), three-step sum (35,653.80), Tamil and Tanglish questions, correction Apex to Acme.
+
+Still failing:
+- Critical, introduced by v26.1.16.49: `kept_despite_judge` kept a wrong answer. Hindi receipt question answered INR 1,250 from the wrong document; the judge had scored it 0. A repeat run answered correctly (714.00).
+- `answer_check`: month-name dates fail ("March 15, 2026" against a source's "15 Mar 2026") because dates are parsed from casefolded text. Warehouse A deadline question refused.
+- Highest-revenue order: correct in one run of two.
+- User-stated facts: MEM1 and MEM3 still refused.
+- JSON-only: valid JSON, but b = 0 (should be 714).
+- Conflicting constraints: tradeoff not explained. Summary of all documents: did not finish within 90 s, result unknown.

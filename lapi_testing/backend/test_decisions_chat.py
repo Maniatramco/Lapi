@@ -270,6 +270,17 @@ def test_an_answer_decisions_matches_to_no_choice_is_asked_again_without_the_cha
     assert reply == {'decision': 'unclear'}
 
 
-def test_a_doubted_sentence_is_kept_only_when_its_values_are_verified():
+def test_a_rejected_sentence_is_removed_even_when_its_value_is_in_the_source(system, monkeypatch):
+    from test_agentic_chat import indexed, thread_message
+    s = system; d, doc = indexed(s)
+    use_decisions(monkeypatch, lambda q, e: {'type': 'predicate', 'probability': 0.0 if 'approved' in q['instructions'] else 0.95})
+    agentic_answer(monkeypatch, 'Bob approved it')
+    m = thread_message(s, plan(s, d, text='Who owns and approved the invoice?'))
+    assert 'Bob approved' not in m['text'] and 'kept_despite_judge' not in m['request_route']['validation']
+
+
+def test_only_numbers_absent_from_the_source_count_as_derived():
     from lapi_app.lapi_agent import answer_check
-    assert answer_check.has_values('There are 81 blank rows [1].') and not answer_check.has_values('Bob approved it [1].')
+    source = [{'index': 1, 'text': 'Amount due: INR 1,250. Plan 1,299.'}]
+    assert not answer_check.has_derived_number('The receipt total is INR 1,250 [1].', source)
+    assert answer_check.has_derived_number('The yearly cost is 15,588 [1].', source)
