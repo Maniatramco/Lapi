@@ -103,7 +103,7 @@ def _close(a, b):
 CALC = re.compile(r'[×*=+/−]|\times|\frac|(?<=\d)\s*-\s*(?=\d)|\b(?:total|sum|subtotal|difference|minus|plus|times|multiplied|divided|per (?:month|year|site|day|unit)|average|discount|combined|together|altogether|add(?:ed|ing)? (?:up|to)|calculat|works out|comes to|equals)\b', re.I)
 
 
-def _derivable(value, known, constants=IMPLICIT_NUMBERS):
+def _derivable(value, known, constants=IMPLICIT_NUMBERS, listed=()):
     """True when value is one arithmetic step away from known numbers: a sum, difference, product,
     ratio or percentage of two of them, or a known number times or divided by an everyday constant
     (12 months, 100 percent, 365 days). Two constants alone never make a value. A calculation that
@@ -119,9 +119,11 @@ def _derivable(value, known, constants=IMPLICIT_NUMBERS):
         for k in constants:
             if any(_close(value, c) for c in (a * k, a / k, a * (1 - k / 100), a * (1 + k / 100))): return True
         if _close(value, 1 - a / 100) or _close(value, 1 + a / 100): return True  # 15% off is "× 0.85"
-    # A total of three or four listed numbers ("117,306 + 114,460 + 116,525 = 348,291").
+    # A total of three or four numbers the answer itself has already stated and passed
+    # ("117,306 + 114,460 + 116,525 = 348,291"), never of any numbers found in the sources.
+    stated = list(dict.fromkeys(round(n, 6) for n in listed))[-12:]
     for size in (3, 4):
-        for combo in itertools.combinations(nums[:30], size):
+        for combo in itertools.combinations(stated, size):
             if _close(value, sum(combo)): return True
     return False
 
@@ -184,7 +186,7 @@ def unsupported_values(text, sources, context='', verified=(), strict_names=Fals
         if any(f.casefold() in corpus or f.casefold() in digits for f in _number_forms(token)): continue
         try: value = float(token.strip('$€£₹ %').replace(',', ''))
         except ValueError: missing.append(token); continue
-        if not (calculation and _derivable(value, known)): missing.append(token)
+        if not (calculation and _derivable(value, known, listed=verified)): missing.append(token)
     for m in NAME.finditer(body):
         name = m[1]
         # A capitalised sentence start is not a name, except when nothing cites the sentence (strict).

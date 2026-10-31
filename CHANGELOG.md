@@ -2,6 +2,13 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.58 - 31 October 2026
+
+Totals of listed figures stay in the answer
+
+- `answer_check._derivable`: three- and four-number totals are tried on the numbers the answer has already stated and passed (`listed`), not the first 30 numbers of the sources. The v26.1.16.56 version missed real totals on long sources and could have accepted a sum of unrelated source numbers.
+- Tests: `test_a_listed_total_is_found_when_sources_hold_many_other_numbers`.
+
 ## v26.1.16.57 - 31 October 2026
 
 Faster, steadier restarts (fixes the restart loop after the v26.1.16.56 deployment)

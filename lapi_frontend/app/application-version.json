@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.57",
+  "version": "26.1.16.58",
   "releases": [
+    {
+      "version": "26.1.16.58",
+      "date": "2026-10-31",
+      "title": "Totals of listed figures stay in the answer",
+      "changes": [
+        "A total of three or four figures listed in the answer is kept, however many other numbers the documents contain."
+      ]
+    },
     {
       "version": "26.1.16.57",
       "date": "2026-10-31",

@@ -391,3 +391,15 @@ def test_every_attached_message_starts_the_right_workflow(system, monkeypatch, t
     monkeypatch.setattr(agent_model, 'complete', lambda *a, **k: pytest.fail('attached files need no model answer'))
     p = plan(s, d, text=text, attached_filenames=['NOTICE.pdf'], **({'template_id': t['id']} if t else {}))
     assert p['phase'] == 'awaiting_confirmation' and [c['tool'] for c in p['calls']] == tools_expected
+
+
+def test_a_listed_total_is_found_when_sources_hold_many_other_numbers():
+    filler = ' '.join(f'Item {i} costs {1000 + i * 7}.50.' for i in range(40))
+    sources = [{'index': 1, 'text': filler + ' Total 117,306.00'}, {'index': 2, 'text': filler + ' Total 114,460.00'}, {'index': 3, 'text': filler + ' Total 116,525.00'}]
+    answer = '- Cedar: INR 117,306.00 [1]\n- Vertex: INR 114,460.00 [2]\n- Ironbridge: INR 116,525.00 [3]\n\nThe combined total is INR 348,291.00.'
+    assert answer_check.check(answer, sources) == []
+    # The same figure with no list in the answer is not a sum of anything stated.
+    assert answer_check.check('The combined total is INR 348,291.00.', sources)[0]['reason'] == 'uncited_claim'
+    # A wrong sum of the listed figures is still caught.
+    wrong = answer.replace('348,291.00', '348,991.00')
+    assert [p['reason'] for p in answer_check.check(wrong, sources)] == ['uncited_claim']

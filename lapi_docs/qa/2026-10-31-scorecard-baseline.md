@@ -61,3 +61,20 @@ Runs: 91.9%, 93.9%, 93.9%. Median answer time 10 s. Every turn took the agentic 
 - Scans, photos and handwriting are simulated from fonts, so real documents can score lower.
 - No before-and-after yet: v26.1.16.56 must be scored with the same files to show the gain.
 - Scores are pass/fail on known values, so they are not comparable with the 1–5 scorecard of the 31 October QA report (46/100, then about 66/100).
+
+## Re-test on v26.1.16.57 (31 October 2026)
+
+Same files and scoring. One pass of the 99 agent prompts, not three. Only the two Excel extractions were re-run, after re-reading those files; the other 19 extraction results are carried over from the baseline.
+
+| Measure | Baseline | Re-test |
+|---|---|---|
+| Agent | 94.3% (280 / 297, 3 passes) | 99.0% (98 / 99, 1 pass) |
+| Extraction | 95.7% (154 / 161) | 100% (161 / 161) |
+| Excel extraction | 50% (7 / 14) | 100% (14 / 14) |
+| Agent on Excel | 50% (9 / 18) | 100% (6 / 6) |
+
+Upload flow on the live site: "can u upload one document for me" with a file attached, "Extract the fields from this file" with a file attached, and "yes i need to upload" in the next turn each opened the card in 1 to 5 s. After confirming, the file reached ready. A plain question about uploads still got an answer, not a card, but took 33 s and its list started at item 2 because a statement was removed.
+
+Remaining failure: the sum of three invoices (2 of 2 attempts). The sum sentence is still removed: three-number totals are tried only on the first 30 known numbers, and the source text fills that list before the numbers stated in the answer.
+
+The second-look extraction step filled no fields, so it is still unproven. The test files are simulated and made for this test, so these scores can be higher than on real documents.
