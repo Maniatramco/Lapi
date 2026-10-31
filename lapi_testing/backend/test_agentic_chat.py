@@ -53,6 +53,9 @@ def test_dates_match_by_meaning_and_calculations_verify_step_by_step():
     # Arithmetic shown with its cited inputs passes, and each result feeds the next step.
     calc = 'The Pro plan costs INR 1,299 per month [1]. 1,299 × 12 = 15,588 per year [1]. With the 15% discount: 15,588 × 0.85 = 13,249.80 [1].'
     assert answer_check.check(calc, sources) == []
+    latex = ('The Pro plan costs INR 1,299 per month per site [1]. To calculate the annual cost:\n\n1. Annual cost without discount:  \n   \( 1,299 \times 12 = 15,588 \)\n\n'
+             '2. Apply the 15% discount:  \n   \( 15,588 \times 0.85 = 13,249.80 \)\n\nTherefore, the Pro plan would cost INR 13,249.80 per site per year with the discount [1].')
+    assert answer_check.check(latex, sources) == []
     # A bare number with no arithmetic in the sentence is still not derivable.
     assert answer_check.check('The yearly price is 15,588 [1].', sources)[0]['reason'] == 'unsupported_value'
 

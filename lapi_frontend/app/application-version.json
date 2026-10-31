@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.50",
+  "version": "26.1.16.51",
   "releases": [
+    {
+      "version": "26.1.16.51",
+      "date": "2026-10-31",
+      "title": "English answers, calculations kept, top row found",
+      "changes": [
+        "Lapi Agent always answers in English.",
+        "Calculations written with LaTeX or a discount multiplier such as × 0.85 are no longer removed.",
+        "Asking for the highest or lowest value with other columns returns that row, such as the order and customer with the highest revenue."
+      ]
+    },
     {
       "version": "26.1.16.50",
       "date": "2026-10-31",

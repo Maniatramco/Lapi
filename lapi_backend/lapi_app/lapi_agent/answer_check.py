@@ -99,7 +99,7 @@ def _close(a, b):
     return abs(a - b) <= max(0.011, abs(b) * 1e-4)
 
 
-CALC = re.compile(r'[×*=+/−]|(?<=\d)\s*-\s*(?=\d)|\b(?:total|sum|subtotal|difference|minus|plus|times|multiplied|divided|per (?:month|year|site|day|unit)|average|discount|combined|together|altogether|add(?:ed|ing)? (?:up|to)|calculat|works out|comes to|equals)\b', re.I)
+CALC = re.compile(r'[×*=+/−]|\times|\frac|(?<=\d)\s*-\s*(?=\d)|\b(?:total|sum|subtotal|difference|minus|plus|times|multiplied|divided|per (?:month|year|site|day|unit)|average|discount|combined|together|altogether|add(?:ed|ing)? (?:up|to)|calculat|works out|comes to|equals)\b', re.I)
 
 
 def _derivable(value, known, constants=IMPLICIT_NUMBERS):
@@ -117,6 +117,7 @@ def _derivable(value, known, constants=IMPLICIT_NUMBERS):
             if (b and _close(value, a / b)) or (a and _close(value, b / a)): return True
         for k in constants:
             if any(_close(value, c) for c in (a * k, a / k, a * (1 - k / 100), a * (1 + k / 100))): return True
+        if _close(value, 1 - a / 100) or _close(value, 1 + a / 100): return True  # 15% off is "× 0.85"
     return False
 
 

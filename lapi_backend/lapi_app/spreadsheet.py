@@ -535,7 +535,16 @@ def query(store, document_id, spec):
         raise SpreadsheetError('Group by at most 2 columns.')
     if not isinstance(metrics, list) or len(metrics) > 6:
         raise SpreadsheetError('Use up to 6 calculations.')
-    if group_by or metrics:
+    # "The highest X and who it belongs to": the top row itself, with the columns asked for.
+    top = (not group_by and len(metrics) == 1 and isinstance(metrics[0], dict) and str(metrics[0].get('op', '')).lower() in ('max', 'min')
+           and metrics[0].get('column') and spec.get('columns'))
+    if top:
+        table, ranked = _derived(table, entry, metrics[0]['column'])
+        chosen = [_column(entry, c)['name'] for c in spec['columns'] if str(c).strip().lower() != ranked['name'].lower()]
+        table = table.filter(pc.is_valid(table[ranked['name']])).sort_by([(ranked['name'], 'descending' if str(metrics[0]['op']).lower() == 'max' else 'ascending')])
+        row_numbers = table['__row'].to_pylist()[:limit]
+        result = table.select(chosen + [ranked['name']])
+    elif group_by or metrics:
         keys, names = [], []
         for item in group_by:
             column = _column(entry, item.get('column') if isinstance(item, dict) else item)
@@ -580,9 +589,10 @@ def query(store, document_id, spec):
         chosen = chosen or [c['name'] for c in entry['columns']]
         row_numbers = table['__row'].to_pylist()[:limit]
         result = table.select(chosen)
-    sort = spec.get('sort') or {}
+    sort = {} if top else spec.get('sort') or {}
     if isinstance(sort, dict) and sort.get('by'):
-        by = next((n for n in result.column_names if n.lower() == str(sort['by']).strip().lower()), None)
+        squeeze = lambda name: ''.join(str(name).lower().split())
+        by = next((n for n in result.column_names if squeeze(n) == squeeze(sort['by'])), None)
         if by is None:
             raise SpreadsheetError(f'Cannot sort by "{sort["by"]}". Sort by one of: ' + ', '.join(result.column_names))
         result = result.sort_by([(by, 'descending' if sort.get('desc') else 'ascending')])

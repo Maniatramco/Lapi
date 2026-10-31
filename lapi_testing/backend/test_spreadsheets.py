@@ -77,6 +77,9 @@ def test_exact_calculations_group_filter_and_refuse_wrong_columns():
     assert doubled['columns'] == ['Region', 'sum of Revenue * 2'] and sorted(doubled['rows']) == [['North', 500.0], ['South', 240.0]]
     scaled = spreadsheet.query(store, 'd', {'columns': ['Region', 'Revenue / 100'], 'sort': {'by': 'Revenue / 100', 'desc': True}, 'limit': 1})
     assert scaled['rows'] == [['North', 1.5]]
+    # The top row itself, not just the top value.
+    best = spreadsheet.query(store, 'd', {'metrics': [{'op': 'max', 'column': 'Revenue * 2'}], 'columns': ['Region'], 'sort': {'by': 'Revenue * 2', 'desc': True}, 'limit': 1})
+    assert best['columns'] == ['Region', 'Revenue * 2'] and best['rows'] == [['North', 300.0]] and best['row_numbers'] == [3]
     assert spreadsheet.query(store, 'd', {'sheet': 'Notes', 'filters': [{'column': 'owner', 'op': '=', 'value': 'PRIYA'}]})['matched_rows'] == 1
     for bad, message in (({'metrics': [{'op': 'sum', 'column': 'Region'}]}, 'not a number column'),
                          ({'filters': [{'column': 'Nope', 'op': '=', 'value': 1}]}, 'no column "Nope"'),

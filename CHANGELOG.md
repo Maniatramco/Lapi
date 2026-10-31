@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.51 - 31 October 2026
+
+English answers, calculations kept, top row found
+
+- `agent_system.md`: always answer in English; arithmetic in plain text; the max-with-columns form for "the highest X".
+- `answer_check`: `CALC` recognises LaTeX `\times` and `\frac`; `_derivable` accepts a percentage as a multiplier (15% as 0.85).
+- `spreadsheet.query`: one max or min metric with `columns` returns the top rows with those columns; sort names ignore spacing.
+
 ## v26.1.16.50 - 31 October 2026
 
 Rejected sentences are removed again; month-name dates match
