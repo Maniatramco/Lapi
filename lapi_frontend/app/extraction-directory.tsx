@@ -10,7 +10,7 @@ export function extractionDataset(e:Entity,documents:Entity[]=[]){
 function filename(e:Entity,documents:Entity[]){return e.merge?.filename||documents.filter(d=>e.document_ids?.includes(d.id)).map(d=>d.name).join(', ')||e.name||'Extraction';}
 function reviewStatus(e:Entity){return e.status==='ready'?(e.review_status==='reviewed'?'Reviewed':'Pending review'):e.status;}
 function columnValues(e:Entity,datasets:Entity[],documents:Entity[],templates:Entity[]){return {
- dataset:datasets.find(d=>d.id===extractionDataset(e,documents))?.name||'Dataset unavailable',
+ dataset:datasets.find(d=>d.id===extractionDataset(e,documents))?.name||'Collection unavailable',
  template:templates.find(t=>t.id===e.template_id)?.name||e.template_name||'Unavailable',
  document:filename(e,documents),id:e.id,created:e.created_at||0,review:reviewStatus(e),status:e.status
 };}
@@ -49,12 +49,12 @@ export function ExtractionDirectory({datasets,extractions,documents,templates=[]
  });
  const currentPage=Math.min(page,Math.max(0,Math.ceil(rows.length/20)-1)),visibleRows=rows.slice(currentPage*20,(currentPage+1)*20);
  const clearSearch=()=>{setQuery('');setPage(0);searchInput.current?.focus();};
- const headings=[['dataset','Dataset'],['template','Prompt template'],['document','Document / extraction'],['created','Extracted time'],['review','Review status']];
+ const headings=[['dataset','Collection'],['template','Prompt template'],['document','Document / extraction'],['created','Extracted time'],['review','Review status']];
  // Tiles count the extractions currently in scope and double as one-click status filters.
  const summary=reviewSummary(scoped);
  return <section className="extraction-directory" aria-label="Extraction results directory">
   <div className="review-summary" role="group" aria-label="Review summary">{summary.map(tile=><button key={tile.status} type="button" className="review-tile" data-tone={tile.tone} aria-pressed={status===tile.status} onClick={()=>{setStatus(status===tile.status?'':tile.status);setPage(0);}}><span>{tile.label}</span><strong>{tile.count}</strong><small>{status===tile.status?'Showing only these · click to clear':'Show only these'}</small></button>)}</div>
-  <ReviewSelectors datasets={datasets} templates={prompts} extractions={scoped} dataset={selectedDataset} template={selectedTemplate} extraction={selectedExtraction} allDatasets allExtractions disabled={busy} datasetLabel="Extraction dataset filter" onDataset={id=>{setTemplate('');setExtraction('');setPage(0);onDatasetChange(id);}} onTemplate={id=>{setTemplate(id);setExtraction('');setPage(0);}} onExtraction={id=>{setExtraction(id);setPage(0);}}/>
+  <ReviewSelectors datasets={datasets} templates={prompts} extractions={scoped} dataset={selectedDataset} template={selectedTemplate} extraction={selectedExtraction} allDatasets allExtractions disabled={busy} datasetLabel="Extraction collection filter" onDataset={id=>{setTemplate('');setExtraction('');setPage(0);onDatasetChange(id);}} onTemplate={id=>{setTemplate(id);setExtraction('');setPage(0);}} onExtraction={id=>{setExtraction(id);setPage(0);}}/>
   <div className="extract-list-toolbar">
    <div className="extract-search" role="search" aria-label="Search extraction results"><Search size={18} aria-hidden="true"/><input ref={searchInput} type="search" aria-label="Search extractions" aria-controls="extraction-directory-results" placeholder="Search names, files, templates or IDs" autoComplete="off" spellCheck={false} value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();clearSearch();}}}/>{query&&<button type="button" className="extract-search-clear" aria-label="Clear extraction search" title="Clear search" onClick={clearSearch}><X size={16}/></button>}</div>
    <label>Review status<select aria-label="Extraction status filter" value={status} onChange={e=>{setStatus(e.target.value);setPage(0);}}><option value="">All statuses</option><option value="unreviewed">Pending review</option><option value="reviewed">Reviewed</option>{['queued','processing','failed','cancelled'].map(s=><option key={s} value={s}>{s[0].toUpperCase()+s.slice(1)}</option>)}</select></label>

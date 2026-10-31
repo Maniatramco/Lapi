@@ -3,7 +3,7 @@ const file=path.resolve(__dirname,'../../lapi_frontend/app/dataset-knowledge-sco
 mod._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,file);
 const {addDatasetKnowledge,removeDatasetKnowledge,droppedDatasetIds,DATASET_DRAG_TYPE}=mod.exports;
 const datasets=[{id:'a'},{id:'b'},{id:'inactive',active:false}],documents=[{id:'one',dataset_id:'a',status:'ready'},{id:'excluded',parent_id:'a',status:'ready'},{id:'two',kb_id:'b',status:'ready'},{id:'stale',dataset_id:'b',status:'ready',requires_reindex:true},{id:'pending',dataset_id:'b',status:'queued'},{id:'private',dataset_id:'unassigned',status:'ready'},{id:'off',dataset_id:'inactive',status:'ready'}];
-test('adding datasets preserves file exclusions and cannot include inaccessible, stale or inactive sources',()=>{
+test('adding collections preserves file exclusions and cannot include inaccessible, stale or inactive sources',()=>{
  const current={datasetIds:['a'],documentIds:['one']};assert.deepEqual(addDatasetKnowledge(current,['a','b','unassigned','inactive'],datasets,documents),{datasetIds:['a','b'],documentIds:['one','two']});assert.deepEqual(current,{datasetIds:['a'],documentIds:['one']});
 });
 test('removing the final dataset stays explicitly empty and add operations deduplicate',()=>{

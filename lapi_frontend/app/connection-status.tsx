@@ -58,7 +58,7 @@ export function ConnectionStatus({api,revision,datasets,datasetId}:{api:Api;revi
  const unknown={provider:'unknown',name:'Not reported',detail:'Hosting location has not been reported by this deployment.'};
  const items:(Destination&{id:string;label:string})[]=connections?[
   {id:'files',label:'Storage',...connections.files,name:connections.files.provider==='local'?'Application filesystem':connections.files.name,detail:'Active destination for new documents and result files. Existing files retain their saved destination.'},
-  {id:'database',label:'Database',...connections.database,name:connections.database.provider==='local'?'Application database':connections.database.name,detail:'Stores application records, users, datasets and extraction metadata.'},
+  {id:'database',label:'Database',...connections.database,name:connections.database.provider==='local'?'Application database':connections.database.name,detail:'Stores application records, users, collections and extraction metadata.'},
   {id:'knowledge',label:'Vector DB',...connections.knowledge,detail:'Knowledge index for documents, metadata and published extraction results.'},
   {id:'api',label:'FastAPI',...(connections.services?.api||unknown)},
   {id:'web',label:'WebApp',...(connections.services?.web||unknown),endpoint:origin},

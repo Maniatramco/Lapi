@@ -1,1 +1,31 @@
-.lapi-agent-logo{display:inline-block;object-fit:contain;flex-shrink:0;vertical-align:middle}.agent-page-title{display:flex;align-items:center;gap:9px}
+.lapi-agent-logo{display:inline-block;flex-shrink:0;vertical-align:middle;overflow:visible}.agent-page-title{display:flex;align-items:center;gap:9px}
+/* The Agent: a light sweeps the tile, the page tilts as it reads, the spark trails a glow and each line brightens
+   as it passes; at the end the spark flares, a ring ripples out and the tile pulses. */
+.lapi-reader{transform-box:fill-box;transform-origin:50% 100%;animation:lapi-reader-hover 4s ease-in-out infinite}
+.lapi-reader-tile{transform-box:fill-box;transform-origin:center;animation:lapi-reader-tile 4s ease-in-out infinite}
+.lapi-reader-sheen{animation:lapi-reader-sheen 4s ease-in-out infinite}
+.lapi-reader-spark{transform-box:fill-box;transform-origin:center;animation:lapi-reader-read 4s ease-in-out infinite}
+.lapi-reader-trail{transform-box:fill-box;transform-origin:center;animation:lapi-reader-read 4s ease-in-out infinite;animation-delay:-3.88s;opacity:.45}
+.lapi-reader-ring{transform-box:fill-box;transform-origin:center;animation:lapi-reader-ring 4s ease-out infinite}
+.lapi-reader-line{transform-box:fill-box;transform-origin:left center;animation:lapi-reader-line 4s ease-in-out infinite}
+.lapi-reader-line:nth-of-type(2){animation-delay:.56s}.lapi-reader-line:nth-of-type(3){animation-delay:1.12s}.lapi-reader-line:nth-of-type(4){animation-delay:1.68s}
+@keyframes lapi-reader-hover{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-2px) rotate(-1.5deg)}60%{transform:translateY(-1px) rotate(1.5deg)}}
+@keyframes lapi-reader-tile{0%,62%,76%,100%{transform:scale(1)}68%{transform:scale(1.035)}}
+@keyframes lapi-reader-sheen{0%,10%,40%,100%{transform:translateX(-70px)}30%{transform:translateX(70px)}}
+@keyframes lapi-reader-read{0%{transform:translate(0,0) scale(.9) rotate(0)}14%{transform:translate(0,8px) scale(1) rotate(45deg)}28%{transform:translate(0,16px) scale(.9) rotate(90deg)}42%{transform:translate(0,24px) scale(1) rotate(135deg)}56%{transform:translate(0,32px) scale(.9) rotate(180deg)}66%{transform:translate(10px,34px) scale(1.6) rotate(225deg)}78%{transform:translate(10px,34px) scale(1.1) rotate(270deg)}100%{transform:translate(0,0) scale(.9) rotate(360deg)}}
+@keyframes lapi-reader-ring{0%,62%{transform:scale(.2);opacity:0}66%{transform:scale(.4);opacity:.9}86%,100%{transform:scale(2.4);opacity:0}}
+@keyframes lapi-reader-line{0%,8%{fill:#c7d7fb;transform:scaleX(1)}12%{fill:#93c5fd;transform:scaleX(1.06)}16%,60%{fill:#1d4ed8;transform:scaleX(1)}72%,100%{fill:#c7d7fb}}
+/* The Help Bot robot hovers, blinks, glances aside, waves, and its bubble pops once every two loops. */
+.lapi-robo{transform-box:fill-box;transform-origin:50% 100%;animation:lapi-robo-bob 3.6s ease-in-out infinite}
+.lapi-robo-light{transform-box:fill-box;transform-origin:center;animation:lapi-robo-glow 1.8s ease-in-out infinite}
+.lapi-robo-head{transform-box:fill-box;transform-origin:50% 90%;animation:lapi-robo-tilt-help 7.2s ease-in-out infinite}
+.lapi-robo-eye{transform-box:fill-box;transform-origin:center;animation:lapi-robo-blink 3.6s ease-in-out infinite}
+.lapi-robo-arm{transform-box:fill-box;transform-origin:20% 90%;animation:lapi-robo-wave 7.2s ease-in-out infinite}
+.lapi-robo-bubble{transform-box:fill-box;transform-origin:10% 100%;animation:lapi-robo-pop 7.2s ease-in-out infinite}
+@keyframes lapi-robo-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes lapi-robo-glow{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.25)}}
+@keyframes lapi-robo-tilt-help{0%,70%,100%{transform:rotate(0)}80%{transform:rotate(5deg)}90%{transform:rotate(-2deg)}}
+@keyframes lapi-robo-blink{0%,46%,54%,100%{transform:scaleY(1)}50%{transform:scaleY(.1)}}
+@keyframes lapi-robo-wave{0%,55%,100%{transform:rotate(0)}62%{transform:rotate(-28deg)}70%{transform:rotate(-8deg)}78%{transform:rotate(-28deg)}86%{transform:rotate(0)}}
+@keyframes lapi-robo-pop{0%,55%,100%{transform:scale(1)}62%{transform:scale(1.12)}70%{transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){.lapi-reader-trail,.lapi-reader-ring,.lapi-reader-sheen{display:none}.lapi-reader,.lapi-reader-tile,.lapi-reader-sheen,.lapi-reader-spark,.lapi-reader-trail,.lapi-reader-ring,.lapi-reader-line,.lapi-robo,.lapi-robo-head,.lapi-robo-light,.lapi-robo-eye,.lapi-robo-arm,.lapi-robo-bubble{animation:none}.lapi-reader-line{fill:#1d4ed8}}

@@ -10,7 +10,7 @@ function view(api,initialStorage=new Map(),full=false,extra={}){
  const base=mod.require.bind(mod);const empty=new Proxy({},{get:()=>()=>null});mod.require=id=>id==='./manage-dataset'?{openDatasetEditor(){}}:id==='./action-button'?actionButton:id==='react'?react:id==='./onboarding-draft'?draft:id==='./agent-consent'?{useAgentConsent:()=>({popup:null,request:async()=>({required:false})})}:id==='lucide-react'||id==='./workflow-stepper'?empty:id.endsWith('.css')?{}:base(id);
  mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,filename);
  const models=[{id:'emb',name:'Embeddings',provider_model:'embed',provider:'ollama',enabled:true,credential_configured:true,capabilities:['embedding']},{id:'chat',name:'Chat and extract',provider_model:'chat',provider:'ollama',enabled:true,credential_configured:true,capabilities:['chat','extraction']}];
- const props={api:async(...args)=>{calls.push(args);return api(...args);},models,storageKey:'setup',proposal:{name:'QA dataset',process_documents:full},onBusy:b=>busy.push(b),onReady:()=>ready++,onUse:()=>{},...extra};
+ const props={api:async(...args)=>{calls.push(args);return api(...args);},models,storageKey:'setup',proposal:{name:'QA collection',process_documents:full},onBusy:b=>busy.push(b),onReady:()=>ready++,onUse:()=>{},...extra};
  const nodes=n=>!n||typeof n!=='object'?[]:Array.isArray(n)?n.flatMap(nodes):[n,...nodes(n.props?.children)];
  function render(){cursor=0;effects.length=0;root=expandActions(mod.exports.AgentOnboarding(props));}
  render();effects[0]();render();if(!full){nodes(root).find(n=>n.props?.['aria-label']==='Upload documents and run extraction')?.props.onChange({target:{checked:false}});render();}return {render,runUpdateEffects:()=>effects.slice(1).forEach(fn=>fn()),calls,storage:initialStorage,find:(key,v)=>nodes(root).find(n=>n.props?.[key]===v),button:()=>nodes(root).find(n=>n.type==='button'),get ready(){return ready;},busy};
@@ -28,7 +28,7 @@ test('confirmation is required; browser observes worker progress without advanci
 test('a restored failed setup retries its existing workflow without another dataset proposal',async()=>{
  const saved={id:'w',status:'failed',name:'Saved',description:'',embedding_model_id:'emb',default_chat_model_id:'chat',default_extraction_model_id:'chat',dataset_id:'dataset',steps:[],error:'Temporary failure'};
  const v=view(async(path,method)=>method==='GET'?saved:{...saved,status:'completed',error:''},new Map([['setup','w']]));
- await flush();v.render();assert.equal(v.find('aria-label','Onboarding dataset name'),undefined);
+ await flush();v.render();assert.equal(v.find('aria-label','Onboarding collection name'),undefined);
  assert.equal(v.button().props.children,'Retry onboarding workflow');v.button().props.onClick();await flush();v.render();
  assert.equal(v.calls.filter(c=>c[1]==='POST').length,1);assert.equal(v.calls.at(-1)[0],'/agent-v2/onboarding/w/advance');assert.equal(v.ready,1);
 });
@@ -38,7 +38,7 @@ test('unknown create outcome retains the same confirmed request across reload, v
  const resumed=view(async(path,method,value)=>path==='/agent-v2/onboarding'?{...value,id:'w',status:'pending',steps:[]}:{id:'w',status:'completed',dataset_id:'d',steps:[]},storage);
  resumed.button().props.onClick();await flush();assert.deepEqual(resumed.calls[0][2],body);
  const rejected=view(async()=>{throw Object.assign(new Error('Invalid model'),{status:422});});rejected.button().props.onClick();await flush();rejected.render();
- assert.equal(rejected.storage.has('setup-request'),false);assert.equal(rejected.find('aria-label','Onboarding dataset name').props.disabled,false);
+ assert.equal(rejected.storage.has('setup-request'),false);assert.equal(rejected.find('aria-label','Onboarding collection name').props.disabled,false);
 });
 
 test('full onboarding confirms document hashes and prompt together, stages files once and advances to review',async()=>{
@@ -74,16 +74,16 @@ test('a rejected document transfer retains the accepted workflow and confirmed r
  assert.equal(v.storage.get('setup'),'full');assert.ok(v.storage.get('setup-request'));assert.ok(v.find('aria-label','Reattach onboarding documents'));
 });
 
-test('New dataset maps defaults without offering processing and reports the completed dataset once',async()=>{
+test('New collection maps defaults without offering processing and reports the completed collection once',async()=>{
  const completed=[];
- const dataset={id:'new-dataset',name:'QA dataset',version:2,models_complete:true};
+ const dataset={id:'new-dataset',name:'QA collection',version:2,models_complete:true};
  const v=view(async(path,method,body)=>path==='/agent-v2/onboarding'?{...body,id:'w',status:'pending',steps:[]}:{id:'w',status:'completed',dataset_id:dataset.id,dataset,steps:[]},new Map(),true,{datasetOnly:true,onCompleted:d=>completed.push(d)});
  assert.equal(v.find('aria-label','Upload documents and run extraction'),undefined);
  assert.equal(v.find('aria-label','Onboarding documents'),undefined);
  assert.equal(v.find('aria-label','Onboarding embedding model').props.value,'emb');
  assert.equal(v.find('aria-label','Onboarding chat model').props.value,'chat');
  assert.equal(v.find('aria-label','Onboarding extraction model').props.value,'chat');
- assert.equal(v.button().props.children,'Create dataset');
+ assert.equal(v.button().props.children,'Create collection');
  v.button().props.onClick();await flush();v.render();v.runUpdateEffects();v.render();v.runUpdateEffects();
  assert.equal(v.calls[0][2].processing,null);
  assert.equal(v.calls.filter(c=>c[1]==='POST').length,1);

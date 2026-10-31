@@ -125,7 +125,47 @@ variable "keycloak_admin_role" {
 }
 
 variable "public_url" {
-  description = "Address people open Lapi at; Keycloak redirects back to <public_url>/api/auth/keycloak/callback. Empty uses http://<load balancer IP>."
+  description = "Address people open Lapi at; Keycloak redirects back to <public_url>/api/auth/keycloak/callback. Empty uses https://<https_hostname> (or http://<load balancer IP> when https is off)."
   type        = string
   default     = ""
+}
+
+# --- HTTPS (Caddy in the container instance, certificate from Let's Encrypt) ---
+
+variable "https" {
+  description = "Serve Lapi over HTTPS: Caddy gets and renews a Let's Encrypt certificate; plain HTTP redirects to it."
+  type        = bool
+  default     = true
+}
+
+variable "https_hostname" {
+  description = "Name the certificate is for. Empty uses lapi.<load balancer IP>.sslip.io, which needs no domain or DNS setup."
+  type        = string
+  default     = ""
+}
+
+# --- Hosted Keycloak (keycloak.tf) ---------------------------------------------
+
+variable "keycloak_hosted" {
+  description = "Run Keycloak in Lapi's container instance (https://sso.<load balancer IP>.sslip.io), with its data in lapidb, and sign in to Lapi with it. Overrides keycloak_url, keycloak_realm and keycloak_client_id. Needs https = true."
+  type        = bool
+  default     = false
+}
+
+variable "keycloak_hostname" {
+  description = "Name of the hosted Keycloak. Empty uses sso.<load balancer IP>.sslip.io."
+  type        = string
+  default     = ""
+}
+
+variable "keycloak_memory_gbs" {
+  description = "Memory limit of the hosted Keycloak container (the Java heap is 60% of it). Taken from container_memory_gbs, not added to it."
+  type        = number
+  default     = 2
+}
+
+variable "keycloak_identity_providers" {
+  description = "Company sign-in providers configured in Keycloak (Identity providers), alias => button label, e.g. { microsoft = \"Microsoft\", google = \"Google\" }. Lapi shows one button per provider. Add an alias here only after it exists in Keycloak."
+  type        = map(string)
+  default     = {}
 }

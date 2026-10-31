@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from . import core, dataset_models as routing
-from .dataset_access import require_admin, dataset_ids
+from .dataset_access import require_admin, require_level, dataset_ids
 
 INSTRUCTION_BYTES = 4096
 GUIDE_BYTES = 8192
@@ -80,7 +80,7 @@ def _versions(kind, parent):
 
 def _require_dataset(dataset_id, actor):
     with core.Session() as session:
-        if dataset_id not in dataset_ids(actor, session): raise HTTPException(404, 'Dataset not found.')
+        if dataset_id not in dataset_ids(actor, session): raise HTTPException(404, 'Collection not found.')
 
 
 def dataset_instructions(dataset_id, owner=None):
@@ -122,7 +122,7 @@ def install(app, auth):
 
     @app.put('/api/datasets/{dataset_id}/instructions')
     def put_instructions(dataset_id: str, body: TextInput, owner=Depends(auth)):
-        require_admin(owner); _require_dataset(dataset_id, owner)
+        _require_dataset(dataset_id, owner); require_level(owner, dataset_id, 'owner')  # Dataset owners and administrators.
         current = dataset_instructions(dataset_id)
         if body.expected_version is not None and body.expected_version != current['version']:
             raise HTTPException(409, 'The instructions changed since this proposal. Review the latest version first.')
@@ -136,7 +136,7 @@ def install(app, auth):
 
     @app.put('/api/datasets/{dataset_id}/prompt-guide')
     def put_dataset_guide(dataset_id: str, body: TextInput, owner=Depends(auth)):
-        require_admin(owner); _require_dataset(dataset_id, owner)
+        _require_dataset(dataset_id, owner); require_level(owner, dataset_id, 'owner')  # Dataset owners and administrators.
         return _write('dataset_prompt_guide', dataset_id, owner, body.text, GUIDE_BYTES, body.summary)
 
     @app.get('/api/models/{model_id}/prompt-guide')

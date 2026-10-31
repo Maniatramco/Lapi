@@ -18,6 +18,17 @@ class FakeOpenFGA:
     def restart(self):
         self.stores = {}
 
+    @staticmethod
+    def has(tuples, user, relation, obj):
+        """Lapi's model: owner > editor > viewer on datasets, and grants to team#member."""
+        if (user, relation, obj) in tuples or ('user:*', relation, obj) in tuples:
+            return True
+        teams = {o for u, r, o in tuples if u == user and r == 'member' and o.startswith('team:')}
+        if any((team + '#member', relation, obj) in tuples for team in teams):
+            return True
+        stronger = {'viewer': 'editor', 'editor': 'owner'}.get(relation)
+        return bool(stronger and obj.startswith('dataset:') and FakeOpenFGA.has(tuples, user, stronger, obj))
+
     def tuples(self):
         return set().union(*(store['tuples'] for store in self.stores.values())) if self.stores else set()
 
@@ -62,9 +73,11 @@ class FakeOpenFGA:
             token = str(start + len(page)) if start + len(page) < len(rows) else ''
             return httpx.Response(200, json={'tuples': [{'key': dict(zip(('user', 'relation', 'object'), t))} for t in page], 'continuation_token': token})
         if operation == 'check':
-            return httpx.Response(200, json={'allowed': key(body['tuple_key']) in store['tuples']})
+            k = body['tuple_key']
+            return httpx.Response(200, json={'allowed': self.has(store['tuples'], k['user'], k['relation'], k['object'])})
         if operation == 'list-objects':
-            return httpx.Response(200, json={'objects': [o for u, r, o in store['tuples'] if u == body['user'] and r == body['relation'] and o.startswith(body['type'] + ':')]})
+            objects = {o for _, _, o in store['tuples'] if o.startswith(body['type'] + ':')}
+            return httpx.Response(200, json={'objects': sorted(o for o in objects if self.has(store['tuples'], body['user'], body['relation'], o))})
         return httpx.Response(404, json={'code': 'undefined_endpoint'})
 
 
@@ -148,3 +161,71 @@ def test_many_tuples_are_written_in_batches_of_100(accounts, fga, monkeypatch):
     monkeypatch.setattr(authz, '_desired', lambda user_id=None: rows)
     authz.prepare()
     assert fga.tuples() == rows
+
+
+def test_access_map_shows_database_grants_beside_openfga_answers(accounts, fga):
+    client = accounts
+    login(client)
+    d = dataset(SimpleNamespace(api=client))
+    other = dataset(SimpleNamespace(api=client), name='Other')
+    assert client.put('/api/users/colleague/datasets', json={'dataset_ids': [d['id']]}).status_code == 200
+    result = client.get('/api/access-map').json()
+    assert {row['id'] for row in result['datasets']} == {d['id'], other['id']}
+    users = {row['id']: row for row in result['users']}
+    assert users['colleague']['dataset_ids'] == [d['id']] and not users['colleague']['is_admin']
+    assert users['colleague']['openfga'] == {'administrator': False, 'auditor': False, 'contributor': False, 'levels': {d['id']: 'viewer'}, 'dataset_ids': [d['id']], 'in_step': True}
+    assert users['administrator']['openfga']['administrator'] and users['administrator']['openfga']['in_step']
+    assert result['openfga'] == {'enabled': True, 'reachable': True, 'differences': 0}
+    # A tuple OpenFGA lost shows as a difference until Lapi rebuilds it.
+    for store in fga.stores.values():
+        store['tuples'].discard(('user:colleague', 'viewer', 'dataset:' + d['id']))
+    result = client.get('/api/access-map').json()
+    colleague = next(row for row in result['users'] if row['id'] == 'colleague')
+    assert colleague['openfga'] == {'administrator': False, 'auditor': False, 'contributor': False, 'levels': {}, 'dataset_ids': [], 'in_step': False}
+    assert result['openfga']['differences'] == 1
+    with TestClient(main.app) as other_client:
+        login(other_client, 'Colleague')
+        assert other_client.get('/api/access-map').status_code == 403
+
+
+def test_access_map_without_openfga_lists_database_grants_only(accounts):
+    client = accounts
+    login(client)
+    d = dataset(SimpleNamespace(api=client))
+    assert client.put('/api/users/colleague/datasets', json={'dataset_ids': [d['id']]}).status_code == 200
+    result = client.get('/api/access-map').json()
+    assert result['openfga'] == {'enabled': False, 'reachable': None, 'differences': 0}
+    colleague = next(row for row in result['users'] if row['id'] == 'colleague')
+    assert colleague['dataset_ids'] == [d['id']] and 'openfga' not in colleague
+
+
+def test_levels_and_team_grants_are_answered_by_openfga(accounts, fga):
+    client = accounts
+    login(client)
+    d = dataset(SimpleNamespace(api=client))
+    team = client.post('/api/teams', json={'name': 'Finance'}).json()['id']
+    assert client.put('/api/teams/' + team + '/members', json={'user_ids': ['colleague']}).status_code == 200
+    assert client.put('/api/teams/' + team + '/datasets', json={'grants': {d['id']: 'editor'}}).status_code == 200
+    assert ('user:colleague', 'member', 'team:' + team) in fga.tuples()
+    assert ('team:' + team + '#member', 'editor', 'dataset:' + d['id']) in fga.tuples()
+    with TestClient(main.app) as colleague:
+        login(colleague, 'Colleague')
+        assert [(row['id'], row['my_access']) for row in colleague.get('/api/datasets').json()] == [(d['id'], 'editor')]
+        # OpenFGA decides: dropping the team tuple removes access before the database changes.
+        for store in fga.stores.values():
+            store['tuples'].discard(('team:' + team + '#member', 'editor', 'dataset:' + d['id']))
+        assert colleague.get('/api/datasets').json() == []
+    assert client.put('/api/users/colleague/datasets', json={'dataset_ids': [d['id']], 'levels': {d['id']: 'owner'}}).status_code == 200
+    assert ('user:colleague', 'owner', 'dataset:' + d['id']) in fga.tuples()
+    mapped = {row['id']: row for row in client.get('/api/access-map').json()['users']}
+    assert mapped['colleague']['openfga']['levels'] == {d['id']: 'owner'} and mapped['colleague']['openfga']['in_step']
+    assert client.patch('/api/users/colleague/role', json={'role': 'auditor', 'current_password': OLD}).status_code == 200
+    assert ('user:colleague', 'auditor', 'lapi:workspace') in fga.tuples()
+    # Contributor (Keycloak lapi-contributor): OpenFGA answers the role; every dataset opens as Owner.
+    from lapi_app import core, relational
+    with core.Session.begin() as session:
+        session.add(relational.WorkspaceContributor(user_id='colleague'))
+    assert ('user:colleague', 'contributor', 'lapi:workspace') in fga.tuples()
+    with core.Session.begin() as session:
+        session.delete(session.get(relational.WorkspaceContributor, 'colleague'))
+    assert ('user:colleague', 'contributor', 'lapi:workspace') not in fga.tuples()

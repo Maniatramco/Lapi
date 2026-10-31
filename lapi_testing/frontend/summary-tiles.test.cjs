@@ -5,7 +5,7 @@ test('dataset readiness counts datasets by their loaded documents',()=>{
  const {directorySummary}=compile('dataset-directory.tsx');
  const datasets=[{id:'a'},{id:'b'},{id:'c',active:false},{id:'d'}];
  const documents=[{dataset_id:'a',status:'ready'},{dataset_id:'b',status:'failed'},{kb_id:'b',status:'ready',requires_reindex:true},{dataset_id:'c',status:'ready'}];
- assert.deepEqual(directorySummary(datasets,documents).map(t=>[t.label,t.value]),[['Datasets',4],['Ready to ask',2],['Need attention',1],['No documents',1]]);
+ assert.deepEqual(directorySummary(datasets,documents).map(t=>[t.label,t.value]),[['Collections',4],['Ready to ask',2],['Need attention',1],['No documents',1]]);
  assert.equal(directorySummary(datasets,documents)[0].detail,'1 inactive');
 });
 test('summary tiles render as a labelled description list',()=>{
@@ -16,7 +16,7 @@ test('summary tiles render as a labelled description list',()=>{
 test('model mapping overview counts fully mapped datasets and names missing roles',()=>{
  const {mappingTiles,missingRoles,MappingOverview}=compile('mapping-overview.tsx');
  const datasets=[{id:'a',name:'Claims',embedding_model_id:'e',default_chat_model_id:'c',default_extraction_model_id:'x'},{id:'b',name:'Policies',default_chat_model_id:'c',active:false}];
- assert.deepEqual(mappingTiles(datasets).map(t=>[t.label,t.value]),[['Datasets',2],['Fully mapped',1],['Missing embedding',1]]);
+ assert.deepEqual(mappingTiles(datasets).map(t=>[t.label,t.value]),[['Collections',2],['Fully mapped',1],['Missing embedding',1]]);
  assert.deepEqual(missingRoles(datasets[1]),['Embedding','Extraction']);
  const html=renderToStaticMarkup(React.createElement(MappingOverview,{datasets,selected:'b',busy:false,onSelect:()=>{}}));
  assert.match(html,/aria-pressed="true"[^>]*>.*Policies/);assert.match(html,/Needs Embedding, Extraction/);

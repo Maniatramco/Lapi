@@ -1,0 +1,180 @@
+/* Phone design D: answer-first and one-handed. Loaded after mobile.css; phones only (up to 640px).
+   Colours: ink #14213d, muted #4d5a75 (5.9:1 on white), Lapi blue #2563eb, warning orange on #fff7ed. */
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
+  /* Tab bar: Agent and Quick Extract, plus More for people with other screens. */
+  body[data-tab-bar=on] .mobile-tab-bar { align-items: center; background: rgba(255,255,255,.96); border-top-color: #e3e9f4; }
+  html body .tab-bar-item { color: #5b6782; font-size: 11px; font-weight: 600; gap: 3px; }
+  html body .tab-bar-item[aria-current=page] { color: #1d4ed8; background: none; font-weight: 700; }
+
+  /* Chat: the question in a dark bubble, the answer on a white card, follow-ups and sources as chips. */
+  html body .shell .agent-v2-thread { background: #f5f7fb; }
+  html body .shell .agent-v2 .agent-v2-user { background: #14213d; color: #fff; border-radius: 18px 18px 6px 18px; padding: 12px 14px; font-size: 15px; line-height: 1.45; }
+  html body .shell .agent-v2 .agent-v2-chat-answer { padding: 16px; border-radius: 22px; background: #fff; border: 1px solid #e3e9f4; box-shadow: 0 12px 30px rgba(20,33,61,.06); }
+  html body .shell .agent-v2 .agent-v2-reply { font-size: 15px; line-height: 1.55; }
+  html body .shell .agent-v2 .agent-v2-reply table { display: block; overflow-x: auto; font-size: 14px; }
+  html body .shell .agent-v2 .agent-citation { min-width: 28px; min-height: 28px; border-radius: 8px; background: #e8f0ff; color: #1d4ed8; font-weight: 800; }
+  html body .shell .agent-v2 .agent-v2-sources > summary { min-height: 44px; display: flex; align-items: center; font-weight: 600; color: #3b4763; }
+  html body .shell .agent-v2 .agent-v2-sources .text-button { min-height: 44px; text-align: left; }
+  html body .shell .agent-v2 .agent-follow-ups { flex-wrap: nowrap; overflow-x: auto; margin: 6px -12px 0; padding: 0 12px 2px; scrollbar-width: none; }
+  html body .shell .agent-v2 .agent-follow-ups .btn { flex: none; min-height: 44px; white-space: nowrap; border-radius: 22px !important; border-color: #c9d7f2; color: #1d4ed8; font-weight: 600; }
+  /* Composer: one rounded field with the send button inside, above the keyboard. */
+  html body .shell .workspace .agent-v2-composer .agent-v2-compose-box { border-radius: 26px; border-color: #d6e0f3; box-shadow: 0 10px 30px rgba(20,33,61,.10); }
+
+  /* Composer: one row of attach, model name, voice and send; the footer goes once a conversation has begun. */
+  html body .shell .agent-v2-compose-controls { flex-wrap: nowrap; gap: 4px; }
+  html body .shell .agent-v2 .agent-v2-model-control { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; padding: 0; }
+  html body .shell .agent-v2 .agent-v2-model-control > span { display: none !important; }
+  html body .shell .agent-v2 .agent-v2-model-control select { flex: 1; width: 100%; min-width: 0; max-width: none; min-height: 40px; border: 1px solid #dfe6f3; border-radius: 12px; background: #f8fafc; font-size: 15px; color: #14213d; }
+  html body .shell .agent-v2 .agent-v2-model-control .agent-v2-model-empty { flex-basis: 100%; }
+  html body .shell .agent-v2:has(.agent-v2-exchange) .agent-v2-footer { display: none; }
+
+  /* Sources open as a sheet from the bottom instead of a side panel. */
+  html body .citation-panel { inset: auto 0 0 0; width: 100%; max-width: 100%; height: 88dvh; max-height: 88dvh; border: 0; border-radius: 24px 24px 0 0; box-shadow: 0 -20px 50px rgba(15,23,42,.25); }
+  html body .citation-panel::backdrop { background: rgba(15,23,42,.5); }
+  html body .citation-panel > header { position: relative; padding: 22px 16px 12px; background: #fff; border-bottom-color: #eef2f8; }
+  html body .citation-panel > header::before { content: ''; position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: #d3dbea; }
+  html body .citation-panel > header .btn.icon { border-radius: 50%; background: #f1f5fd; }
+  html body .citation-panel h2 { font-size: 18px; }
+  html body .citation-panel-eyebrow { font-size: 13px; }
+  html body .citation-panel dt { font-size: 13px; color: #4d5a75; }
+  html body .citation-panel dd { font-size: 15px; }
+  html body .citation-panel :is(blockquote, .citation-panel-values) { font-size: 14px; border-radius: 12px; }
+  html body .citation-panel-note { font-size: 13px; color: #4d5a75; }
+  html body .citation-panel > footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  html body .citation-panel > footer .btn { flex: 1; min-height: 48px; font-size: 15px; border-radius: 14px; }
+
+  /* Quick start, Check the columns: one card per field with how it was matched. */
+  html body .quick-start-mapping { padding: 0; border: 0; background: none; }
+  html body .quick-start-mapping li { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 14px; border: 1px solid #e3e9f4; border-radius: 16px; background: #fff; }
+  html body .quick-start-mapping li[data-how=none] { border: 1.5px dashed #f59e0b; background: #fffbeb; }
+  html body .quick-start-mapping select { min-height: 44px; border-radius: 12px; font-size: 16px; }
+  html body .quick-start-mapping small { font-size: 13px; color: #4d5a75; }
+
+  /* Review: one record at a time. The page scrolls as one, filters and status step aside, and the
+     save buttons stay at the bottom. Back returns to the list of runs. */
+  html body .shell .review-page-shell.has-review .phone-status,
+  html body .shell .review-page-shell.has-review .review-detail-selectorbar .review-filters,
+  html body .shell .review-page-shell.has-review .review-selector-row,
+  html body .shell .review-record-pager ~ .review-field-columns,
+  html body .shell .review-values .review-panel-heading,
+  html body .shell .review-profile-picker { display: none; }
+  html body .shell .review-page-shell.has-review,
+  html body .shell .review-detail-browser,
+  html body .shell .review-workspace,
+  html body .shell .review-workspace .review-split,
+  html body .shell .review-values,
+  html body .shell .review-values-scroll { height: auto !important; max-height: none !important; min-height: 0; overflow: visible !important; }
+  html body .shell .review-record-pager { position: sticky; top: 0; z-index: 4; margin: 0 0 8px; padding: 6px 0; background: #fff; }
+  html body .shell .review-record-pager .btn { min-height: 44px; }
+  html body .shell .review-field { display: block; padding: 10px 0; border-bottom: 1px solid #f0f3f9; }
+  html body .shell .review-field .field-source { display: block; width: 100%; min-height: 28px; text-align: left; font-size: 13px; color: #4d5a75; text-transform: capitalize; }
+  html body .shell .review-field input { width: 100%; box-sizing: border-box; min-height: 44px; font-size: 16px; }
+  html body .shell .review-save-footer { position: sticky; bottom: 0 !important; z-index: 6; padding: 10px 0; background: #fff; border-top: 1px solid #e3e9f4; flex-wrap: wrap; gap: 8px; }
+  html body .shell .review-save-footer .review-actions { display: flex; gap: 8px; width: 100%; margin-left: 0; }
+  html body .shell .review-save-footer .review-actions .btn { flex: 1 1 auto; min-height: 52px !important; border-radius: 16px; font-size: 15px; }
+  html body .shell .review-save-footer .review-actions .btn.primary { flex-grow: 2; }
+
+  /* Wider touch screens (foldables, tablets): the same layout with a drawer for the menu and a readable column. */
+  html body .sidebar { transform: translateX(-100%); visibility: hidden; width: 260px; }
+  html body .sidebar.open { transform: translateX(0); visibility: visible; }
+  html body .shell { margin-left: 0; }
+  html body .menu-toggle, html body .mobile-close { display: inline-flex; }
+  html body .shell .agent-v2, html body .shell .review-workspace, html body .shell .enabled-models, html body .phone-status { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; }
+  body[data-tab-bar=on] .mobile-tab-bar { justify-content: center; }
+  html body .tab-bar-item { flex: 0 1 180px; }
+  html body .quick-start:not(.is-enlarged) { max-width: 720px; margin-left: auto; margin-right: auto; }
+  html body .citation-panel { max-width: 720px; margin-left: auto; margin-right: auto; }
+
+  /* A calm first screen: the greeting and a few suggestions, centred above the message box. */
+  html body .shell .agent-workspace .agent-v2-welcome { flex: 1; justify-content: center; align-items: center; text-align: center; padding: 16px; }
+  html body .shell .agent-welcome-hero { padding: 0 !important; background: none; border: 0; box-shadow: none; }
+  html body .shell .agent-welcome-hero h2 { margin: 0; }
+  html body .shell .agent-workspace .agent-v2-welcome .agent-v2-suggestions { flex-wrap: wrap; justify-content: center; overflow: visible; }
+  html body .shell .agent-workspace .agent-v2-welcome .agent-v2-suggestions > .btn { min-height: 44px; white-space: normal; }
+
+  /* The page never slides sideways on a touch screen; wide tables scroll inside their own box. */
+  html, html body { max-width: 100%; overflow-x: clip; }
+  html body .shell, html body .shell > main { min-width: 0; max-width: 100%; }
+  /* The opening screen always fits, even on short screens such as an open foldable. */
+  html body .shell .agent-workspace .agent-v2-welcome { min-height: 0; gap: 12px; padding: 8px 12px; }
+  html body .shell .agent-v2-composer { padding-bottom: 2px; }
+  html body .shell .agent-v2-footer { margin-top: 2px; padding: 0; }
+}
+/* More room for the chat: connections, version and privacy open from the info button. */
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
+  html body[data-tab-bar=on] { --connection-footer-height: var(--tab-bar-height); }
+  html body[data-tab-bar=on]:not([data-chat-info=on]) .connection-status { display: none; }
+  html body .shell .agent-v2-footer { display: none; }
+  html body .shell .agent-v2 .agent-v2-info { display: inline-flex !important; }
+  /* One row at the top: the workspace picker takes what the buttons leave. */
+  html body .shell .agent-v2-context { flex-wrap: nowrap; gap: 6px; padding: 6px 8px; }
+  html body .shell .agent-v2-context > label { flex: 1 1 auto; min-width: 0; max-width: none; display: flex; font-size: 0 !important; gap: 0; }
+  html body .shell .agent-v2-context > label select { flex: 1; width: 100%; min-width: 0; max-width: none; font-size: 16px; }
+  html body .shell .agent-v2-context > .btn { flex: none; }
+  html body .shell .agent-v2-info[aria-expanded=true] { background: #e8f0ff; color: #1d4ed8; }
+  html body .shell .agent-v2 .agent-v2-info-panel { display: block !important; padding: 10px 14px; border-bottom: 1px solid #e3e9f4; background: #f8fafc; font-size: var(--fit-small); line-height: 1.5; color: #3b4763; }
+  html body .shell .agent-v2-info-panel p { margin: 0 0 6px; }
+}
+
+/* Text follows the screen: phone, foldable or tablet, then computer. Fields stay at 16px so phones do not zoom in on focus. */
+:root { --fit-title: clamp(1.5rem, 1.1rem + 1.6vw, 1.875rem); --fit-page: clamp(1rem, .9rem + .4vw, 1.25rem); --fit-body: clamp(.875rem, .84rem + .2vw, 1rem); --fit-small: clamp(.8125rem, .79rem + .12vw, .875rem); }
+html body .shell .agent-workspace .agent-welcome-hero h2 { font-size: var(--fit-title) !important; }
+html body .shell .agent-v2 .agent-v2-suggestions > .btn { font-size: var(--fit-small); }
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
+  html body .shell > .topbar .workspace-title { font-size: var(--fit-page); }
+  html body .phone-status > * { font-size: var(--fit-small); }
+  html body .shell .agent-v2-context, html body .shell .agent-v2-context label { font-size: var(--fit-small); }
+  html body .shell .agent-v2 .agent-v2-reply, html body .shell .agent-v2 .agent-v2-user { font-size: var(--fit-body); }
+  html body .tab-bar-item { font-size: clamp(.6875rem, .66rem + .12vw, .8125rem); }
+  html body .shell select, html body .shell input, html body .shell textarea { font-size: 16px; }
+}
+@media (max-height: 640px) and (pointer: coarse) {
+  :root { --fit-title: 1.375rem; }
+}
+
+/* Account menu and chat options: parts shared by every screen size. */
+.account{position:relative;display:flex}
+.avatar.account-button{border:0;padding:0;font:inherit;font-weight:700;cursor:pointer}
+.account-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:6px;min-width:200px;padding:8px;border:1px solid var(--line);border-radius:14px;background:#fff;box-shadow:0 16px 40px rgba(20,33,61,.18)}
+.account-name{padding:4px 6px;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.account-menu .btn{justify-content:flex-start;gap:8px;min-height:40px}
+.topbar-attention,.agent-v2-scope-chip{display:none}
+.agent-v2-scope-chip{align-items:center;gap:6px;min-width:0;max-width:100%;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:20px;background:#f8fafc;color:var(--ink);font:600 15px/1 var(--font-ui,system-ui);cursor:pointer}
+.agent-v2-scope-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agent-v2-scope-chip-hero{margin-top:10px;background:var(--blue-soft);border-color:var(--blue-line);color:var(--blue-strong)}
+.agent-v2-sheet-backdrop{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;background:rgba(15,23,42,.45)}
+.agent-v2-sheet{display:flex;flex-direction:column;gap:4px;width:100%;max-height:85dvh;overflow:auto;box-sizing:border-box;padding:10px 16px calc(16px + env(safe-area-inset-bottom));border-radius:24px 24px 0 0;background:#fff}
+.agent-v2-sheet::before{content:'';align-self:center;width:40px;height:5px;margin-bottom:6px;border-radius:3px;background:#d3dbea}
+.agent-v2-sheet-row{display:flex;align-items:center;gap:12px;min-height:50px;padding:0 6px;border:0;border-radius:12px;background:none;color:var(--ink);font:600 16px/1.2 var(--font-ui,system-ui);text-align:left;cursor:pointer}
+.agent-v2-sheet-row:disabled{opacity:.5;cursor:default}
+.agent-v2-sheet-row svg{flex:none;color:var(--blue-strong)}
+.agent-v2-sheet-field{display:flex;flex-direction:column;gap:6px;padding:6px;font-size:13px;font-weight:600;color:var(--muted)}
+.agent-v2-sheet-field select{min-height:46px;padding:0 10px;border:1px solid var(--line);border-radius:12px;background:#f8fafc;font:inherit;font-size:16px;font-weight:500;color:var(--ink)}
+.agent-v2-sheet-field small{font-weight:400}
+.agent-v2-sheet-done{min-height:50px;margin-top:6px;border:0;border-radius:14px;background:var(--blue);color:#fff;font:700 16px var(--font-ui,system-ui);cursor:pointer}
+.agent-v2-sheet :is(button,select):focus-visible,.account-button:focus-visible,.agent-v2-scope-chip:focus-visible{outline:3px solid #315de7;outline-offset:2px}
+
+/* Phones: one row at the top, a personal greeting with three big starters, one clean input bar, a floating tab bar. */
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
+  html body .shell > .topbar .crumb-workspace, html body .shell > .topbar .breadcrumb > svg, html body .shell > .topbar .pill, html body .shell > .topbar .top-actions > .btn.icon[aria-label="Sign out"] { display: none; }
+  html body .shell > .topbar .workspace-switcher { margin-left: 0; padding-left: 4px; border: 0; background: none; font-size: var(--fit-page); font-weight: 700; }
+  html body .shell > .topbar .top-actions .avatar.account-button { display: grid; width: 36px; height: 36px; border-radius: 50%; font-size: 13px; }
+  html body .shell > .topbar .topbar-attention { position: relative; display: inline-flex; width: 40px; height: 40px; border: 1px solid var(--orange-line); border-radius: 50%; background: var(--orange-soft); color: var(--orange-strong); }
+  html body .shell > .topbar .topbar-attention-count { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--orange-strong); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; }
+  /* The chat's own toolbar and the model picker live in the options sheet. */
+  html body .shell .agent-v2-context, html body .shell .agent-v2 .agent-v2-model-control { display: none; }
+  html body .shell .agent-v2 .agent-v2-scope-chip { display: inline-flex; }
+  html body .shell .agent-v2-compose-controls .agent-v2-scope-chip { flex: 1 1 auto; justify-content: space-between; }
+  html body .shell .agent-v2 .agent-v2-starters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 460px; }
+  html body .shell .agent-v2 .agent-v2-starters button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 96px; padding: 12px 6px; border: 1px solid var(--line); border-radius: 20px; background: #fff; color: var(--ink); font: 600 var(--fit-small)/1.25 var(--font-ui, system-ui); text-align: center; cursor: pointer; box-shadow: 0 8px 24px rgba(20,33,61,.06); }
+  html body .shell .agent-v2 .agent-v2-starters button svg { color: var(--blue-strong); }
+  html body .shell .agent-v2 .agent-v2-starters button:focus-visible { outline: 3px solid #315de7; outline-offset: 2px; }
+  html body .shell .agent-v2 .agent-v2-what { min-height: 40px; color: var(--blue-strong); font-weight: 600; }
+  /* Floating tab bar. */
+  body[data-tab-bar=on] .mobile-tab-bar { left: 12px; right: 12px; bottom: calc(8px + env(safe-area-inset-bottom)); height: var(--tab-bar-height); padding: 4px 6px; border: 1px solid var(--line); border-radius: 24px; background: rgba(255,255,255,.98); box-shadow: 0 14px 36px rgba(20,33,61,.16); }
+  html body .tab-bar-item { border-radius: 18px; }
+  html body .tab-bar-item[aria-current=page] { background: var(--blue-soft); }
+  html body[data-tab-bar=on] { --connection-footer-height: calc(var(--tab-bar-height) + 10px); }
+  body[data-tab-bar=on]:not(:has(.connection-status)) .shell { padding-bottom: calc(var(--tab-bar-height) + 10px + env(safe-area-inset-bottom)); }
+  body[data-tab-bar=on] .connection-status { bottom: calc(var(--tab-bar-height) + 8px + env(safe-area-inset-bottom)); }
+}

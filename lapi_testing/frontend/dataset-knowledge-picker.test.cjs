@@ -12,21 +12,21 @@ function mount(values={}){
 const find=(v,label)=>v.nodes.find(n=>n.props?.['aria-label']===label),button=(v,label)=>v.nodes.find(n=>n.type==='button'&&n.props.children===label);
 test('knowledge picker includes existing indexed files without uploading or changing datasets',()=>{
  const v=mount();assert.equal(find(v,'Include available file invoice.txt').props.checked,true);assert.equal(find(v,'Include available file old.txt'),undefined);
- find(v,'Include dataset Policies').props.onChange();v.render();button(v,'Include selected knowledge').props.onClick();assert.deepEqual(v.included,[{datasetIds:['a','b'],documentIds:['one','two']}]);
+ find(v,'Include collection Policies').props.onChange();v.render();button(v,'Include selected knowledge').props.onClick();assert.deepEqual(v.included,[{datasetIds:['a','b'],documentIds:['one','two']}]);
 });
 test('unavailable and unassigned files cannot be selected, and empty scope cannot be applied',()=>{
  const v=mount({datasets:[{id:'a',name:'Invoices'}]});assert.equal(find(v,'Include available file policy.txt'),undefined);
  find(v,'Include available file invoice.txt').props.onChange();v.render();assert.equal(button(v,'Include selected knowledge').props.disabled,true);
 });
 test('search preserves selections and cancelling makes no inclusion change',()=>{
- const v=mount();find(v,'Search available dataset knowledge').props.onChange({target:{value:'Policies'}});v.render();assert.equal(find(v,'Include available file invoice.txt'),undefined);button(v,'Cancel').props.onClick();assert.deepEqual(v.included,[]);assert.deepEqual(v.closed,[true]);
+ const v=mount();find(v,'Search available collection knowledge').props.onChange({target:{value:'Policies'}});v.render();assert.equal(find(v,'Include available file invoice.txt'),undefined);button(v,'Cancel').props.onClick();assert.deepEqual(v.included,[]);assert.deepEqual(v.closed,[true]);
 });
-test('partial selections show a count, unready datasets are summarised and the footer explains the scope',()=>{
+test('partial selections show a count, unready collections are summarised and the footer explains the scope',()=>{
  const v=mount({datasets:[{id:'a',name:'Invoices'},{id:'b',name:'Policies'},{id:'c',name:'Empty research'}],documents:[{id:'one',dataset_id:'a',name:'invoice.txt',status:'ready'},{id:'two',dataset_id:'a',name:'credit.txt',status:'ready'},{id:'three',parent_id:'b',name:'policy.txt',status:'ready'}],initial:{datasetIds:['a'],documentIds:['one']}});
  const text=node=>!node?'':typeof node==='string'||typeof node==='number'?String(node):Array.isArray(node)?node.map(text).join(''):text(node.props?.children);
  assert.ok(v.nodes.some(n=>n.props?.className==='picker-count'&&text(n)==='1 of 2'));
  assert.equal(v.nodes.find(n=>n.props?.id==='picker-files-b').props.hidden,true);assert.equal(v.nodes.find(n=>n.props?.id==='picker-files-a').props.hidden,false);
  assert.match(text(v.nodes.find(n=>n.props?.className==='picker-waiting')),/Not ready yet Empty research · no indexed files/);
- assert.equal(text(v.nodes.find(n=>n.type==='footer').props.children[0]),'1 file from 1 dataset');
+ assert.equal(text(v.nodes.find(n=>n.type==='footer').props.children[0]),'1 file from 1 collection');
  find(v,'Show files in Policies').props.onClick();v.render();assert.equal(v.nodes.find(n=>n.props?.id==='picker-files-b').props.hidden,false);
 });

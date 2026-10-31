@@ -46,15 +46,6 @@ function SourceIcon({ kind }: { kind: (typeof SOURCES)[number] }) {
   }
 }
 
-function StageLabel({ n, label, x, anchor = "start" }: { n: number; label: string; x: number; anchor?: "start" | "middle" }) {
-  const width = 46 + label.length * 15;
-  const left = anchor === "middle" ? x - width / 2 : x;
-  return <g transform={`translate(${left} 40)`}>
-    <circle r="17" cx="17" cy="0" fill={ORANGE} />
-    <text x="17" y="7" textAnchor="middle" fontSize="19" fontWeight="700" fill={INK}>{n}</text>
-    <text x="44" y="8" fontSize="20" fontWeight="700" letterSpacing="3" fill="#ffffff">{label}</text>
-  </g>;
-}
 
 function FlowDot({ path, tone, delay }: { path: string; tone: "light" | "orange"; delay: number }) {
   return <>{[delay, delay + FLOW_SECONDS / 2].map(start => {
@@ -76,7 +67,7 @@ export function LapiBanner({ className }: { className?: string }) {
     orbit.push(<circle key={i} cx={CORE.x + Math.cos(a) * r} cy={CORE.y + Math.sin(a) * r} r={i % 4 ? 3 : 5}
       fill={i % 4 ? ON_BLUE_MUTED : ORANGE} opacity={i % 4 ? 0.7 : 1} />);
   }
-  return <svg className={className} viewBox="0 0 1200 580" role="img" aria-label="Lapi: connect your data, unify it into one knowledge base, and ask"
+  return <svg className={className} viewBox="0 70 1200 510" role="img" aria-label="Lapi: connect your data, unify it into one knowledge base, and ask"
     fontFamily="Inter, ui-sans-serif, system-ui, sans-serif">
     <defs>
       <radialGradient id="lb-glow" cx="0.5" cy="0.5" r="0.5">
@@ -90,11 +81,6 @@ export function LapiBanner({ className }: { className?: string }) {
         <feDropShadow dx="0" dy="14" stdDeviation="16" floodColor="#0b1b4d" floodOpacity="0.32" />
       </filter>
     </defs>
-
-    {/* Stage row */}
-    <StageLabel n={1} label="CONNECT" x={TILE.x} />
-    <StageLabel n={2} label="UNIFY" x={CORE.x} anchor="middle" />
-    <StageLabel n={3} label="ASK" x={ASK.x} />
 
     {/* 1 Connect: glass source tiles */}
     {SOURCES.map((_, i) => <path key={`p${i}`} d={sourcePath(i)} fill="none" stroke={i % 2 ? "#ffffff" : ORANGE}

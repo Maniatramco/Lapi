@@ -43,6 +43,68 @@ class UserDataset(Times, core.Base):
     user_id:Mapped[str]=mapped_column(String(80),ForeignKey(user_fk,ondelete='CASCADE'),primary_key=True)
     dataset_id:Mapped[str]=mapped_column(String(80),ForeignKey('dataset_tbl.dataset_id',ondelete='CASCADE'),primary_key=True)
     enabled:Mapped[bool]=mapped_column(Boolean,default=True)
+    # viewer: read and chat; editor: also upload, extract and review; owner: also the dataset's
+    # settings and members. Grants made before levels existed could do all editor work.
+    # Nullable like the column the upgrade adds to existing databases; empty means 'viewer'.
+    access_level:Mapped[str|None]=mapped_column(String(16),default='viewer')
+
+class Team(Times, core.Base):
+    """People who get dataset access together. Keycloak teams mirror the person's
+    Keycloak groups at each sign-in; local teams are managed in Lapi."""
+    __tablename__='team_tbl'
+    team_id:Mapped[str]=mapped_column(String(80),primary_key=True)
+    name:Mapped[str]=mapped_column(StoredString(200),unique=True)
+    source:Mapped[str]=mapped_column(String(16),default='local')
+
+class TeamMember(Times, core.Base):
+    __tablename__='team_member_tbl'
+    team_id:Mapped[str]=mapped_column(String(80),ForeignKey('team_tbl.team_id',ondelete='CASCADE'),primary_key=True)
+    user_id:Mapped[str]=mapped_column(String(80),ForeignKey(user_fk,ondelete='CASCADE'),primary_key=True)
+
+class TeamDataset(Times, core.Base):
+    __tablename__='team_dataset_tbl'
+    team_id:Mapped[str]=mapped_column(String(80),ForeignKey('team_tbl.team_id',ondelete='CASCADE'),primary_key=True)
+    dataset_id:Mapped[str]=mapped_column(String(80),ForeignKey('dataset_tbl.dataset_id',ondelete='CASCADE'),primary_key=True)
+    access_level:Mapped[str]=mapped_column(String(16),default='viewer')
+
+class ScreenGrant(Times, core.Base):
+    """Who sees a screen on a device (screens.py): grantee_kind everyone | team | user | off."""
+    __tablename__='screen_grant_tbl'
+    screen:Mapped[str]=mapped_column(String(40),primary_key=True)
+    device:Mapped[str]=mapped_column(String(10),primary_key=True)
+    grantee_kind:Mapped[str]=mapped_column(String(10),primary_key=True)
+    grantee_id:Mapped[str]=mapped_column(String(80),primary_key=True)
+
+class SignInAttempt(core.Base):
+    """Failed sign-ins per person and per address (sign_in_limits.py); kept across restarts."""
+    __tablename__='sign_in_attempt_tbl'
+    attempt_key:Mapped[str]=mapped_column(String(100),primary_key=True)
+    failures:Mapped[int]=mapped_column(Integer,default=0)
+    window_start:Mapped[float]=mapped_column(timestamp_type(),default=time.time)
+    locked_until:Mapped[float|None]=mapped_column(timestamp_type(),nullable=True)
+
+class UserTotp(Times, core.Base):
+    """Authenticator-app secret for password accounts (break-glass administrators), encrypted."""
+    __tablename__='user_totp_tbl'
+    user_id:Mapped[str]=mapped_column(String(80),ForeignKey(user_fk,ondelete='CASCADE'),primary_key=True)
+    secret:Mapped[str]=mapped_column(String(400))
+    enabled:Mapped[bool]=mapped_column(Boolean,default=False)
+    last_step:Mapped[int|None]=mapped_column(Integer,nullable=True)
+
+class WorkspaceRole(Times, core.Base):
+    """Workspace roles besides Administrator (users_tbl.role): 'auditor' reads users,
+    access and activity but no dataset content and changes nothing."""
+    __tablename__='workspace_role_tbl'
+    user_id:Mapped[str]=mapped_column(String(80),ForeignKey(user_fk,ondelete='CASCADE'),primary_key=True)
+    role:Mapped[str]=mapped_column(String(20),default='auditor')
+
+class WorkspaceContributor(Times, core.Base):
+    """Contributors (Keycloak role lapi-contributor) are Owner on every dataset and may create,
+    delete and restore datasets; managing the workspace (users, teams, storage, settings,
+    models) stays with Administrators. Kept apart from workspace_role_tbl so a person can be
+    both Auditor and Contributor."""
+    __tablename__='workspace_contributor_tbl'
+    user_id:Mapped[str]=mapped_column(String(80),ForeignKey(user_fk,ondelete='CASCADE'),primary_key=True)
 
 class Document(Times, core.Base):
     __tablename__='document_tbl'
@@ -275,7 +337,10 @@ def upgrade_legacy(connection, bootstrap_assignments=False):
         if role_added:connection.execute(table.update().where(table.c.id=='administrator').values(role='administrator',updated_at=time.time(),updated_via='migration'))
         # Historical creators/updaters were not recorded. Do not invent them.
         connection.execute(table.update().where(table.c.created_via==None).values(created_via='legacy',updated_via='legacy'))
-        if model is UserDataset:connection.execute(table.update().where(table.c.enabled==None).values(enabled=True))
+        if model is UserDataset:
+            connection.execute(table.update().where(table.c.enabled==None).values(enabled=True))
+            # Before levels, every grant could upload, extract and review: keep that as Editor.
+            connection.execute(table.update().where(table.c.access_level==None).values(access_level='editor'))
         if model in (core.User,core.Login):
             connection.execute(table.update().where(table.c.created_at==None).values(created_at=time.time(),updated_at=time.time()))
     # Fresh tables need no backfill. Existing catalog rows are projected in
@@ -289,4 +354,4 @@ def upgrade_legacy(connection, bootstrap_assignments=False):
         for value in rows:
             if value['kind']!='knowledge_base':continue
             if not connection.scalar(select(core.User.id).where(core.User.id==value['owner'],core.User.role!='administrator')):continue
-            connection.execute(UserDataset.__table__.insert().values(user_id=value['owner'],dataset_id=value['id'],enabled=True,created_at=time.time(),updated_at=time.time(),created_by=None,updated_by=None,created_via='migration',updated_via='migration'))
+            connection.execute(UserDataset.__table__.insert().values(user_id=value['owner'],dataset_id=value['id'],enabled=True,access_level='owner',created_at=time.time(),updated_at=time.time(),created_by=None,updated_by=None,created_via='migration',updated_via='migration'))

@@ -76,6 +76,14 @@ class Login(Audit,Base):
     csrf:Mapped[str]=mapped_column(String(100))
     created_at:Mapped[float]=mapped_column(timestamp_type(),default=time.time)
     updated_at:Mapped[float]=mapped_column(timestamp_type(),default=time.time)
+    # Session details (sessions.py): last activity for the idle timeout, the device for
+    # "My sessions", and for Keycloak sign-ins the Keycloak session id and encrypted tokens.
+    last_seen:Mapped[float|None]=mapped_column(timestamp_type(),nullable=True)
+    user_agent:Mapped[str|None]=mapped_column(String(200),nullable=True)
+    client_ip:Mapped[str|None]=mapped_column(String(64),nullable=True)
+    kc_sid:Mapped[str|None]=mapped_column(String(100),nullable=True,index=True)
+    kc_tokens:Mapped[str|None]=mapped_column(Text,nullable=True)
+    kc_checked:Mapped[float|None]=mapped_column(timestamp_type(),nullable=True)
 
 def is_administrator(user_id, session=None):
     """Read the persisted role; IDs and client-supplied flags grant no access.

@@ -31,112 +31,112 @@ test('source deselection remains explicit and never becomes the dataset-wide sco
 });
 test('Sources collapses while the expanded Agent remains available without Studio',()=>{
  const v=mount({selectedId:'a'});find(v,'Collapse sources').props.onClick();v.render();assert.equal(find(v,'Expand sources').props['aria-expanded'],false);assert.equal(v.nodes.find(n=>n.props?.id==='notebook-source-content').props.hidden,true);
- assert.ok(v.nodes.some(n=>n.props?.['aria-label']==='Dataset knowledge workspace chat'));assert.equal(v.nodes.some(n=>n.props?.['aria-label']==='Lapi Studio'),false);
+ assert.ok(v.nodes.some(n=>n.props?.['aria-label']==='Collection knowledge chat'));assert.equal(v.nodes.some(n=>n.props?.['aria-label']==='Lapi Studio'),false);
  find(v,'Expand sources').props.onClick();v.render();assert.equal(v.nodes.find(n=>n.props?.id==='notebook-source-content').props.hidden,false);
 });
-test('workspace chat starts from authorized datasets; active work blocks scope switching',()=>{
+test('collection chat starts from authorized collections; active work blocks scope switching',()=>{
  const workspace=mountChat();assert.deepEqual(workspace.agents[0].knowledgeScope.datasetIds,['a','b']);const v=mountChat({selectedId:'a'});v.agents[0].onBusy(true);v.render();assert.equal(find(v,'Ask Lapi about Policies').props.disabled,true);assert.equal(find(v,'Include source invoice.txt').props.disabled,true);
- const inactive=mount({datasets:[{id:'a',name:'Inactive',active:false}],selectedId:'a'});assert.equal(inactive.agents.length,0);assert.ok(inactive.nodes.some(n=>n.type==='h3'&&text(n)==='This dataset is inactive'));
- workspace.render();workspace.agents[0].onBusy(true);workspace.render();assert.equal(find(workspace,'Chat with all accessible dataset knowledge').props.disabled,true);
+ const inactive=mount({datasets:[{id:'a',name:'Inactive',active:false}],selectedId:'a'});assert.equal(inactive.agents.length,0);assert.ok(inactive.nodes.some(n=>n.type==='h3'&&text(n)==='This collection is inactive'));
+ workspace.render();workspace.agents[0].onBusy(true);workspace.render();assert.equal(find(workspace,'Chat with all accessible collection knowledge').props.disabled,true);
  assert.equal(find(v,'Ask Lapi about Invoices').props.disabled,true);
 });
 
 test('Dashboard omits onboarding while existing-source selection and browsing remain available',()=>{
  const calls=[];const v=mount({canManage:true,selectedId:'a',onBrowse:()=>calls.push('datasets')});
- assert.equal(v.nodes.some(n=>n.type==='button'&&text(n)==='Onboard dataset'),false);
- v.nodes.find(n=>n.type==='button'&&text(n)==='Add Dataset Knowledge').props.onClick();v.render();assert.ok(v.nodes.some(n=>n.type==='picker'));assert.deepEqual(calls,[]);
+ assert.equal(v.nodes.some(n=>n.type==='button'&&text(n)==='Onboard collection'),false);
+ v.nodes.find(n=>n.type==='button'&&text(n)==='Add Collection Knowledge').props.onClick();v.render();assert.ok(v.nodes.some(n=>n.type==='picker'));assert.deepEqual(calls,[]);
  const member=mount({canManage:false,onBrowse:()=>calls.push('browse')});
- member.nodes.find(n=>n.type==='button'&&text(n)==='Browse datasets').props.onClick();assert.equal(calls.at(-1),'browse');
+ member.nodes.find(n=>n.type==='button'&&text(n)==='Browse collections').props.onClick();assert.equal(calls.at(-1),'browse');
 });
 
 test('including available knowledge opens a bounded cross-dataset scope',()=>{
- const v=mount({selectedId:'a'});v.nodes.find(n=>n.type==='button'&&text(n)==='Add Dataset Knowledge').props.onClick();v.render();
+ const v=mount({selectedId:'a'});v.nodes.find(n=>n.type==='button'&&text(n)==='Add Collection Knowledge').props.onClick();v.render();
  const picker=v.nodes.find(n=>n.type==='picker');picker.props.onInclude({datasetIds:['a','b'],documentIds:['one','two']});v.render();
  assert.equal(v.selected.at(-1),'');assert.deepEqual(v.agents[0].knowledgeScope,{datasetIds:['a','b'],documentIds:['one','two']});
 });
 
-test('Dashboard does not initialize chat on first load, including a preselected dataset',()=>{
+test('Dashboard does not initialize chat on first load, including a preselected collection',()=>{
  for(const selectedId of ['', 'a']){const v=mount({selectedId});assert.equal(v.agents.length,0);v.render();assert.equal(v.agents.length,0);assert.ok(v.nodes.some(n=>n.type==='button'&&text(n)==='Open chat'));find(v,'Ask Lapi about Policies').props.onClick();v.render();assert.deepEqual(v.agents.map(a=>a.id),['b']);}
 });
 
 
 test('sticky knowledge action remains outside the scrollable source list and collapsed sources',()=>{
- const v=mount();const toolbar=v.nodes.find(n=>n.props?.['aria-label']==='Dataset knowledge actions');
- assert.ok(all(toolbar).some(n=>n.type==='button'&&text(n)==='Add Dataset Knowledge'));
- const content=v.nodes.find(n=>n.props?.id==='notebook-source-content');assert.equal(all(content).some(n=>n.type==='button'&&text(n)==='Add Dataset Knowledge'),false);
- find(v,'Collapse sources').props.onClick();v.render();assert.equal(v.nodes.find(n=>n.type==='button'&&text(n)==='Add Dataset Knowledge').props.disabled,false);
+ const v=mount();const toolbar=v.nodes.find(n=>n.props?.['aria-label']==='Collection knowledge actions');
+ assert.ok(all(toolbar).some(n=>n.type==='button'&&text(n)==='Add Collection Knowledge'));
+ const content=v.nodes.find(n=>n.props?.id==='notebook-source-content');assert.equal(all(content).some(n=>n.type==='button'&&text(n)==='Add Collection Knowledge'),false);
+ find(v,'Collapse sources').props.onClick();v.render();assert.equal(v.nodes.find(n=>n.type==='button'&&text(n)==='Add Collection Knowledge').props.disabled,false);
 });
 
 test('dataset checkboxes combine scopes and preserve individual file exclusions',()=>{
  const v=mountChat({selectedId:'a'});find(v,'Include source invoice.txt').props.onChange();v.render();
- find(v,'Include dataset Policies in knowledge').props.onChange();v.render();
+ find(v,'Include collection Policies in knowledge').props.onChange();v.render();
  assert.deepEqual(v.agents[0].knowledgeScope,{datasetIds:['a','b'],documentIds:['two']});
- find(v,'Include dataset Invoices in knowledge').props.onChange();v.render();
+ find(v,'Include collection Invoices in knowledge').props.onChange();v.render();
  assert.deepEqual(v.agents[0].knowledgeScope,{datasetIds:['b'],documentIds:['two']});
- find(v,'Include dataset Policies in knowledge').props.onChange();v.render();
+ find(v,'Include collection Policies in knowledge').props.onChange();v.render();
  assert.equal(v.agents.length,0);assert.ok(v.nodes.some(n=>n.type==='h3'&&text(n)==='Choose knowledge for this chat'));
 });
 
-test('dragging a dataset onto collapsed Sources adds only permitted ready knowledge without duplicates',()=>{
+test('dragging a collection onto collapsed Sources adds only permitted ready knowledge without duplicates',()=>{
  const v=mountChat({selectedId:'a'}),type='application/x-lapi-dataset-ids';find(v,'Collapse sources').props.onClick();v.render();
  let payload;const tile=v.nodes.find(n=>n.props?.className==='dashboard-dataset-tile'&&all(n).some(c=>c.props?.['aria-label']==='Ask Lapi about Policies'));
- tile.props.onDragStart({preventDefault(){assert.fail('Valid dataset should drag');},dataTransfer:{setData:(mime,data)=>{assert.equal(mime,type);payload=data;}}});
- const drop=()=>find(v,'Dataset sources').props.onDrop({preventDefault(){},dataTransfer:{getData:mime=>mime===type?payload:''}});
+ tile.props.onDragStart({preventDefault(){assert.fail('Valid collection should drag');},dataTransfer:{setData:(mime,data)=>{assert.equal(mime,type);payload=data;}}});
+ const drop=()=>find(v,'Collection sources').props.onDrop({preventDefault(){},dataTransfer:{getData:mime=>mime===type?payload:''}});
  drop();v.render();assert.deepEqual(v.agents[0].knowledgeScope,{datasetIds:['a','b'],documentIds:['one','two']});
  assert.equal(v.nodes.find(n=>n.props?.id==='notebook-source-content').props.hidden,true);
  drop();v.render();assert.deepEqual(v.agents[0].knowledgeScope.documentIds,['one','two']);
- const before=v.agents[0].knowledgeScope;find(v,'Dataset sources').props.onDrop({preventDefault(){},dataTransfer:{getData:()=>JSON.stringify(['unauthorized'])}});v.render();assert.deepEqual(v.agents[0].knowledgeScope,before);
+ const before=v.agents[0].knowledgeScope;find(v,'Collection sources').props.onDrop({preventDefault(){},dataTransfer:{getData:()=>JSON.stringify(['unauthorized'])}});v.render();assert.deepEqual(v.agents[0].knowledgeScope,before);
 });
 
 test('active chat disables multi-selection and ignores dropped datasets',()=>{
  const v=mountChat({selectedId:'a'});v.agents[0].onBusy(true);v.render();
- assert.equal(find(v,'Include dataset Policies in knowledge').props.disabled,true);
- assert.equal(v.nodes.find(n=>n.type==='button'&&text(n)==='Add Dataset Knowledge').props.disabled,true);
- find(v,'Dataset sources').props.onDrop({preventDefault(){},dataTransfer:{getData:()=>JSON.stringify(['b'])}});v.render();assert.equal(v.agents[0].id,'a');
+ assert.equal(find(v,'Include collection Policies in knowledge').props.disabled,true);
+ assert.equal(v.nodes.find(n=>n.type==='button'&&text(n)==='Add Collection Knowledge').props.disabled,true);
+ find(v,'Collection sources').props.onDrop({preventDefault(){},dataTransfer:{getData:()=>JSON.stringify(['b'])}});v.render();assert.equal(v.agents[0].id,'a');
 });
 
 test('including indexed knowledge keeps datasets and sources beside chat with exact file scope',()=>{
- const v=mount({selectedId:'a'});v.nodes.find(n=>n.type==='button'&&text(n)==='Add Dataset Knowledge').props.onClick();v.render();
+ const v=mount({selectedId:'a'});v.nodes.find(n=>n.type==='button'&&text(n)==='Add Collection Knowledge').props.onClick();v.render();
  v.nodes.find(n=>n.type==='picker').props.onInclude({datasetIds:['a','b'],documentIds:['one','two','stale','foreign']});v.render();
- assert.equal(find(v,'Dataset dashboard').props['data-chat-focused'],false);
- assert.equal(find(v,'Authorized datasets').props.hidden,false);assert.equal(find(v,'Dataset sources').props.hidden,false);
+ assert.equal(find(v,'Collection dashboard').props['data-chat-focused'],false);
+ assert.equal(find(v,'Authorized collections').props.hidden,false);assert.equal(find(v,'Collection sources').props.hidden,false);
  assert.deepEqual(v.agents[0].knowledgeScope,{datasetIds:['a','b'],documentIds:['one','two']});
- assert.equal(find(v,'Expand Dataset Knowledge Chat').props.title,'Expand Dataset Knowledge Chat');
- assert.equal(v.nodes.find(n=>n.type==='button'&&text(n)==='Add Dataset Knowledge').props.disabled,false);
+ assert.equal(find(v,'Expand Collection Knowledge Chat').props.title,'Expand Collection Knowledge Chat');
+ assert.equal(v.nodes.find(n=>n.type==='button'&&text(n)==='Add Collection Knowledge').props.disabled,false);
 });
 
 test('only explicit expansion hides panels; restoring and peeking preserve active chat scope',()=>{
  const v=mount();find(v,'Ask Lapi about Policies').props.onClick();v.render();
- assert.equal(find(v,'Dataset dashboard').props['data-chat-focused'],false);
+ assert.equal(find(v,'Collection dashboard').props['data-chat-focused'],false);
  const scope=v.agents[0].sourceScope,id=v.agents[0].id;
- find(v,'Expand Dataset Knowledge Chat').props.onClick();v.render();
- assert.equal(find(v,'Dataset dashboard').props['data-chat-focused'],true);
- assert.equal(find(v,'Authorized datasets').props.hidden,true);assert.equal(find(v,'Dataset sources').props.hidden,true);
+ find(v,'Expand Collection Knowledge Chat').props.onClick();v.render();
+ assert.equal(find(v,'Collection dashboard').props['data-chat-focused'],true);
+ assert.equal(find(v,'Authorized collections').props.hidden,true);assert.equal(find(v,'Collection sources').props.hidden,true);
  find(v,'Show sources').props.onClick();v.render();assert.equal(find(v,'Hide sources').props.title,'Hide sources');
- assert.equal(find(v,'Dataset sources').props.hidden,false);
+ assert.equal(find(v,'Collection sources').props.hidden,false);
  assert.equal(v.agents[0].sourceScope,scope);assert.equal(v.agents[0].id,id);
  v.agents[0].onBusy(true);v.render();find(v,'Restore Dashboard layout').props.onClick();v.render();
- assert.equal(find(v,'Authorized datasets').props.hidden,false);assert.equal(find(v,'Dataset sources').props.hidden,false);
+ assert.equal(find(v,'Authorized collections').props.hidden,false);assert.equal(find(v,'Collection sources').props.hidden,false);
  assert.equal(v.agents[0].id,id);assert.equal(v.agents[0].sourceScope,scope);
 });
 
 test('initial, inactive, unindexed and emptied selections keep the three-panel layout',()=>{
- const initial=mount();assert.equal(find(initial,'Dataset dashboard').props['data-chat-focused'],false);assert.equal(initial.agents.length,0);
+ const initial=mount();assert.equal(find(initial,'Collection dashboard').props['data-chat-focused'],false);assert.equal(initial.agents.length,0);
  for(const values of [{documents:[]},{datasets:[{id:'a',name:'Invoices',active:false}],documents}]){
-  const v=mount(values);find(v,'Ask Lapi about Invoices').props.onClick();v.render();assert.equal(find(v,'Dataset dashboard').props['data-chat-focused'],false);
+  const v=mount(values);find(v,'Ask Lapi about Invoices').props.onClick();v.render();assert.equal(find(v,'Collection dashboard').props['data-chat-focused'],false);
  }
  const v=mount();find(v,'Ask Lapi about Policies').props.onClick();v.render();
- find(v,'Include dataset Policies in knowledge').props.onChange();v.render();
- assert.equal(find(v,'Dataset dashboard').props['data-chat-focused'],false);assert.equal(v.agents.length,0);
+ find(v,'Include collection Policies in knowledge').props.onChange();v.render();
+ assert.equal(find(v,'Collection dashboard').props['data-chat-focused'],false);assert.equal(v.agents.length,0);
 });
 
 test('mobile panel switching keeps the existing chat and bounded sources mounted',()=>{
  const v=mountChat({selectedId:'a'});const before=v.agents[0];
- for(const name of ['Sources (2)','Datasets (2)','Knowledge Chat']){
+ for(const name of ['Sources (2)','Collections (2)','Knowledge Chat']){
   v.nodes.find(n=>n.type==='button'&&text(n)===name).props.onClick();v.render();
   assert.equal(v.agents[0].id,before.id);assert.deepEqual(v.agents[0].sourceScope,before.sourceScope);
  }
- assert.equal(find(v,'Dataset dashboard').props['data-mobile-panel'],'chat');
+ assert.equal(find(v,'Collection dashboard').props['data-mobile-panel'],'chat');
 });
 
 test('landing summary counts only loaded active knowledge and announces what was added',()=>{
@@ -148,28 +148,28 @@ test('landing summary counts only loaded active knowledge and announces what was
 });
 
 test('asking from the landing opens a roomy chat with the question; chat asks earn room until restored',()=>{
- const v=mount();assert.equal(find(v,'Dataset dashboard').props['data-mode'],'landing');assert.equal(v.agents.length,0);
+ const v=mount();assert.equal(find(v,'Collection dashboard').props['data-mode'],'landing');assert.equal(v.agents.length,0);
  v.nodes.find(n=>n.props?.id==='dashboard-ask-input').props.onChange({target:{value:'What changed?'}});v.render();
  v.nodes.find(n=>n.type==='form'&&n.props.className==='dashboard-ask').props.onSubmit({preventDefault(){}});v.render();
- assert.equal(find(v,'Dataset dashboard').props['data-chat-focused'],true);assert.equal(find(v,'Dataset dashboard').props['data-mode'],'workspace');
+ assert.equal(find(v,'Collection dashboard').props['data-chat-focused'],true);assert.equal(find(v,'Collection dashboard').props['data-mode'],'workspace');
  const options=v.agents[0].options||{};assert.equal(options.initialQuestion.text,'What changed?');options.onInitialSent();v.render();assert.equal(v.agents[0].options.initialQuestion,null);
  find(v,'Restore Dashboard layout').props.onClick();v.render();v.agents[0].options.onAsk();v.render();
- assert.equal(find(v,'Dataset dashboard').props['data-chat-focused'],false);
- const w=mount();find(w,'Ask Lapi about Policies').props.onClick();w.render();assert.equal(find(w,'Dataset dashboard').props['data-chat-focused'],false);
- w.agents[0].options.onAsk();w.render();assert.equal(find(w,'Dataset dashboard').props['data-chat-focused'],true);
+ assert.equal(find(v,'Collection dashboard').props['data-chat-focused'],false);
+ const w=mount();find(w,'Ask Lapi about Policies').props.onClick();w.render();assert.equal(find(w,'Collection dashboard').props['data-chat-focused'],false);
+ w.agents[0].options.onAsk();w.render();assert.equal(find(w,'Collection dashboard').props['data-chat-focused'],true);
 });
 
 test('overview keeps the chat mounted and new knowledge routes to the connection flow',()=>{
  const calls=[];const v=mount({onAddNew:()=>calls.push('new')});find(v,'Ask Lapi about Policies').props.onClick();v.render();
  find(v,'Back to Dashboard overview').props.onClick();v.render();
- assert.equal(find(v,'Dataset dashboard').props['data-mode'],'landing');assert.deepEqual(v.agents.map(a=>a.id),['b']);assert.equal(find(v,'Dataset knowledge workspace chat').props.hidden,true);
+ assert.equal(find(v,'Collection dashboard').props['data-mode'],'landing');assert.deepEqual(v.agents.map(a=>a.id),['b']);assert.equal(find(v,'Collection knowledge chat').props.hidden,true);
  v.nodes.find(n=>n.type==='button'&&n.props.className==='dashboard-new-knowledge').props.onClick();
  find(v,'Add new knowledge from cloud storage').props.onClick();assert.deepEqual(calls,['new','new']);
 });
 
 test('documents handed over from Add knowledge open chat with exactly that indexed scope',()=>{
  const v=mount({startScope:{datasetIds:['b'],documentIds:['two','unknown']}});
- assert.equal(find(v,'Dataset dashboard').props['data-mode'],'workspace');
+ assert.equal(find(v,'Collection dashboard').props['data-mode'],'workspace');
  assert.deepEqual(v.agents[0].knowledgeScope,{datasetIds:['b'],documentIds:['two']});
  assert.match(v.agents[0].options.notice,/^Added Policies · 1 indexed source/);
 });
@@ -179,7 +179,7 @@ test('hero chips quick-remove and quick-add knowledge without leaving the overvi
  const chips=()=>v.nodes.filter(n=>n.props?.className==='dashboard-chip').map(n=>text(n));
  assert.deepEqual(chips(),['Invoices','Policies']);
  find(v,'Remove Policies from this chat').props.onClick();v.render();
- assert.deepEqual(chips(),['Invoices']);assert.equal(find(v,'Dataset dashboard').props['data-mode'],'landing');assert.equal(v.agents.length,0);
+ assert.deepEqual(chips(),['Invoices']);assert.equal(find(v,'Collection dashboard').props['data-mode'],'landing');assert.equal(v.agents.length,0);
  v.nodes.find(n=>n.props?.className==='dashboard-chip-add').props.onClick();v.render();
  find(v,'Add Policies to this chat').props.onClick();v.render();assert.deepEqual(chips(),['Invoices','Policies']);
  find(v,'Remove Invoices from this chat').props.onClick();v.render();find(v,'Remove Policies from this chat').props.onClick();v.render();

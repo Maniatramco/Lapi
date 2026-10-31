@@ -1,6 +1,6 @@
 "use client";
 import {ActionButton} from "./action-button";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SignInLayout } from "./sign-in-layout";
 import { DatasetSearch } from "./dataset-directory";
 import {ReviewDetail} from './review-detail';
@@ -17,22 +17,28 @@ import { StorageConfiguration } from "./storage-configuration";
 import { ConnectionSettings } from "./connection-settings";
 import { ConnectionStatus } from "./connection-status";
 import { AboutLapi } from "./about-lapi";
+import { WalkthroughGate } from "./walkthrough";
+import { WorkspaceAssist } from "./workspace-assist";
+import { OPEN_REVIEW_EVENT } from "./quick-start-flow";
+import {phoneRedirect, currentDevice, viewAllowed, agentOnly, type ScreenState } from "./screens-client";
+import { useDevice } from "./use-device";
 import { OperationProgress, extractionProgressJob } from "./operation-progress";
 import "./workspace-flow.css";
 import { DatasetWorkspace, DatasetMappings, ModelPicker, eligibleModels, modelLabel } from "./dataset-workspace";
 import { ModelRegistration } from "./model-registration";
 import { KnowledgeIndexBanner } from "./knowledge-index-banner";
 import { UserManagement } from "./user-management";
+import { AccessMap } from "./access-map";
 import { AdminDocuments } from "./admin-documents";
 import { TokenUsageAdmin } from "./token-usage";
 import { AgentV2 } from "./agent-v2";
 import { AgentLogo } from "./agent-logo";
 import "./agent-shortcut.css";
 import { rememberAssistantDataset } from "./agent-prompt-selection";
-import {prepareFreshLoginChat} from './chat-login-session';
+import {prepareFreshLoginChat, startFresh} from './chat-login-session';
 import { fetchWithSessionCsrf } from "./session-request";
 import {pendingJobIds,mergeJobUpdates} from './workflow-polling';
-import {
+import { ToggleRight,
   Activity,
   Bot,
   BookOpen,
@@ -45,6 +51,7 @@ import {
   Layers,
   Loader2,
   LogOut,
+  AlertTriangle,
   Menu,
   MessageSquare,
   RefreshCw,
@@ -57,11 +64,19 @@ import {
   Server,
   CloudUpload,
   Coins,
+  Network,
 } from "lucide-react";
 import { AddKnowledge } from "./add-knowledge";
 import { PageBand, PAGE_INTROS } from "./page-band";
+import { EnabledModels } from "./enabled-models";
+import { WorkspaceGate, type GateMode } from "./workspace-gate";
+import { SetupChat } from "./setup-chat";
+import { HelpBotMenuButton } from "./lapi-bot-button";
+import application from "./application-version.json";
+import { canAddCollections, gateStep, inWorkspace, pickWorkspace } from "./workspace-scope";
+import { openQuickStart } from "./quick-start-flow";
 import { JobsBoard } from "./jobs-board";
-import { NeedsAttentionDialog, attentionItems, onAttention, type AttentionScope } from "./needs-attention";
+import { NeedsAttentionDialog, attentionItems, onAttention, openAttention, type AttentionScope } from "./needs-attention";
 import { ManageDataset, onDatasetEditor, type ManageRequest } from "./manage-dataset";
 import { MappingOverview } from "./mapping-overview";
 import type { DatasetKnowledgeScope } from "./dataset-knowledge-picker";
@@ -85,7 +100,9 @@ type View =
   | "Files & processing"
   | "Model Registration"
   | "Model Mapping"
+  | "Enabled models"
   | "Users & passwords"
+  | "Access map"
   | "Token usage"
   | "Add knowledge";
 const sections: { name: View; icon: typeof Shield; group?: string }[] = [
@@ -94,6 +111,7 @@ const sections: { name: View; icon: typeof Shield; group?: string }[] = [
   { name: "Lapi agent V2", icon: Bot, group: "WORKSPACE" },
   { name: "Skills & memory", icon: Bot, group: "WORKSPACE" },
   { name: "Users & passwords", icon: KeyRound },
+  { name: "Access map", icon: Network },
   { name: "Datasets", icon: BookOpen },
   { name: "Extract", icon: FileSearch },
   { name: "Extract Data", icon: Database },
@@ -107,11 +125,12 @@ const sections: { name: View; icon: typeof Shield; group?: string }[] = [
   { name: "Token usage", icon: Coins },
   { name: "Model Registration", icon: Layers },
   { name: "Model Mapping", icon: BookOpen },
+  { name: "Enabled models", icon: ToggleRight },
   { name: "Add knowledge", icon: CloudUpload },
 ];
 // Keep saved route identifiers compatible while presenting the product names.
-const viewLabel = (name: View) => name === "Home" ? "Dashboard" : name === "Lapi agent V2" ? "Lapi Agent" : name === "Extract" ? "Review" : name === "Extract Data" ? "Extract" : name;
-const viewRoute = (name: View) => name === "Extract Data" ? "Extract Data" : viewLabel(name);
+const viewLabel = (name: View) => name === "Datasets" ? "Collections" : name === "Home" ? "Dashboard" : name === "Lapi agent V2" ? "Lapi Agent" : name === "Extract" ? "Review" : name === "Extract Data" ? "Extract" : name;
+const viewRoute = (name: View) => name === "Extract Data" ? "Extract Data" : name === "Datasets" ? "Collections" : viewLabel(name);
 type ReviewReturn = {view: View; datasetId: string; agentTab: string; extractionTab: string};
 const date = (v: string | number) =>
   v
@@ -122,15 +141,24 @@ const date = (v: string | number) =>
 const json = (v: unknown) => JSON.stringify(v, null, 2);
 // Codes the Keycloak callback adds to /?sign_in_error= (lapi_app/keycloak_auth.py).
 const SIGN_IN_ERRORS: Record<string, string> = {
-  denied: "Keycloak sign-in was cancelled.",
+  denied: "Sign-in was cancelled.",
   expired: "That sign-in took too long or was started in another tab. Try again.",
-  unavailable: "Keycloak is unreachable right now. Try again in a minute.",
-  account_conflict: "A local Lapi account already uses your Keycloak username. Ask an administrator to rename or delete it.",
-  failed: "Keycloak sign-in did not complete. Try again, or ask an administrator to check the server log.",
+  unavailable: "The sign-in service is unreachable right now. Try again in a minute.",
+  account_conflict: "A local Lapi account already uses your username. Ask an administrator to rename or delete it.",
+  mfa_required: "Administrators must sign in with an authenticator code. Set up your authenticator app in your account security settings, then sign in again.",
+  failed: "Sign-in did not complete. Try again, or ask an administrator to check the server log.",
 };
+/** The provider's own mark on its sign-in button (brand colours, as their sign-in guidelines ask). */
+function ProviderMark({alias}:{alias:string}){
+  if(alias==="microsoft")return <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>;
+  if(alias==="google")return <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>;
+  if(alias==="github")return <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path fill="#181717" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>;
+  // Any other provider (GitLab, Okta, SAML …) gets a key icon and its label.
+  return <KeyRound size={17} aria-hidden="true"/>;
+}
 /** With Keycloak, Lapi's password form is only the local administrators' break-glass path. */
 function BreakGlass({ on, children }: { on: boolean; children: ReactNode }) {
-  return on ? <details className="login-breakglass"><summary>Administrator sign-in without Keycloak</summary>{children}</details> : <>{children}</>;
+  return on ? <details className="login-breakglass"><summary>Emergency administrator sign-in</summary>{children}</details> : <>{children}</>;
 }
 function Status({ value }: { value: string }) {
   const green = [
@@ -212,14 +240,33 @@ export default function App() {
   useEffect(()=>{if(view!=='Home')setHomeSearch('');},[view]);
   const [agentTab,setAgentTab]=useState("Chat");
   const [user, setUser] = useState<Entity | null>(null);
+  // Screens this person may see on this device (OpenFGA, /api/me/screens); re-read every minute and when the device class changes.
+  const [screens, setScreens] = useState<ScreenState | null>(null);
+  useEffect(() => {
+    if (!user) { setScreens(null); return; }
+    let stopped = false, device = currentDevice();
+    const read = () => fetch(`/api/me/screens?device=${device}`, { credentials: "include" }).then(r => r.ok ? r.json() : null).then(state => { if (!stopped && state) setScreens(state); }).catch(() => undefined);
+    void read();
+    const timer = window.setInterval(() => void read(), 60000);
+    const resized = () => { const next = currentDevice(); if (next !== device) { device = next; void read(); } };
+    window.addEventListener("resize", resized);
+    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener("resize", resized); };
+  }, [user?.id]);
+  const device = useDevice();
+  const allowedView = (name: string) => !phoneRedirect(name, device) && viewAllowed(name, screens, Boolean(user?.is_admin));
+  const phoneAgentOnly = agentOnly(screens, Boolean(user?.is_admin));
   const [authChecked, setAuthChecked] = useState(false);
   const [csrf, setCsrf] = useState("");
   const authSession = useRef({ userId: user?.id as string | undefined, csrf });
   authSession.current = { userId: user?.id, csrf };
   const [setupRequired, setSetupRequired] = useState(false);
   const [keycloak, setKeycloak] = useState(false);
+  // Company sign-in providers configured in Keycloak (Microsoft, Google): one button each.
+  const [providers, setProviders] = useState<{alias:string;label:string}[]>([]);
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
+  // Accounts with an authenticator app: the server asks for the 6-digit code after a correct password.
+  const [totpCode, setTotpCode] = useState(""), [needsCode, setNeedsCode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordChangedNotice, setPasswordChangedNotice] = useState(false);
   const [roleChangedNotice, setRoleChangedNotice] = useState(false);
@@ -239,8 +286,9 @@ export default function App() {
   const navigationIsDrawer = compactNavigation || view === 'Lapi agent V2' || view === 'Home';
   const drawerOpen = mobile && navigationIsDrawer;
   useEffect(() => { setMobile(false); }, [view]);
+  useEffect(() => { if (user && phoneRedirect(view, device)) { navigate("Lapi agent V2"); return; } if (user && screens && !allowedView(view)) navigate(device === "phone" ? "Lapi agent V2" : "Home"); }, [view, screens, user?.id, device]);
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 960px)");
+    const media = window.matchMedia("(max-width: 960px), (pointer: coarse) and (max-width: 1100px)");
     const sync = () => {
       setCompactNavigation(media.matches);
       if (!media.matches) setMobile(false);
@@ -275,13 +323,26 @@ export default function App() {
   const [adminNavigation, setAdminNavigation] = useState(false);
   const [extractionTab, setExtractionTab] = useState("History");
   const [refresh, setRefresh] = useState(0);
-  const [docs, setDocs] = useState<Entity[]>([]);
+  const [allDocs, setDocs] = useState<Entity[]>([]);
   // A list response started before an upload must not erase its accepted result.
   const uploadRevision = useRef(0);
-  const [kbs, setKbs] = useState<Entity[]>([]);
+  const [allKbs, setKbs] = useState<Entity[]>([]);
+  // Workspaces: the open one scopes every screen. Access is still decided by the server, per collection.
+  const [workspaces, setWorkspaces] = useState<Entity[]>([]), [canCreateTeam, setCanCreateTeam] = useState(false), [workspaceId, setWorkspaceId] = useState('');
+  const [gateChosen, setGateChosen] = useState(false), [gateSkipped, setGateSkipped] = useState(false), [gateOpen, setGateOpen] = useState<GateMode | null>(null);
+  const currentWorkspace = useRef('');
+  currentWorkspace.current = workspaceId;
+  const kbs = useMemo(() => inWorkspace(allKbs, workspaceId), [allKbs, workspaceId]);
+  const openIds = useMemo(() => new Set(kbs.map(d => d.id)), [kbs]);
+  const docs = useMemo(() => { if (!workspaceId) return allDocs; const ids = new Set(kbs.map(d => d.id)); return allDocs.filter(d => { const owner = d.dataset_id || d.kb_id; return !owner || ids.has(owner); }); }, [allDocs, kbs, workspaceId]);
   const [kb, setKb] = useState("");
-  const [jobs, setJobs] = useState<Entity[]>([]);
+  const [allJobs, setJobs] = useState<Entity[]>([]);
   const [attention, setAttention] = useState<AttentionScope | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [nameSkipped, setNameSkipped] = useState(false);
+  const [setupChat, setSetupChat] = useState(false);
+  const [botEntry, setBotEntry] = useState<'setup' | 'help' | 'email'>('setup');
+  const openBot = (entry: 'help' | 'email') => { setBotEntry(entry); setSetupChat(true); };
   useEffect(() => onAttention(scope => setAttention(scope)), []);
   const [manage, setManage] = useState<ManageRequest | null>(null);
   useEffect(() => onDatasetEditor(request => { setAttention(null); setManage(request); }), []);
@@ -302,9 +363,15 @@ export default function App() {
   const [extractModelId, setExtractModelId] = useState("");
   const [, setDocumentPollError] = useState(false);
   const [scope, setScope] = useState<string[]>([]);
-  const [templates, setTemplates] = useState<Entity[]>([]);
+  const [allTemplates, setTemplates] = useState<Entity[]>([]);
   const [templateId, setTemplateId] = useState("");
-  const [extractions, setExtractions] = useState<Entity[]>([]);
+  const [allExtractions, setExtractions] = useState<Entity[]>([]);
+  // A run or prompt with no known collection stays visible rather than disappearing.
+  const extractions = useMemo(() => !workspaceId ? allExtractions : allExtractions.filter(e => { const owner = e.dataset_id || e.parent_id || allDocs.find(d => e.document_ids?.includes(d.id))?.dataset_id; return !owner || openIds.has(owner); }), [allExtractions, allDocs, openIds, workspaceId]);
+  const templates = useMemo(() => !workspaceId ? allTemplates : allTemplates.filter(t => { const owner = t.dataset_id || t.parent_id; return !owner || openIds.has(owner); }), [allTemplates, openIds, workspaceId]);
+  // A job follows its file, collection or run; old jobs for things no longer here are dropped.
+  const jobs = useMemo(() => { if (!workspaceId) return allJobs; const here = new Set([...docs, ...kbs, ...extractions].map(d => d.id)); return allJobs.filter(job => { const id = job.document_id || job.target_id; return !id || here.has(id); }); }, [allJobs, docs, kbs, extractions, workspaceId]);
+  const phoneAttention = useMemo(() => attentionItems(docs, jobs, kbs).length, [docs, jobs, kbs]);
   const [extraction, setExtraction] = useState<Entity | null>(null);
   const [reviewOpenRequest, setReviewOpenRequest] = useState(0);
   const [reviewRouteId, setReviewRouteId] = useState("");
@@ -333,14 +400,16 @@ export default function App() {
       quiet = false,
     ) => {
       const requestId=randomId();
-      const resource=path.split('/')[1]||'workspace';
-      const section=({overview:'workspace summary',jobs:'workflow status',settings:'workspace settings',conversations:'chats',models:'available models',templates:'prompt templates'} as Record<string,string>)[resource]||resource.replaceAll('-',' ');
+      const resource=path.split('/')[1]||'collection';
+      const section=({overview:'collection summary',jobs:'workflow status',settings:'collection settings',conversations:'chats',models:'available models',templates:'prompt templates'} as Record<string,string>)[resource]||resource.replaceAll('-',' ');
       const testingModel=path==='/model-registrations/test';
       const planningAgent=path==='/agent-v2/plans'&&method==='POST';
-      const label=path==='/templates/validate'?'Validating prompt JSON…':path.startsWith('/temporary-chat/')?(path==='/temporary-chat/messages'?'Answering from the temporary document…':method==='DELETE'?'Clearing temporary document…':body instanceof FormData?'Reading temporary document…':'Loading temporary document…'):testingModel?'Testing model connection…':path.startsWith('/datasets/')&&path.endsWith('/models')&&method==='PUT'?'Applying dataset model mappings…':`${method==='GET'?'Loading':method==='POST'&&body instanceof FormData?'Uploading':'Saving'} ${section}…`;
+      const label=path==='/templates/validate'?'Validating prompt JSON…':path.startsWith('/temporary-chat/')?(path==='/temporary-chat/messages'?'Answering from the temporary document…':method==='DELETE'?'Clearing temporary document…':body instanceof FormData?'Reading temporary document…':'Loading temporary document…'):testingModel?'Testing model connection…':path.startsWith('/datasets/')&&path.endsWith('/models')&&method==='PUT'?'Applying collection model mappings…':`${method==='GET'?'Loading':method==='POST'&&body instanceof FormData?'Uploading':'Saving'} ${section}…`;
       if(!quiet)setRequests(previous=>[...previous,{id:requestId,label}]);
       const timeout=AbortSignal.timeout(planningAgent?630000:testingModel?Math.min(630000,(Number((body as Entity)?.timeout)||60)*1000+30000):method==='GET'?30000:120000);
       try {
+      // A new collection goes into the open workspace.
+      if (path === "/datasets" && method === "POST" && body && !(body instanceof FormData) && !(body as Entity).workspace_id && currentWorkspace.current) body = { ...(body as Entity), workspace_id: currentWorkspace.current };
       const headers: Record<string, string> = {};
       if (body && !(body instanceof FormData))
         headers["Content-Type"] = "application/json";
@@ -427,6 +496,7 @@ export default function App() {
       .then((d: Entity) => {
         setSetupRequired(!!d.setup_required);
         setKeycloak(!!d.keycloak);
+        setProviders(Array.isArray(d.providers) ? d.providers : []);
       })
       .catch(() => {});
   }, []);
@@ -446,7 +516,7 @@ export default function App() {
     ];
     Promise.allSettled(tasks.map(async([path,update])=>{
       try {const value=await api(path,'GET',undefined,controller.signal,true);if(active)update(value);}
-      catch(error){if(active)setError(error instanceof Error?error.message:'Could not refresh workspace.');}
+      catch(error){if(active)setError(error instanceof Error?error.message:'Could not refresh.');}
     })).finally(()=>{if(active)setLoading(false);});
     return () => {
       active = false;
@@ -536,6 +606,13 @@ export default function App() {
     setReviewOpenRequest(n=>n+1);
     return true;
   };
+  // Other screens (Quick start) open an extraction's Review with an event.
+  const openReviewRef = useRef(openReview);
+  openReviewRef.current = openReview;
+  useEffect(()=>{
+    const open=(event:Event)=>{const id=(event as CustomEvent<{id?:string}>).detail?.id;if(id)openReviewRef.current(id);};
+    window.addEventListener(OPEN_REVIEW_EVENT,open);return()=>window.removeEventListener(OPEN_REVIEW_EVENT,open);
+  },[]);
   useEffect(()=>{
     if(!user || view!=='Review' || !reviewRouteId || extraction?.id===reviewRouteId)return;
     let active=true;
@@ -552,7 +629,7 @@ export default function App() {
     let route: string;
     try { route = decodeURIComponent(hash.slice(1)); } catch { route = "Home"; }
     if (["connections","services & migration"].includes(route.toLowerCase())) {route="Storage";window.history.replaceState(null,"","#Storage");}
-    if (route.toLowerCase()==="onboard dataset") {route="Datasets";window.history.replaceState(null,"","#Datasets");}
+    if (["onboard dataset","workspaces","datasets","collections"].includes(route.toLowerCase())) {route="Datasets";window.history.replaceState(null,"","#Collections");}
     if (["dashboard","home"].includes(route.toLowerCase())) {route="Home";window.history.replaceState(null,"","#Dashboard");}
     if (["setup","api documentation","adp documentation","index inspector"].includes(route.toLowerCase())) {
       route = "Home";
@@ -571,6 +648,7 @@ export default function App() {
     } else {
       if(["ask lapi","lapi assistant","lapi agent"].includes(route.toLowerCase()))route="Lapi agent V2";
       if(route.toLowerCase()==="document chat")route="Lapi agent V2";
+      if(/^add knowledge\//i.test(route))route="Add knowledge"; // Add knowledge reads the provider from the hash.
       const next = sections.find(s => s.name.toLowerCase() === (route.toLowerCase() === "templates" ? "prompt templates" : route.toLowerCase()))?.name || "Home";
       if(next === "Review")setReviewRouteId("");
       setView(next);
@@ -603,21 +681,54 @@ export default function App() {
   const selectDoc = (id: string) =>
     setScope((s) => (s.includes(id) ? s.filter((v) => v !== id) : [...s, id]));
   const reload = () => setRefresh((v) => v + 1);
+  const savedWorkspaceKey = user ? `lapi-workspace:${user.id}` : '';
+  const readWorkspaces = async () => {
+    const result = await api('/workspaces', 'GET', undefined, undefined, true);
+    setWorkspaces(result.workspaces); setCanCreateTeam(Boolean(result.can_create_team));
+    return result.workspaces as Entity[];
+  };
+  const openWorkspace = (id: string) => {
+    setWorkspaceId(id); setGateChosen(true); setGateSkipped(false); setGateOpen(null); changeDataset('');
+    try { localStorage.setItem(savedWorkspaceKey, id); sessionStorage.setItem('lapi-workspace-chosen', '1'); } catch {}
+  };
+  useEffect(() => {
+    if (!user) return;
+    let stopped = false;
+    void readWorkspaces().then(found => {
+      if (stopped) return;
+      let saved: string | null = null, chosen = false;
+      try { saved = localStorage.getItem(savedWorkspaceKey); chosen = sessionStorage.getItem('lapi-workspace-chosen') === '1'; } catch {}
+      setWorkspaceId(pickWorkspace(found, saved)); setGateChosen(chosen);
+      reload();  // The first read may have placed existing collections in workspaces.
+    }).catch(() => undefined);
+    return () => { stopped = true; };
+  }, [user?.id]);
+  useEffect(() => { if (user && refresh) void readWorkspaces().catch(() => undefined); }, [refresh]);
+  const gateStepNow = gateOpen || gateStep({ workspaces, current: workspaceId, chosen: gateChosen, skipped: gateSkipped });
+  // First sign-in is a chat with Lapi: the name, a team workspace, which workspace, the first collection.
+  const needName = Boolean(user && !user.display_name && !nameSkipped && workspaces.length > 0);
+  // Once open, the chat stays until it says it is done, even as the steps it completes stop needing it.
+  const setupWanted = !gateOpen && (needName || gateStepNow === 'choose' || gateStepNow === 'collection');
+  useEffect(() => { if (setupWanted) setSetupChat(true); }, [setupWanted]);
   const authenticate = () =>
     run(async () => {
-      const d = await api("/auth/login", "POST", { username, password });
+      let d;
+      try {
+        d = await api("/auth/login", "POST", needsCode&&totpCode ? { username, password, code: totpCode } : { username, password });
+      } catch (e) {
+        if (e instanceof Error && /authenticator/i.test(e.message)) { setNeedsCode(true); setTotpCode(""); window.setTimeout(()=>document.getElementById("login-code")?.focus(),0); }
+        throw e;
+      }
+      setNeedsCode(false); setTotpCode("");
       prepareFreshLoginChat(sessionStorage,d.user.username,d.chat_session_id||'');
-      navigate("Home");
-      setUser(d.user);
-      setPasswordChangedNotice(false);
-      setRoleChangedNotice(false);
-      setCsrf(d.csrf_token || "");
       setPassword("");
+      // A full load, so this session runs the latest release with nothing left from the last one.
+      startFresh(window.location,sessionStorage,true);
     });
   const chooseTemplate = (id: string) => setTemplateId(id);
   const extract = () =>
     run(async () => {
-      if (!kb || !selectedExtractModel) throw new Error("Choose a dataset and an eligible extraction model.");
+      if (!kb || !selectedExtractModel) throw new Error("Choose a collection and an eligible extraction model.");
       if (!scope.length || !templateId)
         throw new Error("Select at least one document and a template.");
       if (extractionNeedsConsent && !externalExtract)
@@ -655,13 +766,13 @@ export default function App() {
         ))
       ) : (
         <p className="small muted">
-          {kb ? "Add documents to this dataset first." : "Choose a dataset to see its documents."}
+          {kb ? "Add documents to this collection first." : "Choose a collection to see its documents."}
         </p>
       )}
     </div>
   );
-  const externalNotice = (model: Entity | undefined) => `I approve sending this extraction request and selected document content to ${modelLabel(model)} (${model?.provider || 'model provider'}), using the dataset’s configured embedding and retrieval providers. External API usage is billed separately.`;
-  const datasetSelect = (label: string) => <select aria-label={label} value={kb} onChange={e => changeDataset(e.target.value)}><option value="">Choose a dataset</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>;
+  const externalNotice = (model: Entity | undefined) => `I approve sending this extraction request and selected document content to ${modelLabel(model)} (${model?.provider || 'model provider'}), using the collection’s configured embedding and retrieval providers. External API usage is billed separately.`;
+  const datasetSelect = (label: string) => <select aria-label={label} value={kb} onChange={e => changeDataset(e.target.value)}><option value="">Choose a collection</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>;
   const configureDataset = () => { navigate("Model Mapping"); };
 
   if (!authChecked)
@@ -674,11 +785,16 @@ export default function App() {
     return (
       <SignInLayout>
           <h1 id="login-heading" className="screen-heading">Welcome back</h1>
-          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : keycloak ? "Sign in with your organization account." : "Sign in to your workspace."}</p>
+          <p className="login-description">{roleChangedNotice ? "Your role changed. Sign in again to use your updated access." : passwordChangedNotice ? "Password changed. Sign in with your new password." : keycloak && providers.length > 0 ? "Choose how you want to sign in." : keycloak ? "Sign in with your work account." : "Sign in to Lapi."}</p>
           {setupRequired && <div className="login-setup-notice" role="status">No administrator exists yet. Create one on the server with <code>lapi_local_use/lapi_scripts/create-admin.sh</code>, then sign in here.</div>}
           {error && <div className="login-error" role="alert"><AlertCircle size={18} aria-hidden="true" /><span>{error}</span></div>}
-          {keycloak && <a className="btn primary login-submit login-keycloak" href="/api/auth/keycloak/start">
-            <KeyRound size={17} aria-hidden="true" />Sign in with Keycloak</a>}
+          {keycloak && providers.length > 0 && <div className="login-providers">
+            {providers.map(provider => <a key={provider.alias} className="btn login-provider" href={`/api/auth/keycloak/start?provider=${encodeURIComponent(provider.alias)}`}>
+              <ProviderMark alias={provider.alias}/>Sign in with {provider.label}</a>)}
+            <a className="login-keycloak-other" href="/api/auth/keycloak/start">Sign in with a username and password instead</a>
+          </div>}
+          {keycloak && !providers.length && <a className="btn primary login-submit login-keycloak" href="/api/auth/keycloak/start">
+            <KeyRound size={17} aria-hidden="true" />Sign in with your work account</a>}
           <BreakGlass on={keycloak}>
           <form noValidate aria-busy={busy} onSubmit={e => {
             e.preventDefault();
@@ -715,6 +831,12 @@ export default function App() {
               </div>
               {signInErrors.password && <small className="field-error" id="login-password-error">{signInErrors.password}</small>}
             </div>
+            {needsCode && <div className="field">
+              <label htmlFor="login-code">Authenticator code</label>
+              <input id="login-code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={totpCode}
+                placeholder="6 digits" onChange={e => { setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }} />
+              <small className="muted">From the authenticator app on your phone.</small>
+            </div>}
             <button className="btn primary login-submit" type="submit" disabled={busy}>
               {busy && <Loader2 size={17} className="animate-spin" aria-hidden="true" />}
               {busy ? "Signing in..." : "Sign in"}
@@ -725,10 +847,19 @@ export default function App() {
       </SignInLayout>
     );
 
+  const signOut = () => run(async () => {
+    const result = await api("/auth/logout", "POST");
+    setUser(null);
+    setCsrf("");
+    // End the Keycloak session too, or the next sign-in would skip the password.
+    sessionStorage.clear();
+    if (result?.logout_url) window.location.assign(result.logout_url);
+    else startFresh(window.location, sessionStorage);
+  });
   return (
     <>
       {drawerOpen && <div className="navigation-backdrop" aria-hidden="true" onClick={() => setMobile(false)} />}
-      <aside id="workspace-navigation" ref={navigationRef} className={`sidebar ${view === 'Lapi agent V2' || view === 'Home' ? 'agent-navigation-drawer' : ''} ${drawerOpen ? "open" : ""}`} role={drawerOpen ? "dialog" : undefined} aria-modal={drawerOpen ? true : undefined} aria-label="Workspace navigation" inert={navigationIsDrawer && !drawerOpen}>
+      <aside id="workspace-navigation" ref={navigationRef} className={`sidebar ${view === 'Lapi agent V2' || view === 'Home' ? 'agent-navigation-drawer' : ''} ${drawerOpen ? "open" : ""}`} role={drawerOpen ? "dialog" : undefined} aria-modal={drawerOpen ? true : undefined} aria-label="App navigation" inert={navigationIsDrawer && !drawerOpen}>
         <button title="Close navigation"
           className="btn icon mobile-close"
           onClick={() => setMobile(false)}
@@ -743,17 +874,18 @@ export default function App() {
           <span className="brand-name">Lapi</span>
         </div>
         <div className="brand-sub">AI Data Platform</div>
-        <WorkspaceNavigation view={view} isAdmin={Boolean(user.is_admin)} onNavigate={navigate} adminOpen={adminNavigation} onAdminToggle={()=>setAdminNavigation(!adminNavigation)} adminItems={sections.filter(s=>!["About","Home","Datasets","Add knowledge","Lapi Agent","Lapi agent V2","Skills & memory","Extract","Extract Data","Review","Extraction Review","Re-extract","Prompt templates","Model Registration","Model Mapping"].includes(s.name)&&(user.is_admin||["Users & passwords","Jobs & activity"].includes(s.name)))}/>
+        <WorkspaceNavigation view={view} isAdmin={Boolean(user.is_admin)} allowed={allowedView} onNavigate={navigate} adminOpen={adminNavigation} onAdminToggle={()=>setAdminNavigation(!adminNavigation)} adminItems={sections.filter(s=>allowedView(s.name)&&!["About","Home","Datasets","Add knowledge","Lapi Agent","Lapi agent V2","Skills & memory","Extract","Extract Data","Review","Extraction Review","Re-extract","Prompt templates","Model Registration","Model Mapping","Enabled models"].includes(s.name)&&(user.is_admin||["Users & passwords","Jobs & activity"].includes(s.name)||(Boolean((user as {is_auditor?:boolean}).is_auditor)&&s.name==="Access map")))}/>
 
         <div className="nav-footer">
           <div className="row" style={{ marginBottom: 9 }}>
             <Server size={14} />
-            <span>Private workspace</span>
+            <span>Private</span>
           </div>
           Originals protected. Insights grounded.
         </div>
+        <HelpBotMenuButton onOpen={() => { setMobile(false); openBot('help'); }}/>
       </aside>
-      <div className={`shell ${view === "Lapi agent V2" ? "assistant-shell" : view === "Home" ? "notebook-shell" : view === "Extract Data" ? "extract-data-shell" : ""}`} inert={drawerOpen}>
+      <div className={`shell ${view === "Lapi agent V2" ? "assistant-shell" : view === "Home" ? "notebook-shell" : view === "Extract Data" ? "extract-data-shell" : ""}`} inert={drawerOpen} data-agent-only={phoneAgentOnly || undefined}>
         <header className="topbar">
           <div className="breadcrumb">
             <button title="Open navigation"
@@ -766,9 +898,19 @@ export default function App() {
             >
               <Menu size={17} />
             </button>
-            <img className="header-logo" src="/lapi-mark.svg" alt="Lapi" width={40} height={40} /><span className="crumb-workspace">Workspace</span>
+            <img className="header-logo" src="/lapi-mark.svg" alt="Lapi" width={40} height={40} /><span className="crumb-workspace">Lapi</span>
             <ChevronRight size={13} />
             <h1 className="workspace-title">{viewLabel(view)}</h1>
+            {workspaces.length > 0 && <select className="workspace-switcher" aria-label="Current workspace" value={workspaceId} onChange={event => {
+              const value = event.target.value;
+              if (value === '__team') { setGateOpen('team'); return; }
+              if (value === '__people') { setGateOpen('people'); return; }
+              openWorkspace(value);
+            }}>
+              {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {canCreateTeam && <option value="__team">+ Create a team workspace</option>}
+              {(() => { const open = workspaces.find(w => w.id === workspaceId); return open && open.audience === 'team' && open.my_access === 'owner' ? <option value="__people">People in this workspace…</option> : null; })()}
+            </select>}
           </div>
           <div className="top-actions">
             {view !== "Lapi agent V2" && !(view === 'Review' && extraction) && <div className="workspace-page-actions" role="toolbar" aria-label={`${viewLabel(view)} actions`}>
@@ -778,8 +920,8 @@ export default function App() {
                 className="btn icon"
                 onClick={reload}
                 disabled={loading}
-                aria-label="Refresh workspace"
-                title="Refresh workspace"
+                aria-label="Refresh"
+                title="Refresh"
               >
                 <RefreshCw
                   size={14}
@@ -787,27 +929,18 @@ export default function App() {
                 />
               </button>
             </div>}
+            {phoneAttention > 0 && <button type="button" className="btn icon topbar-attention" aria-label={`Check ${phoneAttention} ${phoneAttention === 1 ? 'file' : 'files'}`} title="Files that need you" onClick={() => openAttention()}><AlertTriangle size={16} aria-hidden="true" /><span className="topbar-attention-count">{phoneAttention}</span></button>}
             <span className="pill">
               <span className="dot" />
-              Private workspace
+              Private
             </span>
-            <div className="avatar" title={user.username}>
-              {(user.username || "A").slice(0, 2).toUpperCase()}
+            <div className="account">
+              <button type="button" className="avatar account-button" title={user.username} aria-label="Account" aria-haspopup="menu" aria-expanded={accountOpen} onClick={() => setAccountOpen(open => !open)}>
+                {(user.username || "A").slice(0, 2).toUpperCase()}
+              </button>
+              {accountOpen && <div className="account-menu" role="menu"><span className="account-name">{user.username}</span><button type="button" role="menuitem" className="btn" onClick={() => { setAccountOpen(false); signOut(); }}><LogOut size={14} aria-hidden="true" /> Sign out</button></div>}
             </div>
-            <button
-              className="btn icon"
-              title="Sign out"
-              aria-label="Sign out"
-              onClick={() =>
-                run(async () => {
-                  const result = await api("/auth/logout", "POST");
-                  setUser(null);
-                  setCsrf("");
-                  // End the Keycloak session too, or the next sign-in would skip the password.
-                  if (result?.logout_url) window.location.assign(result.logout_url);
-                })
-              }
-            >
+            <button className="btn icon" title="Sign out" aria-label="Sign out" onClick={signOut}>
               <LogOut size={14} />
             </button>
           </div>
@@ -818,6 +951,7 @@ export default function App() {
           {error && view !== "Home" && (
             <Notice tone="error">
               {error}
+              <button type="button" className="text-button" style={{ marginLeft: 12 }} onClick={() => openBot('email')}>Email for help</button>
               <button title="Dismiss error"
                 className="btn icon"
                 onClick={() => setError("")}
@@ -828,15 +962,30 @@ export default function App() {
               </button>
             </Notice>
           )}
-          {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
+          {setupChat && user && <SetupChat key={botEntry} api={api} user={user} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)} chosen={gateChosen} needName={needName} entry={botEntry} dataset={kbs.find(d => d.id === kb)} lastError={error} page={viewLabel(view)} version={application.version}
+            onNamed={given => { setUser(current => current ? { ...current, display_name: given } : current); setNameSkipped(true); void readWorkspaces(); }}
+            onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}
+            onChoose={openWorkspace}
+            onCollectionCreated={id => { reload(); changeDataset(id); }} onChanged={reload}
+            onDone={() => { setSetupChat(false); setBotEntry('setup'); setGateChosen(true); setGateSkipped(true); setNameSkipped(true); }}/>}
+          {!setupChat && gateStepNow && <WorkspaceGate mode={gateStepNow} api={api} workspaces={workspaces} canCreateTeam={canCreateTeam} current={workspaces.find(w => w.id === workspaceId)}
+            onChoose={openWorkspace}
+            onTeamCreated={made => { setWorkspaces(current => [...current, made]); setCanCreateTeam(Boolean(user?.is_admin)); setWorkspaceId(made.id); setGateChosen(true); setGateOpen('people'); try { localStorage.setItem(savedWorkspaceKey, made.id); } catch {} changeDataset(''); }}
+            onPeopleDone={() => { setGateOpen(null); reload(); }}
+            onCollectionCreated={id => { setGateOpen(null); setGateSkipped(true); reload(); changeDataset(id); openQuickStart(); }}
+            onLater={gateStepNow === 'team' || gateStepNow === 'collection' ? () => { setGateOpen(null); setGateSkipped(true); } : null}/>}
+          <WorkspaceAssist onHelp={() => openBot('help')} api={api} user={user} view={view} datasets={kbs} onNavigate={v => navigate(v as View)} onOpenNavigation={() => setMobile(true)} onChanged={reload} agentOnly={phoneAgentOnly} onSelectDataset={changeDataset} documents={docs} jobs={jobs} workspace={workspaces.find(w => w.id === workspaceId)}/>
+          {(view === "Home" || (view === 'Review' && reviewReturn?.view === 'Home')) && <div hidden={view!=='Home'}><DatasetDashboard key={dashboardHandoff?.key||0} startScope={dashboardHandoff} metadataApi={api} onMetadataReview={openReview} username={user.username} selectedId={dashboardDatasetId} onSelect={id=>{setDashboardDatasetId(id);changeDataset(id);}} datasets={kbs} documents={docs} loading={loading} search={homeSearch} onClearSearch={()=>setHomeSearch('')} canManage={Boolean(user.is_admin||user.is_contributor)} onBrowse={()=>navigate("Datasets")} onAddNew={()=>navigate("Add knowledge")} guide={<WorkflowOverview isAdmin={Boolean(user.is_admin)} onNavigate={navigate}/>} renderAgent={(id,onBusy,sourceScope,_onSourceChange,knowledgeScope,options)=>{const scope=knowledgeScope||{datasetIds:[id],documentIds:sourceScope};return <DatasetKnowledgeChat key={knowledgeScopeKey(scope)} scope={scope} onOpenAgent={()=>navigate('Lapi agent V2')} onBusy={onBusy} catalogRevision={refresh} api={api} stream={agentStream} username={user.username} onReview={openReview} {...options}/>;}}/></div>}
           {view === "About" && <AboutLapi/>}
+          <WalkthroughGate api={api} active={view === "Home"} userId={user.id as string | undefined}/>
           {view === "Skills & memory" && <AgentSetup api={api} datasets={kbs} selectedDataset={kb} isAdmin={Boolean(user.is_admin)} onNotify={notify}/>}
           {view === "Add knowledge" && <AddKnowledge api={api} datasets={kbs} documents={docs} selectedDataset={kb} onChanged={reload} onBack={()=>navigate("Home")} onExtract={()=>navigate("Extract Data")} onAsk={scope=>{if(navigate("Home")){setDashboardDatasetId('');setDashboardHandoff({...scope,key:Date.now()});}}}/>}
           {view === "Files & processing" && (user.is_admin?<AdminDocuments api={api} onChanged={reload} onReview={openReview}/>:<div className="panel" role="alert">Administrator access is required to manage files and processing.</div>)}
           {view === "Token usage" && (user.is_admin?<TokenUsageAdmin api={api}/>:<div className="panel" role="alert">Administrator access is required to view token usage.</div>)}
-          {view === "Users & passwords" && <UserManagement api={api} keycloak={keycloak} user={user as {id:string;username:string;is_admin?:boolean;sign_in?:string}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
-          {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This dataset is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
-          {view === "Datasets" && <DatasetWorkspace directorySearch={directorySearch} onClearDirectorySearch={()=>setDirectorySearch('')} onDirectoryVisibilityChange={setDatasetDirectoryVisible} canManage={Boolean(user.is_admin)} datasets={kbs} models={models} documents={docs}
+          {view === "Access map" && (user.is_admin||(user as {is_auditor?:boolean}).is_auditor?<AccessMap api={api}/>:<div className="panel" role="alert">Administrator or Auditor access is required to view the access map.</div>)}
+          {view === "Users & passwords" && <UserManagement api={api} keycloak={keycloak} user={user as {id:string;username:string;is_admin?:boolean;is_auditor?:boolean;sign_in?:string}} onPasswordChanged={()=>{setUser(null);setCsrf("");setPassword("");setPasswordChangedNotice(true);}} onRoleChanged={()=>{setUser(null);setCsrf("");setPassword("");setRoleChangedNotice(true);setPasswordChangedNotice(false);}} />}
+          {(view === "Lapi agent V2" || (view === 'Review' && reviewReturn?.view === 'Lapi agent V2')) && <div className="agent-v2-view" hidden={view !== 'Lapi agent V2'}><AgentV2 displayName={user.display_name || ''} workspaceId={workspaceId} renderManage={({datasetId,onClose,onCommand})=>{const d=kbs.find(x=>x.id===datasetId);return d?<ManageDataset variant="inline" dataset={d} models={models} documents={docs} templates={templates} isAdmin={Boolean(user.is_admin)} api={api} reload={reload} notify={notify} onClose={onClose} onCommand={onCommand} onNavigate={v=>{changeDataset(datasetId);navigate(v as View);}}/>:<p className="small muted">This collection is still loading. Try again in a moment.</p>;}} catalogRevision={refresh} onWorkspaceChanged={reload} api={api} stream={agentStream} username={user.username} onDatasetChange={view === 'Lapi agent V2' ? changeDataset : undefined} maxUploadMb={Number(settings.max_upload_mb || 25)} onJobs={onAgentJobs} onVisibleJobs={setAgentVisibleJobIds} onPromptSaved={d => setTemplates(previous=>[d,...previous.filter(t=>t.id!==d.id)])} onReview={openReview} /></div>}
+          {view === "Datasets" && <DatasetWorkspace onNewCollection={canAddCollections(workspaces.find(w => w.id === workspaceId)) ? () => setGateOpen("collection") : undefined} directorySearch={directorySearch} onClearDirectorySearch={()=>setDirectorySearch('')} onDirectoryVisibilityChange={setDatasetDirectoryVisible} canManage={Boolean(user.is_admin||user.is_contributor)} datasets={kbs} models={models} documents={docs}
             storageKey={`lapi-new-dataset:${user.id}`} defaults={selectedDataset} onSelect={changeDataset} onCreated={d=>{setKbs(current=>[...current.filter(item=>item.id!==d.id),d]);changeDataset(d.id);}}
             api={api} reload={reload} notify={notify} onUse={navigate}/>
           }
@@ -860,7 +1009,7 @@ export default function App() {
                     Select a prompt template and documents. Review extracted values and
                     their evidence.
                   </p>
-                  <Field label="Dataset">{datasetSelect("Extraction dataset")}</Field>
+                  <Field label="Collection">{datasetSelect("Extraction collection")}</Field>
                   <ModelPicker dataset={selectedDataset} capability="extraction" value={extractModelId} onChange={setExtractModelId} onConfigure={configureDataset} />
                   <Field label="Prompt template">
                     <select
@@ -907,13 +1056,15 @@ export default function App() {
           )}
           {view === "Model Registration" && <ModelRegistration models={models} settings={settings} api={api} run={run} busy={busy}
             onSaved={model => { setModels(current => current.some(m => m.id === model.id) ? current.map(m => m.id === model.id ? model : m) : [model, ...current]); notify("Model saved. New runs use the updated connection; re-apply an edited Default embedding model to rebuild the knowledge index."); reload(); }}
-            onDefaultsChanged={() => { notify("Workspace Default saved."); reload(); }}
+            onDefaultsChanged={() => { notify("Overall Default saved."); reload(); }}
             onMapping={() => navigate("Model Mapping")} />}
+          {view === "Enabled models" && <EnabledModels models={models} api={api} onRegistration={() => navigate("Model Registration")}
+            onChanged={model => { setModels(current => current.map(m => m.id === model.id ? model : m)); notify(`${model.name} is ${model.enabled === false ? "off" : "on"}.`); reload(); }} />}
           {view === "Model Mapping" && <section className="panel model-mapping-screen">
             <MappingOverview datasets={kbs} selected={selectedDataset?.id || ""} busy={busy} onSelect={changeDataset} />
-            <div className="field mapping-dataset-select"><label htmlFor="mapping-dataset">Dataset</label><select id="mapping-dataset" value={selectedDataset?.id || ""} onChange={e => changeDataset(e.target.value)} disabled={busy}><option value="">Choose a dataset</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}{d.active === false ? " · Inactive" : ""}</option>)}</select></div>
-            {selectedDataset ? <DatasetMappings key={selectedDataset.id} dataset={selectedDataset} models={models} api={api} run={run} busy={busy} reload={reload} notify={notify} onConnections={() => navigate("Model Registration")} /> : <p className="muted">Choose a dataset to configure its Embedding, Chat, Extraction, and OCR models.</p>}
-            {!kbs.length && <button className="btn" onClick={() => navigate("Datasets")}>Open Datasets to create one</button>}
+            <div className="field mapping-dataset-select"><label htmlFor="mapping-dataset">Collection</label><select id="mapping-dataset" value={selectedDataset?.id || ""} onChange={e => changeDataset(e.target.value)} disabled={busy}><option value="">Choose a collection</option>{kbs.map(d => <option key={d.id} value={d.id}>{d.name}{d.active === false ? " · Inactive" : ""}</option>)}</select></div>
+            {selectedDataset ? <DatasetMappings key={selectedDataset.id} dataset={selectedDataset} models={models} api={api} run={run} busy={busy} reload={reload} notify={notify} onConnections={() => navigate("Model Registration")} /> : <p className="muted">Choose a collection to configure its Embedding, Chat, Extraction, and OCR models.</p>}
+            {!kbs.length && <button className="btn" onClick={() => navigate("Datasets")}>Open Collections to create one</button>}
           </section>}
           {view === "Storage" && user.is_admin && <StorageConfiguration api={api} connections={<ConnectionSettings api={api} onChanged={reload} onModels={()=>navigate("Model Registration")}/>} onChanged={reload} onFreshStart={()=>{changeDataset('');setExtraction(null);setReviewReturn(null);Object.keys(sessionStorage).filter(key=>key.startsWith('lapi-agent-v2:')||key.startsWith('lapi-review-return-')).forEach(key=>sessionStorage.removeItem(key));}}/>}
         </main>

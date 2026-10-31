@@ -17,7 +17,7 @@ const TASKS:Record<AgentTask,{icon:LucideIcon;label:string}>={
  publish:{icon:Layers,label:'Publishing knowledge'},
  extract:{icon:ClipboardList,label:'Extracting fields'},
  reextract:{icon:FileScan,label:'Re-extracting fields'},
- onboard:{icon:Database,label:'Setting up the dataset'},
+ onboard:{icon:Database,label:'Setting up the collection'},
  save:{icon:Save,label:'Saving'},
 };
 

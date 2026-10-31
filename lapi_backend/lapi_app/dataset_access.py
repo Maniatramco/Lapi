@@ -13,20 +13,127 @@ def require_admin(actor):
     # Trusted internal CLI calls and synthetic dependency overrides have no
     # authenticated HTTP actor. Every normal API request sets it in auth().
     if request_actor.get() is not None and not core.is_administrator(actor):
-        raise HTTPException(403, 'Only the administrator can manage dataset and model configuration.')
+        raise HTTPException(403, 'Only the administrator can manage collection and model configuration.')
+
+
+RANK = {'viewer': 1, 'editor': 2, 'owner': 3}
+LABEL = {'viewer': 'Viewer', 'editor': 'Editor', 'owner': 'Owner'}
+
+
+def is_auditor(actor, session=None):
+    """Auditors read users, access and activity across the workspace; they change nothing."""
+    from . import authz
+    if authz.enabled():
+        return authz.is_auditor(actor)
+    if session is None:
+        with core.Session() as active:
+            return is_auditor(actor, active)
+    row = session.get(relational.WorkspaceRole, actor)
+    return bool(row and row.role == 'auditor')
+
+
+def is_contributor(actor, session=None):
+    """Contributors may create datasets; like everyone they open only what they created or were given."""
+    from . import authz
+    if authz.enabled():
+        return authz.is_contributor(actor)
+    if session is None:
+        with core.Session() as active:
+            return is_contributor(actor, active)
+    return session.get(relational.WorkspaceContributor, actor) is not None
+
+
+def manages_datasets(actor, session=None):
+    return core.is_administrator(actor, session) or is_contributor(actor, session)
+
+
+def require_contributor(actor):
+    """Creating, deleting and restoring datasets: Administrators and Contributors."""
+    if request_actor.get() is not None and not manages_datasets(actor):
+        raise HTTPException(403, 'Only administrators and contributors can create, delete or restore collections.')
+
+
+def _saved_levels(actor, session):
+    """Highest saved level per dataset, from the person's own grants and their teams' grants."""
+    levels = {}
+    def keep(dataset_id, level):
+        level = level if level in RANK else 'viewer'
+        if RANK[level] > RANK.get(levels.get(dataset_id), 0):
+            levels[dataset_id] = level
+    for dataset_id, level in session.execute(select(relational.UserDataset.dataset_id, relational.UserDataset.access_level).where(
+            relational.UserDataset.user_id == actor, relational.UserDataset.enabled == True)):
+        keep(dataset_id, level)
+    for dataset_id, level in session.execute(select(relational.TeamDataset.dataset_id, relational.TeamDataset.access_level).join(
+            relational.TeamMember, relational.TeamMember.team_id == relational.TeamDataset.team_id).where(relational.TeamMember.user_id == actor)):
+        keep(dataset_id, level)
+    return levels
+
+
+def _created(actor, session, live):
+    """Collections this person made, unless someone has since removed them from it."""
+    removed = set(session.scalars(select(relational.UserDataset.dataset_id).where(relational.UserDataset.user_id == actor, relational.UserDataset.enabled == False)))
+    return set(session.scalars(live.where(core.Record.owner == actor))) - removed
+
+
+def dataset_levels(actor, session):
+    """Each dataset this person can open, with their level. Its creator is Owner; a role alone opens nothing."""
+    live = select(core.Record.id).where(core.Record.kind == 'knowledge_base', core.Record.status != 'deleted')
+    if request_actor.get() is None and manages_datasets(actor, session):  # Trusted internal work, such as background jobs.
+        return {id: 'owner' for id in session.scalars(live)}
+    if not session.get(core.User, actor) and request_actor.get() is None:
+        return {id: 'owner' for id in session.scalars(live.where(core.Record.owner == actor))}
+    existing = set(session.scalars(live))
+    from . import authz
+    if authz.enabled():
+        levels = {}
+        for level in ('viewer', 'editor', 'owner'):  # Later levels overwrite: the highest wins.
+            levels.update({id: level for id in authz.datasets_at(actor, level) & existing})
+    else:
+        levels = {id: level for id, level in _saved_levels(actor, session).items() if id in existing}
+    return levels | {id: 'owner' for id in _created(actor, session, live)}
+
+
+def level_for(actor, dataset_id, session=None):
+    if session is None:
+        with core.Session() as active:
+            return level_for(actor, dataset_id, active)
+    return dataset_levels(actor, session).get(dataset_id)
+
+
+def require_level(actor, dataset_id, needed):
+    """Refuse unless the person has at least `needed` on the dataset. Trusted internal calls
+    (no HTTP actor) pass, as with require_admin."""
+    if request_actor.get() is None:
+        return
+    level = level_for(actor, dataset_id)
+    if level is None:
+        raise HTTPException(404, 'Not found or collection access removed.')
+    if RANK[level] < RANK[needed]:
+        raise HTTPException(403, f'This needs {LABEL[needed]} access to the collection; you have {LABEL[level]} access. Ask the collection owner or an administrator.')
+
+
+def record_dataset(record):
+    """The dataset a dataset-scoped record belongs to (None for personal records)."""
+    if record.kind == 'knowledge_base':
+        return record.id
+    if record.kind in SHARED:
+        return record.parent_id
+    return None
 
 
 def dataset_ids(actor, session):
     live = select(core.Record.id).where(core.Record.kind == 'knowledge_base', core.Record.status != 'deleted')
-    if core.is_administrator(actor,session):
+    if request_actor.get() is None and manages_datasets(actor, session):  # Trusted internal work, such as background jobs.
         return set(session.scalars(live))
+    created = _created(actor, session, live)
     if not session.get(core.User, actor) and request_actor.get() is None:
-        return set(session.scalars(live.where(core.Record.owner == actor)))
+        return created
     from . import authz
     if authz.enabled():
         # Intersect in Python: Oracle limits IN lists to 1000 values.
-        return set(session.scalars(live)) & authz.viewable_datasets(actor)
-    return set(session.scalars(select(relational.UserDataset.dataset_id).where(relational.UserDataset.user_id == actor,relational.UserDataset.enabled == True,relational.UserDataset.dataset_id.in_(live))))
+        return created | (set(session.scalars(live)) & authz.viewable_datasets(actor))
+    # Own grants and team grants (without OpenFGA, the database answers).
+    return created | (set(_saved_levels(actor, session)) & set(session.scalars(live)))
 
 
 def allowed(record, actor, session, datasets=None, models=None):
@@ -67,12 +174,16 @@ def visible_models(datasets, session):
     return models
 
 
-def get_record(id, actor, kind=None):
+def get_record(id, actor, kind=None, level='viewer'):
+    """The record if the person may open it; with level 'editor' or 'owner', also requires
+    that level on the record's dataset (personal records are already owner-only)."""
     with core.Session() as session:
         record = session.get(core.Record, id)
         if not record or (kind and record.kind != kind) or not allowed(record, actor, session):
-            raise HTTPException(404, 'Not found or dataset access removed.')
-        return record
+            raise HTTPException(404, 'Not found or collection access removed.')
+    if level != 'viewer' and (dataset_id := record_dataset(record)):
+        require_level(actor, dataset_id, level)
+    return record
 
 
 def rows(actor, kind):
@@ -89,6 +200,15 @@ def job_allowed(job, actor, session):
         return False
     target = session.get(core.Record, job.target_id)
     return allowed(target, actor, session) if target else job.owner == actor
+
+
+def require_job_change(job, actor):
+    """Retrying or cancelling work changes the dataset: Editor, or the person who started it."""
+    with core.Session() as session:
+        target = session.get(core.Record, job.target_id) if job else None
+    dataset_id = record_dataset(target) if target else None
+    if dataset_id and job.owner != actor:
+        require_level(actor, dataset_id, 'editor')
 
 
 def jobs(actor):

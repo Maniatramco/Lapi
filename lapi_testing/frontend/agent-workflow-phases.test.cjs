@@ -13,7 +13,7 @@ test('server steps map to the four answer phases, with workflows as their own ph
  for(const [label,phase] of Object.entries(cases))assert.equal(phaseFor(label),phase,label);
 });
 test('ten answer steps collapse into four phases with the live step named in the running phase',()=>{
- const labels=['Checking agent configuration','Checking workspace','Reading current workspace state','Understanding request','Chat Agent · Querying vector knowledge','Hybrid search','Reranking evidence','Chat Agent · Answering from knowledge','Validating answer','Saving response'];
+ const labels=['Checking agent configuration','Checking collection','Reading current collection state','Understanding request','Chat Agent · Querying vector knowledge','Hybrid search','Reranking evidence','Chat Agent · Answering from knowledge','Validating answer','Saving response'];
  const steps=labels.map((label,i)=>({id:String(i),label,status:i<6?'completed':i===6?'running':'pending',started_at:1000,duration_ms:i<6?500:undefined}));
  const phases=groupWorkflowSteps(steps,2500);
  assert.deepEqual(phases.map(p=>[p.label,p.status]),[['Understand request','completed'],['Find evidence','running'],['Write answer','pending'],['Check & save','pending']]);

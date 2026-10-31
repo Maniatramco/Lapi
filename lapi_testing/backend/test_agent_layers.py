@@ -88,7 +88,8 @@ def test_model_guide_falls_back_to_family_and_dataset_override_wins(system):
 def test_memory_records_turns_searches_history_and_can_be_cleared(system, monkeypatch):
     s = system; d = dataset(s); upload(s, d); knowledge.sync(s.owner, d['id']); agentic(monkeypatch)
     def complete(messages, tools, on_token=None):
-        n = json.loads(next(m['content'] for m in messages if m.get('role') == 'tool'))['citations'][0]
+        # The invoice-review skill now loads itself for invoice questions, so skip its tool message.
+        n = json.loads(next(m['content'] for m in messages if m.get('role') == 'tool' and '"citations"' in m['content']))['citations'][0]
         return {'text': f'Alice is the owner [{n}].', 'calls': []}
     monkeypatch.setattr(agent_model, 'complete', complete)
     plan(s, d, text='Who is the owner of the invoice?')
@@ -121,3 +122,43 @@ def test_memory_compaction_keeps_user_edits_and_expires_old_history(system, monk
     s.api.put('/api/me/memory', json={'note': 'My own note.'})
     user_memory.compact(s.owner, snapshot)
     assert user_memory.note(s.owner) == 'My own note.'
+
+
+def test_skill_applies_to_is_parsed_rendered_and_matched():
+    from lapi_app.lapi_agent import skills
+    text = '---\nname: contract-risks\ndescription: Risks in contracts\ndocument_types: contract, agreement\ndomains: legal\nkeywords: termination, renewal\ndocuments: *-msa.pdf\n---\n1. Find the clauses.\n'
+    skill = skills._parse(text)
+    assert skill['applies_to'] == {'document_types': ['contract', 'agreement'], 'domains': ['legal'], 'keywords': ['termination', 'renewal'], 'documents': ['*-msa.pdf']}
+    assert skills.applies(skill, 'What are the renewal terms?') == 'keywords: renewal'
+    assert skills.applies(skill, 'Summarise this', ['Acme-MSA.pdf']) == 'document: *-msa.pdf'
+    assert skills.applies(skill, 'Summarise this', ['services agreement.docx']) == 'document type: agreement'
+    assert skills.applies(skill, 'List my invoices', ['inv-7.pdf']) == ''
+    assert skills.applies(skills._parse('---\nname: plain\n---\nsteps'), 'anything about contracts') == '', 'no applies_to means never automatic'
+    again = skills._parse(skills.render(skill))
+    assert again['applies_to'] == skill['applies_to'] and again['instructions'] == skill['instructions']
+
+
+def test_builtin_invoice_review_applies_to_invoices():
+    from lapi_app.lapi_agent import skills
+    invoice = next(s for s in skills.builtins() if s['name'] == 'invoice-review')
+    assert 'invoice' in invoice['applies_to']['document_types']
+    assert skills.applies(invoice, 'Which invoices are overdue?').startswith('keywords')
+    assert skills.applies(invoice, 'Check this', ['Invoice_2041.pdf']) == 'document type: invoice'
+
+
+def test_skill_upload_download_and_automatic_use(system):
+    from lapi_app.lapi_agent import skills
+    s = system
+    text = '---\nname: po-checks\ndescription: Purchase order checks\ndocument_types: purchase order\nkeywords: po number\n---\n1. Compare quantities.\n'
+    r = s.api.post('/api/skills/upload', files={'file': ('SKILL.md', text.encode(), 'text/markdown')}, data={'scope': 'personal'})
+    assert r.status_code == 200, r.text
+    saved = r.json(); assert saved['name'] == 'po-checks' and saved['applies_to']['document_types'] == ['purchase order']
+    again = s.api.post('/api/skills/upload', files={'file': ('SKILL.md', text.replace('Compare', 'Recount').encode(), 'text/markdown')}, data={'scope': 'personal'})
+    assert again.status_code == 200 and again.json().get('replaced') and again.json()['id'] == saved['id']
+    down = s.api.get(f"/api/skills/{saved['id']}/download")
+    assert down.status_code == 200 and 'document_types: purchase order' in down.text and 'Recount' in down.text
+    bad = s.api.post('/api/skills/upload', files={'file': ('SKILL.md', b'no front matter and no name', 'text/markdown')}, data={'scope': 'personal'})
+    assert bad.status_code == 422
+    found = skills.Library().relevant(s.owner, '', 'What is the PO number on this?', [])
+    assert [s['name'] for s in found] == ['po-checks'] and found[0]['why'] == 'keywords: po number'
+    assert skills.Library().relevant(s.owner, '', 'Summarise the meeting notes', []) == []

@@ -64,6 +64,9 @@ def parse_document(name,raw,*,ocr_enabled=True,progress=None,cache_id=None):
     ext=name.rsplit('.',1)[-1].lower()
     if ext=='txt':return [{'page':1,'text':raw.decode('utf-8-sig')}]
     if ext=='json':return [{'page':1,'text':json_document_text(raw)}]
+    if ext in file_formats.SPREADSHEETS:
+        from . import spreadsheet
+        return spreadsheet.pages(spreadsheet.read(name,raw))
     if ext in ('pdf','docx',*file_formats.IMAGES) and (text:=file_formats.plain_text(name,raw)) is not None:
         # The file only holds text (for example a saved link): index that text as it is.
         return [{'page':1,'text':text,'text_origin':'native'}]
@@ -160,19 +163,63 @@ def parse_document(name,raw,*,ocr_enabled=True,progress=None,cache_id=None):
         return [{'page':None,'text':text,**({'text_origin':'native+ocr','ocr':{'model':image_results[0]['model'],'provider':image_results[0].get('provider','ollama'),'images':image_results,'verified':False,'notice':'DOCX image transcription; page location unavailable.'}} if ocr_enabled and image_results else {})}]
     raise ValueError('Unsupported document format')
 
+def workbook_image(did):
+    """Reads an image placed in a workbook: OCR text and a short description of what it shows."""
+    from . import ocr
+    def read(raw,item):
+        out={}
+        try:
+            value=ocr.read_image(raw,cache_id=did)
+            out['text']=value['text'];item['ocr']=value.get('ocr')
+        except ocr.OcrError as error:
+            out['ocr_error']=str(error)
+        out['description']=ocr.describe(raw,cache_id=did)
+        if not out.get('text') and not out['description']:
+            out['error']=out.get('ocr_error') or 'the image could not be read'
+        return out
+    return read
+
+def _fits(size):
+    """Whether a spreadsheet chunk fits the embedding model as one piece (rows are never cut)."""
+    cfg=settings()
+    if cfg['embedding_provider']=='sentence_transformers' and cfg['search_provider']!='oci':
+        model=providers.local_model('sentence-transformers/all-MiniLM-L6-v2');tokenizer=model.tokenizer;limit=model.max_seq_length-2
+        return lambda text:len(text)<=size*4 and len(tokenizer(text,add_special_tokens=False)['input_ids'])<=limit
+    if cfg['embedding_provider']=='openai' and cfg['search_provider']!='oci':
+        return lambda text:len(text)<=max(size,400) and len(text.encode())<=providers.OPENAI_EMBEDDING_MAX_BYTES
+    return lambda text:len(text)<=max(size,400)
+
+def table_chunks(did,page,fits):
+    """A spreadsheet table page as chunks of whole rows, each starting with the sheet and its columns."""
+    from . import spreadsheet
+    out=[]
+    for content,first,last in spreadsheet.pack(page['table_header'],page['table_rows'],fits):
+        ident=str(uuid.uuid5(uuid.NAMESPACE_URL,f'{did}:{page["page"]}:rows:{first}:{last}:{providers.fingerprint()}:{content}'))
+        rows=f'row {first}' if first==last else f'rows {first}-{last}'
+        out.append({'id':ident,'document_id':did,'page':page['page'],'offset':first,'text':content,'table':True,'sheet':page['sheet'],
+                    'row_start':first,'row_end':last,'section':f'Sheet: {page["sheet"]} · {rows}'})
+    return out
+
 def chunk_pages(did,pages,size,overlap):
     chunks=[]
+    fits=None
     for page in pages:
+        if page.get('table_rows') is not None:
+            fits=fits or _fits(size)
+            chunks.extend(table_chunks(did,page,fits))
+            if len(chunks)>5000:raise ValueError('Document exceeds 5000 chunk limit')
+            continue
         text=page['text']
         if len(chunks)+len(text)//(size-overlap)>5000:raise ValueError('Document exceeds 5000 chunk limit')
         for start in range(0,len(text),size-overlap):
             content=text[start:start+size]
             if not content.strip():continue
             ident=str(uuid.uuid5(uuid.NAMESPACE_URL,f'{did}:{page["page"]}:{start}:{providers.fingerprint()}:{content}'))
-            chunks.append({'id':ident,'document_id':did,'page':page['page'],'offset':start,'text':content,**{k:page[k] for k in ('source_key','source_filename','source_page','text_origin','ocr') if k in page}})
+            chunks.append({'id':ident,'document_id':did,'page':page['page'],'offset':start,'text':content,**{k:page[k] for k in ('source_key','source_filename','source_page','text_origin','ocr','section','sheet','table_summary','workbook_item') if k in page}})
     if settings()['embedding_provider']=='sentence_transformers' and settings()['search_provider']!='oci':
         model=providers.local_model('sentence-transformers/all-MiniLM-L6-v2');tokenizer=model.tokenizer;limit=model.max_seq_length-2;safe=[]
         for chunk in chunks:
+            if chunk.get('table'):safe.append(chunk);continue  # Already sized to the model, whole rows only.
             offsets=tokenizer(chunk['text'],add_special_tokens=False,return_offsets_mapping=True)['offset_mapping']
             for n in range(0,max(1,len(offsets)),limit):
                 part=chunk.copy()
@@ -183,6 +230,7 @@ def chunk_pages(did,pages,size,overlap):
     elif settings()['embedding_provider']=='openai' and settings()['search_provider']!='oci':
         safe=[]
         for chunk in chunks:
+            if chunk.get('table'):safe.append(chunk);continue  # Already sized to the model, whole rows only.
             for offset,text in providers.split_utf8_bounded(chunk['text']):
                 part=chunk.copy();part['text']=text;part['offset']+=offset
                 part['id']=str(uuid.uuid5(uuid.NAMESPACE_URL,chunk['id']+':utf8:'+str(offset)));safe.append(part)
@@ -233,13 +281,23 @@ def _process(jid,token,snapshot):
             workflow.transition(jid,'extract','running')
             from . import merged_documents
             merged=merged_documents.manifest(did)
-            def ocr_progress(page):
+            def ocr_progress(page,note=None):  # note: why a page is taking longer (read in parts)
                 checkpoint(jid,token,15)
                 state=workflow.read(jid)
-                state['stages']['extract'].update(detail='Reading/OCR page '+str(page),ocr_page=page)
+                state['stages']['extract'].update(detail=note or 'Reading/OCR page '+str(page),ocr_page=page)
                 store.put_json('jobs/'+jid+'/workflow.json',state)
             if merged and (merged.get('ocr_pending') or any(p.get('ocr') for p in merged.get('pages',[]))):
                 pages=merged_documents.read_sources(did,merged,progress=ocr_progress)
+            elif not merged and file_formats.extension(name) in file_formats.SPREADSHEETS:
+                from . import spreadsheet,workbook
+                # Every part of the workbook is read or reported (workbook.py): cells, formulas, comments,
+                # images (OCR), charts, text boxes, embedded files, and the links between them.
+                book=workbook.read(name,store.get(ref),read_image=workbook_image(did),
+                                   read_file=lambda file,data:'\n'.join(p.get('text','') for p in parse_document(file,data,cache_id=did)),
+                                   progress=lambda note:ocr_progress(1,note))
+                spreadsheet.save(store,did,book['sheets'])
+                workbook.save(store,did,book)
+                pages=spreadsheet.pages(book['sheets'])+workbook.item_pages(book,1)
             else:pages=merged['pages'] if merged else parse_document(name,store.get(ref),progress=ocr_progress,cache_id=did)
             chunks=chunk_pages(did,pages,cfg['chunk_size'],cfg['chunk_overlap'])
         if not chunks:raise ValueError('Document has no usable text')
@@ -304,7 +362,7 @@ def _process(jid,token,snapshot):
         result=data['result'];evidence=data['evidence']
         ocr_sources=[{'document_id':c['document_id'],'page':c['page'],'source_filename':c.get('source_filename',c['document_name']),'model':c['ocr']['model']} for c in sources if c.get('ocr')]
         ocr_sources=list({(c['document_id'],c['page']):c for c in ocr_sources}.values())
-        data.update(result=result,evidence=evidence,ocr_sources=ocr_sources,evidence_notice='Review all values. Evidence contains only validated verbatim source quotes; fields without evidence are unverified.'+(' OCR was used: matching a transcription quote does not verify its accuracy against the original image. Check names, numbers and tables.' if ocr_sources else ''),sources=[{'document_id':c['document_id'],'document_name':c['document_name'],'chunk_id':c['id'],'page':c['page'],'excerpt':c['text'][:1000],**{k:c[k] for k in ('source_key','source_filename','source_page','text_origin') if k in c}} for c in sources],review_status='unreviewed',completed_at=time.time(),mock=cfg['model_provider']=='mock')
+        data.update(result=result,evidence=evidence,ocr_sources=ocr_sources,evidence_notice='Review all values. Evidence contains only validated verbatim source quotes; fields without evidence are unverified.'+(' OCR was used: matching a transcription quote does not verify its accuracy against the original image. Check names, numbers and tables.' if ocr_sources else '')+data.get('table_notice',''),sources=[{'document_id':c['document_id'],'document_name':c['document_name'],'chunk_id':c['id'],'page':c['page'],'excerpt':c['text'][:1000],**{k:c[k] for k in ('source_key','source_filename','source_page','text_origin') if k in c}} for c in sources],review_status='unreviewed',completed_at=time.time(),mock=cfg['model_provider']=='mock')
         store.put_json(ref,data)
         workflow.transition(jid,'ready','completed')
     else:raise ValueError('Unknown job type')

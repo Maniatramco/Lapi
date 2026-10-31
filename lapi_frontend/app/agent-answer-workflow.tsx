@@ -46,12 +46,13 @@ export function AgentAnswerWorkflow({workflow,status='completed'}:{workflow?:Ans
  const [now,setNow]=useState(Date.now());
  const state=workflow?.status||(status==='streaming'?'running':status);
  const active=state==='running';
- const [expanded,setExpanded]=useState(active);
+ // Like a chat status line: the phase panel opens only when the person asks for it, never by itself.
+ const [expanded,setExpanded]=useState(false);
  const [showSteps,setShowSteps]=useState(false);
  const dismissed=useRef(false);
  const panelId=useId(),stepsId=useId();
  const close=()=>{dismissed.current=true;setExpanded(false);setShowSteps(false);};
- useEffect(()=>{if(!active){setExpanded(false);setShowSteps(false);dismissed.current=false;}else if(!dismissed.current)setExpanded(true);},[active]);
+ useEffect(()=>{if(!active){setExpanded(false);setShowSteps(false);dismissed.current=false;}},[active]);
  useEffect(()=>{if(!active)return;setNow(Date.now());const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[active]);
  const current=workflow?.steps.find(s=>s.status==='running');
  const total=workflow?.steps.reduce((sum,s)=>sum+stepElapsed(s,now),0)??0;

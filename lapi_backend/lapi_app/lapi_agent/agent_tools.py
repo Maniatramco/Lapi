@@ -134,14 +134,14 @@ class Tools:
                 'total':len(found),'next_offset':offset+10 if offset+10<len(found) else None}
 
     def prepare_dataset_onboarding(self, name='', description=''):
-        from ..dataset_access import require_admin
-        require_admin(self.owner)
+        from ..dataset_access import require_contributor
+        require_contributor(self.owner)
         self.proposal = {'onboarding': {'name': name.strip(), 'description': description}, 'calls': []}
         return {'proposed': self.proposal, 'executed': False, 'confirmation_required': True,
                 'message': 'Review the new dataset name and select registered Embedding, Chat and Extraction models before confirming onboarding.'}
 
     def dataset(self):
-        if not self.body.dataset_id: raise HTTPException(422, 'Choose a dataset to use documents or saved results.')
+        if not self.body.dataset_id: raise HTTPException(422, 'Choose a collection to use documents or saved results.')
         return routing.owned(self.body.dataset_id, self.owner, 'knowledge_base')
 
     def definitions(self):
@@ -330,7 +330,7 @@ class Tools:
         self.dataset();id=template_id or self.body.template_id
         if not id:return {'prompts':self.list_documents()['prompts'],'message':'Choose a saved prompt ID.'}
         record=routing.owned(id,self.owner,'template')
-        if record.parent_id and record.parent_id!=self.body.dataset_id:raise HTTPException(404,'Prompt is outside the selected dataset.')
+        if record.parent_id and record.parent_id!=self.body.dataset_id:raise HTTPException(404,'Prompt is outside the selected collection.')
         value=core.store.json(record.ref)
         if len(json.dumps(value.get('schema',{})))>7000:
             return {'id':id,'name':record.name,'version':record.version,'error':'This schema is too large for a chat observation. Inspect its complete content in Prompt templates.'}
@@ -367,7 +367,7 @@ class Tools:
 
     def read_extraction_results(self, extraction_id, offset=0, fields=None, filters=None):
         self.dataset(); record = routing.owned(extraction_id, self.owner, 'extraction')
-        if record.parent_id != self.body.dataset_id: raise HTTPException(404, 'Extraction is outside the selected dataset.')
+        if record.parent_id != self.body.dataset_id: raise HTTPException(404, 'Extraction is outside the selected collection.')
         value = core.store.json(record.ref)
         if not self.visible(value):
             raise HTTPException(422, 'This merged result includes files outside the selected document filter.')
@@ -435,7 +435,7 @@ class Tools:
         if scope=='accessible_datasets':
             source_types=source_types or ['dataset','model','application']
             if set(source_types)-{'dataset','model','application'}:
-                raise HTTPException(400,'Select a dataset before searching document content or extraction values. Cross-dataset discovery covers dataset/model metadata and application guidance.')
+                raise HTTPException(400,'Select a collection before searching document content or extraction values. Cross-dataset discovery covers dataset/model metadata and application guidance.')
             dataset_id='';document_ids=[]
         result=knowledge.search(query,self.owner,dataset_id,document_ids,source_types,5)
         matches=[]
@@ -497,7 +497,7 @@ class Tools:
         if template_id:
             template = routing.owned(template_id, self.owner, 'template')
             if template.parent_id and template.parent_id != self.body.dataset_id:
-                raise HTTPException(422, 'Choose a prompt from the selected dataset.')
+                raise HTTPException(422, 'Choose a prompt from the selected collection.')
         if operation=='extract' and not self.body.attached_filenames:
             selected=set(document_ids or self.body.document_ids)
             for entry in self.find_extractions(list(selected) or None)['extractions']:

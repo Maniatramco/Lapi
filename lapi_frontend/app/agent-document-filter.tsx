@@ -9,9 +9,9 @@ export function AgentDocumentFilter({documents,selected,onChange,disabled}:{docu
  useEffect(()=>{if(disabled)setOpen(false);},[disabled]);
  return <div ref={root} className="agent-v2-document-filter" onKeyDown={e=>{if(e.key==='Escape'){setOpen(false);root.current?.querySelector('button')?.focus();}}}>
   <button title="Filter documents" className="btn agent-v2-filter-trigger" aria-label="Filter documents" aria-expanded={open} aria-controls="agent-document-filter" disabled={disabled} onClick={()=>{setOpen(!open);setQuery('');}}><Filter size={15}/><span>Documents{selected.length?` · ${selected.length}`:''}</span></button>
-  {open&&<div id="agent-document-filter" className="agent-v2-document-popover" role="dialog" aria-label="Filter dataset documents">
+  {open&&<div id="agent-document-filter" className="agent-v2-document-popover" role="dialog" aria-label="Filter collection documents">
    <div className="agent-v2-picker-heading"><strong>Filter documents</strong><button title="Close document filter" className="btn icon" aria-label="Close document filter" onClick={()=>setOpen(false)}><X size={15}/></button></div>
-   <input autoFocus aria-label="Search dataset documents" placeholder="Search documents…" value={query} onChange={e=>setQuery(e.target.value)}/>
+   <input autoFocus aria-label="Search collection documents" placeholder="Search documents…" value={query} onChange={e=>setQuery(e.target.value)}/>
    <button className="text-button" onClick={()=>onChange([])}>Use all ready documents</button>
    <div className="agent-v2-document-options">{matchingDocuments(documents,query).map(d=><label key={d.id}><input type="checkbox" checked={selected.includes(d.id)} disabled={!selected.includes(d.id)&&selected.length>=20} onChange={e=>onChange(e.target.checked?[...selected,d.id]:selected.filter(id=>id!==d.id))}/><span>{documentOptionLabel(d,documents)}</span></label>)}{!matchingDocuments(documents,query).length&&<p>No matching ready documents.</p>}</div>
    <p className="muted small">{selected.length?`${selected.length}/20 selected`:'All ready documents'} · Type # in your message to choose a document.</p>

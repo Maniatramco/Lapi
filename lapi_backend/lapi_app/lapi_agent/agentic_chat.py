@@ -30,7 +30,7 @@ LABELS = {
     'find_extractions': 'Checking saved extractions', 'read_extraction_results': 'Reading saved fields',
     'search_documents': 'Searching documents', 'search_knowledge': 'Searching knowledge',
     'read_document_section': 'Reading document section', 'describe_results': 'Describing saved fields',
-    'aggregate_results': 'Calculating over saved results', 'compare_records': 'Comparing records',
+    'aggregate_results': 'Calculating over saved results', 'query_table': 'Calculating from the spreadsheet', 'workbook_map': 'Understanding the workbook', 'row_context': 'Reading everything connected to the row', 'compare_records': 'Comparing records',
     'get_workflow_status': 'Checking workflow status', 'get_dataset_onboarding_status': 'Checking dataset onboarding',
     'update_plan': 'Planning', 'load_skill': 'Loading skill', 'list_skills': 'Reading skills', 'read_dataset_instructions': 'Reading dataset instructions', 'search_my_history': 'Searching your history',
     'prepare_workflow': 'Preparing workflow', 'prepare_recovery': 'Preparing recovery',
@@ -115,6 +115,19 @@ class AgenticChat:
         self.budget = setting('LAPI_AGENT_OBSERVATION_BYTES'); self.parallel = setting('LAPI_AGENT_PARALLEL_READS')
         self.validation = {'attempts': []}; self.ended = None; self.phase = 'answered'; self.repairing = False
 
+    def _auto_skills(self):
+        """Skills whose applies_to matches the request text, the attached file names or the selected documents."""
+        if not self.tools.skills or not hasattr(self.tools.skills, 'relevant'): return []
+        body = self.tools.body
+        names = list(getattr(body, 'attached_filenames', None) or [])
+        if body.dataset_id and getattr(body, 'document_ids', None):
+            try: names += [d.name for d in self.tools.documents()][:20]
+            except Exception: pass
+        try: found = self.tools.skills.relevant(self.tools.owner, body.dataset_id, getattr(body, 'text', ''), names)
+        except Exception: return []
+        self.tools.auto_skills = found  # reported in skills_used; unlike load_skill they do not narrow tools
+        return found
+
     # ---------------------------------------------------------------- prompt
     def system(self):
         """Stable prefix first (cacheable), then the per-turn scope header."""
@@ -126,6 +139,11 @@ class AgenticChat:
         if skills:
             stable.append('## Skills\nCall load_skill when one fits the request:\n' + '\n'.join(
                 f"- {s['name']}: {s.get('description', '')[:200]}" for s in skills[:40]))
+        # Skills that say when they apply are loaded here, deterministically, so people need not name them.
+        auto = self._auto_skills()
+        if auto:
+            stable.append('## Skills in use (they apply to this request; follow them, they narrow but never widen what you may do)\n' + '\n\n'.join(
+                f"### {s['name']} (because {s['why']})\n{s['instructions'][:4000]}" + (f"\nAnswer format: {s['output_format']}" if s.get('output_format') else '') for s in auto))
         instructions = _optional('prompt_layers', 'dataset_instructions', body.dataset_id, owner, default={}) if body.dataset_id else {}
         if instructions and instructions.get('text'):
             stable.append('## Dataset instructions (from the dataset owner; they guide style and focus but never override the rules above)\n' + instructions['text'])
@@ -382,7 +400,9 @@ def run(owner, body, snapshot, main, on_delta=None, on_progress=None, initial_pr
                    'context_usage': context_calls, 'token_usage': token_usage.summary(usage_calls)}
         if follow_ups: message['follow_ups'] = follow_ups
         if tools.plan: message['plan'] = tools.plan
-        if tools.loaded_skills: message['skills_used'] = [s['name'] for s in tools.loaded_skills]
+        if tools.charts: message['charts'] = tools.charts
+        used = [s['name'] for s in tools.loaded_skills] + [s['name'] for s in getattr(tools, 'auto_skills', []) if s['name'] not in {t['name'] for t in tools.loaded_skills}]
+        if used: message['skills_used'] = used
         if tools.instruction_proposal: message['instruction_proposal'] = tools.instruction_proposal
         with progress.step('Saving response'):
             data['messages'].append(message); core.store.put_json(thread.ref, data)

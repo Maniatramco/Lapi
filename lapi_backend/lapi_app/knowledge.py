@@ -155,7 +155,7 @@ def eligible(actor, dataset_id='', document_ids=None):
     selected = set(document_ids or [])
     for id in selected:
         doc = access.get_record(id, actor, 'document')
-        if not dataset_id or doc.parent_id != dataset_id: raise HTTPException(400, 'Selected document is outside the selected dataset.')
+        if not dataset_id or doc.parent_id != dataset_id: raise HTTPException(400, 'Selected document is outside the selected collection.')
     with core.Session() as session:
         datasets = access.dataset_ids(actor, session)
         records = session.scalars(select(core.Record).where(core.Record.kind.in_(KINDS))).all()
@@ -328,13 +328,13 @@ def _write_points(q, name, sources, known, checkpoint=None):
 def sync(actor, dataset_id='', max_points=None, application_only=False):
     """Durable digest ledger; retries repeat deterministic IDs, not new records."""
     from .workspace_reset import paused
-    if paused():raise HTTPException(503,'Workspace archive operation is running.')
+    if paused():raise HTTPException(503,'An archive operation is running.')
     snapshot = embedding_snapshot(actor, dataset_id)
     name = snapshot['knowledge_collection']
     claim(name)
     records = [] if application_only else eligible(actor, dataset_id)
     with core.document_lock('unified-knowledge-'+name):
-        if paused():raise HTTPException(503,'Workspace archive operation is running.')
+        if paused():raise HTTPException(503,'An archive operation is running.')
         try: current = manifest(name)
         except FileNotFoundError: current = {'entities': {}, 'points': {}, 'failures': []}
         entities = current['entities']; points = current['points']; pending = []; alive = set(); failures = []
@@ -496,7 +496,7 @@ def retrieve_chunks(query, documents, limit):
         if not chunk: continue
         results.append({'document_id': did, 'document_name': allowed[did].name, 'chunk_id': cid, 'text': chunk['text'], 'excerpt': chunk['text'],
             'page': chunk.get('page'), 'score': score, 'vector_score': similarity.get(entity), 'knowledge_collection': name,
-            **{key: chunk[key] for key in ('text_origin', 'ocr', 'source_key', 'source_filename', 'source_page', 'section', 'coordinates') if key in chunk}})
+            **{key: chunk[key] for key in ('text_origin', 'ocr', 'source_key', 'source_filename', 'source_page', 'section', 'coordinates', 'sheet', 'row_start', 'row_end') if key in chunk}})
     return results
 
 

@@ -254,7 +254,7 @@ def embedding_execution():
         with core.Session() as session: profile = session.get(core.Record, data.get('connection_profile_id'))
         profile_version = profile.version if profile else None
     if model.version != snapshot.get('model_version') or profile_version != snapshot.get('connection_profile_version'):
-        raise HTTPException(409, 'Embedding model configuration changed. Re-apply it as the workspace Default in Model Registration to delete and rebuild the knowledge index.')
+        raise HTTPException(409, 'Embedding model configuration changed. Re-apply it as the overall Default in Model Registration to delete and rebuild the knowledge index.')
     return execution(snapshot)
 
 
@@ -262,7 +262,7 @@ def guard_disable(model_id):
     """The current Default of any role stays enabled until another is chosen."""
     roles = roles_of(model_id)
     if roles:
-        raise HTTPException(409, 'This model is the workspace ' + ', '.join(r.title() for r in roles) + ' Default. Choose another Default before disabling it.')
+        raise HTTPException(409, 'This model is the collection ' + ', '.join(r.title() for r in roles) + ' Default. Choose another Default before disabling it.')
 
 
 def record_test(model_id, profile_version):
@@ -481,6 +481,34 @@ class RetryInput(BaseModel):
     allow_external: bool = False
 
 
+DEVICES = ('computer', 'phone')
+
+
+class EnabledInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    enabled: bool
+    # Where the model is offered: phones, computers or both. Omitted keeps the current choice.
+    devices: list[Literal['computer', 'phone']] | None = None
+
+
+def set_enabled(model_id, enabled, actor, devices=None):
+    """Offer a registered model for new work (on phones, computers or both), or stop offering it,
+    without editing its connection. Devices decide which pickers list it; they are a product choice."""
+    from . import dataset_models as routing
+    if devices is not None:
+        devices = sorted(set(devices))
+        if not devices: raise HTTPException(400, 'Choose phones, computers or both. To stop offering the model, turn it off.')
+    with core.document_lock('model-' + model_id):
+        record = routing.owned(model_id, actor, 'model')
+        data = routing.model_data(record)
+        if data.get('archived'): raise HTTPException(409, 'This registration is archived. Switch its replacement model instead.')
+        if not enabled: guard_disable(model_id)
+        changed = dict(data, enabled=enabled, **({'devices': devices} if devices is not None else {}))
+        if changed != data:
+            record = routing.write_version(record, changed)
+    return routing.model_public(record)
+
+
 def install(app, auth):
     from . import dataset_access as access
 
@@ -493,6 +521,11 @@ def install(app, auth):
         access.require_admin(actor)
         set_default(id, body.role, actor, body.acknowledge_index_rebuild, body.allow_external)
         return public(actor)
+
+    @app.put('/api/model-registrations/{id}/enabled')
+    def switch(id: str, body: EnabledInput, actor=Depends(auth)):
+        access.require_admin(actor)
+        return set_enabled(id, body.enabled, actor, body.devices)
 
     @app.get('/api/workspace/knowledge-index')
     def index(actor=Depends(auth)):

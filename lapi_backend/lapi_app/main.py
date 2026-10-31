@@ -14,12 +14,23 @@ from . import providers, reranker, workflow, temporary_files, dataset_models as 
 from .json_documents import json_document_text
 from . import file_formats
 from . import dataset_access as access
+from . import preferences
 from .admin_documents import lifecycle_guard
 
 @asynccontextmanager
 async def lifespan(app):
     from . import runtime_config
     runtime_config.validate()
+    from . import tls_state
+    if tls_root := tls_state.directory():
+        # First, so Caddy (which waits for this) starts with the saved certificate.
+        import asyncio
+        await asyncio.to_thread(tls_state.restore, tls_root)
+    from . import keycloak_bootstrap
+    if keycloak_root := keycloak_bootstrap.directory():
+        # Hosted Keycloak waits for its database user and secrets (never stops Lapi starting).
+        import asyncio
+        await asyncio.to_thread(keycloak_bootstrap.prepare, keycloak_root)
     from .vault_master_key import master_key, SECRET_ENV
     if os.getenv(SECRET_ENV):master_key()  # Fail at startup, not on the first saved credential.
     init()
@@ -37,13 +48,16 @@ async def lifespan(app):
         await asyncio.to_thread(reranker.load)
     import asyncio
     from contextlib import suppress
-    cleanup = asyncio.create_task(temporary_chat.expiry_loop())
+    tasks = [asyncio.create_task(temporary_chat.expiry_loop())]
+    if tls_root := tls_state.directory():
+        tasks.append(asyncio.create_task(tls_state.keep(tls_root)))
     try:
         yield
     finally:
-        cleanup.cancel()
-        with suppress(asyncio.CancelledError):
-            await cleanup
+        for task in tasks:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 app=FastAPI(title='Lapi AI Data Platform',version='0.1.0',lifespan=lifespan)
 @app.exception_handler(RequestValidationError)
 async def safe_validation_errors(request, error):
@@ -68,29 +82,40 @@ async def security_headers(request,call_next):
         access.request_actor.reset(actor_token);relational.actor_override.reset(audit_token);authz.forget_answers(answers_token)
 
 def authenticate(request:Request):
-    token=request.cookies.get('lapi_session','');bearer=request.headers.get('authorization','')
+    from . import sessions
+    token=sessions.token_from(request);bearer=request.headers.get('authorization','')
     if bearer.startswith('Bearer '):token=bearer[7:]
     if not token:raise HTTPException(401,'Sign in required')
+    now=time.time()
     with Session() as s:
-        login=s.get(Login,hashlib.sha256(token.encode()).hexdigest())
-        if not login or login.expires<time.time():raise HTTPException(401,'Session expired')
+        login=s.get(Login,sessions.session_id(token))
+        touch=sessions.check(login,now)  # 12 hours after sign-in, or idle too long: 401.
         if not s.get(User,login.owner):raise HTTPException(401,'Account unavailable')
         if request.method not in ('GET','HEAD','OPTIONS') and not bearer.startswith('Bearer ') and not secrets.compare_digest(request.headers.get('x-csrf-token',''),login.csrf):raise HTTPException(403,'Invalid CSRF token')
-        return login.owner
+        owner,login_id=login.owner,login.id
+        recheck=bool(login.kc_tokens) and now-(login.kc_checked or 0)>=keycloak_auth.RECHECK_SECONDS
+    # Keycloak sessions: every few minutes Keycloak confirms the person is still enabled and
+    # signed in there, and their roles and groups are brought up to date.
+    if recheck:keycloak_auth.recheck(login_id)
+    if touch:sessions.touch(login_id,now)
+    return owner
 
 async def auth(request:Request):
     from starlette.concurrency import run_in_threadpool
     owner=await run_in_threadpool(authenticate,request)
     from .workspace_reset import paused
     if paused() and not request.url.path.startswith('/api/workspace/'):
-        raise HTTPException(503,'Workspace archive operation is running. Try again when it finishes.')
+        raise HTTPException(503,'An archive operation is running. Try again when it finishes.')
     access.request_actor.set(owner);relational.actor_override.set(owner)
-    if request.method not in ('GET','HEAD','OPTIONS') and any(request.url.path==prefix or request.url.path.startswith(prefix+'/') for prefix in ('/api/datasets','/api/knowledge-bases','/api/models','/api/model-registrations','/api/settings')):
-        access.require_admin(owner)
+    # Every route's policy (route_policy.py): administrator and auditor routes are enforced
+    # here; dataset levels are enforced by the routes, which know the dataset.
+    from . import route_policy
+    route=request.scope.get('route')
+    await run_in_threadpool(route_policy.check,'GET' if request.method=='HEAD' else request.method,getattr(route,'path',request.url.path),owner)
     return owner
 
-def get_record(id,owner,kind=None):
-    return access.get_record(id,owner,kind)
+def get_record(id,owner,kind=None,level='viewer'):
+    return access.get_record(id,owner,kind,level)
 
 def records(owner,kind):
     return access.rows(owner,kind)
@@ -122,45 +147,76 @@ def external_check(consent,embedding=False,cfg=None):
 class Credentials(BaseModel):
     username:str=Field(min_length=1,max_length=120)
     password:str=Field(min_length=1,max_length=200)
+    code:str|None=Field(default=None,pattern=r'^\d{6}$')
 
 @app.get('/api/auth/status')
 def auth_status():
     with Session() as s:setup=not bool(s.scalar(select(User)))
     # With Keycloak, password sign-in is only the local administrators' break-glass path.
-    return {'setup_required':setup,'keycloak':keycloak_auth.enabled()}
-_login_attempts={}
+    return {'setup_required':setup,'keycloak':keycloak_auth.enabled(),'providers':keycloak_auth.identity_providers() if keycloak_auth.enabled() else []}
+# Unknown usernames still pay for a password check, so response time does not reveal them.
+_UNKNOWN_USER_HASH=password_hash(secrets.token_urlsafe(16))
 @app.post('/api/auth/login')
 def login(body:Credentials,response:Response,request:Request):
-    client=request.client.host if request.client else 'unknown';now=time.time()
-    attempts=[t for t in _login_attempts.get(client,[]) if t>now-300]
-    if len(attempts)>=15:raise HTTPException(429,'Too many login attempts; try again in five minutes')
-    _login_attempts[client]=attempts+[now]
+    from . import sessions, sign_in_limits, totp
+    ip=sessions.client_ip(request);attempt=sign_in_limits.keys(body.username,ip)
+    sign_in_limits.check(attempt)
+    failure=None
     with document_lock('administrator-auth'):
         with Session.begin() as s:
             u=s.scalar(select(User).where(User.username==body.username))
-            if not u or not password_valid(body.password,u.password_hash):raise HTTPException(401,'Invalid username or password')
-            if keycloak_auth.enabled() and (keycloak_auth.managed(u.id) or u.role!='administrator'):raise HTTPException(403,'This account signs in with Keycloak.')
-            token=secrets.token_urlsafe(40);csrf=secrets.token_urlsafe(32)
-            s.add(Login(id=hashlib.sha256(token.encode()).hexdigest(),owner=u.id,expires=now+43200,csrf=csrf))
-            user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s)}
-    _login_attempts.pop(client,None)
-    response.set_cookie('lapi_session',token,httponly=True,secure=os.getenv('COOKIE_SECURE','false')=='true',samesite='strict',max_age=43200,path='/')
-    return {'user':user,'csrf_token':csrf,'chat_session_id':hashlib.sha256(('chat:'+hashlib.sha256(token.encode()).hexdigest()).encode()).hexdigest()}
+            valid=password_valid(body.password,u.password_hash if u else _UNKNOWN_USER_HASH)
+            if not u or not valid:failure=(401,'Invalid username or password')
+            elif keycloak_auth.enabled() and (keycloak_auth.managed(u.id) or u.role!='administrator'):raise HTTPException(403,'This account signs in with Keycloak.')
+            elif totp.enabled(u.id,s):
+                # The password was right: ask for the code without counting a failure.
+                if not body.code:raise HTTPException(401,'Enter the 6-digit code from your authenticator app.')
+                if not totp.verify(s,u.id,body.code):failure=(401,'That authenticator code is not valid. Wait for the next code and try again.')
+            if not failure:
+                user={'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'is_contributor':access.is_contributor(u.id,s),'display_name':preferences.display_name(u.id)}
+                user_id,mfa=u.id,totp.enabled(u.id,s)
+    if failure:
+        sign_in_limits.fail(attempt)
+        raise HTTPException(*failure)
+    sign_in_limits.succeed(body.username)
+    token,csrf=sessions.create(user_id,request)
+    if keycloak_auth.enabled():
+        # Password sign-in is the break-glass path once Keycloak is on: record every use.
+        import logging;logging.getLogger(__name__).warning('Break-glass administrator sign-in: %s from %s (authenticator: %s).',body.username,ip,'yes' if mfa else 'NO')
+    sessions.set_cookie(response,token)
+    return {'user':user|{'mfa':mfa},'csrf_token':csrf,'chat_session_id':hashlib.sha256(('chat:'+sessions.session_id(token)).encode()).hexdigest()}
 @app.get('/api/auth/me')
 def me(request:Request,owner=Depends(auth)):
+    from . import sessions, totp
     with Session() as s:
-        u=s.get(User,owner);token=request.cookies.get('lapi_session','');l=s.get(Login,hashlib.sha256(token.encode()).hexdigest())
-        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password'},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else ''}
+        u=s.get(User,owner);l=s.get(Login,sessions.session_id(sessions.token_from(request)))
+        return {'user':{'id':u.id,'username':u.username,'role':u.role,'is_admin':is_administrator(u.id,s),'is_auditor':access.is_auditor(u.id,s),'is_contributor':access.is_contributor(u.id,s),'mfa':totp.enabled(u.id,s),'sign_in':'keycloak' if keycloak_auth.managed(u.id) else 'password','display_name':preferences.display_name(u.id)},'csrf_token':l.csrf if l else '', 'chat_session_id':hashlib.sha256(('chat:'+l.id).encode()).hexdigest() if l else '','session':{'idle_minutes':sessions.idle_seconds()//60,'expires_at':l.expires if l else None}}
 @app.post('/api/auth/logout')
 def logout(request:Request,response:Response,owner=Depends(auth)):
-    with Session.begin() as s:
-        row=s.get(Login,hashlib.sha256(request.cookies.get('lapi_session','').encode()).hexdigest())
-        if row:s.delete(row)
-    response.delete_cookie('lapi_session')
-    return {'ok':True,'logout_url':keycloak_auth.logout_url() if keycloak_auth.enabled() and keycloak_auth.managed(owner) else ''}
+    from . import sessions
+    login_id=sessions.session_id(sessions.token_from(request))
+    hint=keycloak_auth.id_token_of(login_id) if keycloak_auth.enabled() and keycloak_auth.managed(owner) else ''
+    sessions.end(login_id)
+    sessions.clear_cookie(response)
+    return {'ok':True,'logout_url':keycloak_auth.logout_url(hint) if keycloak_auth.enabled() and keycloak_auth.managed(owner) else ''}
 app.include_router(keycloak_auth.router)
 from .user_management import install as install_user_management
 install_user_management(app, auth)
+from . import teams
+teams.install(app, auth)
+from . import workspaces as workspace_groups
+workspace_groups.install(app, auth)
+from . import screens
+screens.install(app, auth)
+from . import sessions as session_routes, totp as totp_routes
+session_routes.install(app, auth)
+totp_routes.install(app, auth)
+from .walkthrough import install as install_walkthrough; install_walkthrough(app, auth)
+from . import prompt_suggest
+prompt_suggest.install(app, auth)
+from . import setup_assist
+setup_assist.install(app, auth)
+from .preferences import install as install_preferences; install_preferences(app, auth)
 from .storage_config import install as install_storage_config
 install_storage_config(app,auth)
 from .database_control import install as install_database_control
@@ -193,7 +249,7 @@ class KBInput(BaseModel):name:str=Field(min_length=1,max_length=200);description
 def kbs(owner=Depends(auth)):return [routing.dataset_public(r) for r in records(owner,'knowledge_base')]
 @app.post('/api/knowledge-bases')
 def create_kb(body:KBInput,owner=Depends(auth)):
-    access.require_admin(owner)
+    access.require_contributor(owner)
     return routing.dataset_public(new_record('knowledge_base',owner,body.name,data=body.model_dump()|routing.ROUTING_DEFAULTS|{'routing_version':1}))
 @app.get('/api/documents')
 def documents(kb_id:str|None=None,dataset_id:str|None=None,owner=Depends(auth)):
@@ -212,13 +268,13 @@ async def upload(files:list[UploadFile]=File(...),kb_id:str=Form(''),dataset_id:
     # request looks interrupted and cannot safely be retried after approval.
     upload_snapshot=None
     if dataset_id or kb_id:
-        if dataset_id and kb_id and dataset_id!=kb_id:raise HTTPException(400,'Conflicting dataset identifiers')
-        upload_snapshot=routing.execution_snapshot(get_record(dataset_id or kb_id,owner,'knowledge_base'),'embedding')
+        if dataset_id and kb_id and dataset_id!=kb_id:raise HTTPException(400,'Conflicting collection identifiers')
+        upload_snapshot=routing.execution_snapshot(get_record(dataset_id or kb_id,owner,'knowledge_base',level='editor'),'embedding')
         external_check(allow_external,True,upload_snapshot['settings'])
     if template_id:
         template=get_record(template_id,owner,'template')
         scope_id=dataset_id or kb_id
-        if template.parent_id and template.parent_id!=scope_id:raise HTTPException(400,'Choose a prompt belonging to the upload dataset')
+        if template.parent_id and template.parent_id!=scope_id:raise HTTPException(400,'Choose a prompt belonging to the upload collection')
         # Validate routing before accepting originals or starting expensive jobs.
         extraction_snapshot=routing.execution_snapshot(get_record(scope_id,owner,'knowledge_base'),'extraction')
         external_check(allow_external,cfg=extraction_snapshot['settings'])
@@ -240,7 +296,7 @@ async def _upload_with_receipt(files,kb_id,dataset_id,allow_external,temporary_s
             if previous['signature']!=digest:raise HTTPException(409,'Upload idempotency key was already used for different inputs')
             if previous.get('deleted'):raise HTTPException(409,'This upload included a permanently deleted document. Start a new upload instead of replaying the previous request.')
             if previous.get('response'):return previous['response']
-            if not previous.get('uploaded'):raise HTTPException(409,'Upload submission was interrupted. Inspect dataset originals before resubmitting; automatic replay could duplicate files.')
+            if not previous.get('uploaded'):raise HTTPException(409,'Upload submission was interrupted. Inspect collection originals before resubmitting; automatic replay could duplicate files.')
     else:previous=None
     if previous and previous.get('uploaded'):response=previous['uploaded']
     else:
@@ -255,9 +311,9 @@ async def _upload_with_receipt(files,kb_id,dataset_id,allow_external,temporary_s
 
 async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_session_id,owner,merge_files,snapshot=None):
     if temporary_session_id:raise HTTPException(409,'Temporary chat uploads use /api/temporary-chat/documents and never create an index.')
-    if kb_id and dataset_id and kb_id!=dataset_id:raise HTTPException(400,'Conflicting dataset identifiers')
+    if kb_id and dataset_id and kb_id!=dataset_id:raise HTTPException(400,'Conflicting collection identifiers')
     kb_id=dataset_id or kb_id
-    if not kb_id:raise HTTPException(409,'Create or choose a dataset and map its embedding model before uploading.')
+    if not kb_id:raise HTTPException(409,'Create or choose a collection and map its embedding model before uploading.')
     dataset=get_record(kb_id,owner,'knowledge_base');snapshot=snapshot or routing.execution_snapshot(dataset,'embedding')
     from . import knowledge
     knowledge.require_writable(snapshot)
@@ -277,7 +333,14 @@ async def _upload_documents(files,kb_id,dataset_id,allow_external,temporary_sess
             try:json_document_text(raw)
             except ValueError as error:raise HTTPException(400,str(error))
         if (problem:=file_formats.problem(name,raw)) and file_formats.plain_text(name,raw) is None:raise HTTPException(400,problem)
+        if file_formats.extension(name) in file_formats.SPREADSHEETS:
+            # Read it now so a broken or oversized sheet is refused before anything is stored.
+            from . import spreadsheet
+            try:spreadsheet.read(name,raw)
+            except spreadsheet.SpreadsheetError as error:raise HTTPException(400,f'"{name}": {error}')
     merged = None; original_parts = []
+    if merge_files is True and len(files)>1 and any(file_formats.extension(f.filename or '') in file_formats.SPREADSHEETS for f in files):
+        raise HTTPException(422,'Spreadsheets are not merged with other files: their rows and columns stay a table. Upload them as separate documents.')
     if merge_files is True and len(files)>1:
         from . import merged_documents
         import io
@@ -314,6 +377,13 @@ def preview(id:str,owner=Depends(auth)):
     info={'page_count':original_pdf_page_count(store.get(r.ref))} if r.name.lower().endswith('.pdf') else {}
     try:data=store.json('documents/'+id+'/chunks.json');return {'text':'\n\n'.join(c['text'] for c in data['chunks']),'chunks':data['chunks'],'document':representation(r),**info}
     except FileNotFoundError:return {'text':'Text is not available until processing completes.','chunks':[],'document':representation(r),**info}
+@app.get('/api/documents/{id}/row-context')
+def row_context(id:str,sheet:str='',row:int=0,owner=Depends(auth)):
+    from . import spreadsheet,workbook,workbook_context
+    r=get_record(id,owner,'document')
+    sheets=spreadsheet.tables(store,id)
+    if not sheets:raise HTTPException(422,repr(r.name)+' is not a spreadsheet, or it has not been read yet.')
+    return workbook_context.row_context(id,r.name,sheets,workbook.load(store,id) or {},sheet,row)
 @app.get('/api/documents/{id}/download')
 def download(id:str,owner=Depends(auth)):
     from urllib.parse import quote
@@ -372,7 +442,7 @@ class Consent(BaseModel):allow_external:bool=False
 @app.post('/api/documents/{id}/reindex')
 @lifecycle_guard()
 def reindex(id:str,body:Consent,owner=Depends(auth)):
-    doc=get_record(id,owner,'document');dataset,_=routing.documents_scope(owner,doc.parent_id,[id]);snapshot=routing.execution_snapshot(dataset,'embedding');external_check(body.allow_external,True,snapshot['settings'])
+    doc=get_record(id,owner,'document',level='editor');dataset,_=routing.documents_scope(owner,doc.parent_id,[id]);snapshot=routing.execution_snapshot(dataset,'embedding');external_check(body.allow_external,True,snapshot['settings'])
     from . import knowledge
     knowledge.require_writable(snapshot)
     with document_lock('submit-'+id):
@@ -385,7 +455,7 @@ class ReextractDocument(Consent):confirm_reviewed:bool=False
 @app.post('/api/documents/{id}/reextract')
 @lifecycle_guard()
 def reextract_document(id:str,body:ReextractDocument,owner=Depends(auth)):
-    doc=get_record(id,owner,'document')
+    doc=get_record(id,owner,'document',level='editor')
     reviewed=[r for r in records(owner,'extraction') if id in store.json(r.ref).get('document_ids',[]) and store.json(r.ref).get('review_status')=='reviewed']
     if reviewed and not body.confirm_reviewed:raise HTTPException(409,'Reviewed extraction results exist. Confirm re-extraction; saved structured reviews are retained and can be rerun separately.')
     with document_lock('submit-'+id):
@@ -404,7 +474,7 @@ def reextract_document(id:str,body:ReextractDocument,owner=Depends(auth)):
         return result|{'original_retained':True,'document_version':revision,'reviewed_results_retained':True}
 @app.delete('/api/documents/{id}')
 def delete_document(id:str,owner=Depends(auth)):
-    r=get_record(id,owner,'document')
+    r=get_record(id,owner,'document',level='editor')
     with Session.begin() as s:
         for j in s.scalars(select(Job).where(Job.target_id==id,Job.status.in_(['queued','running']))):j.status='cancelled';j.lease_token=''
         s.get(Record,id).status='deleting'
@@ -427,7 +497,7 @@ def conversations(owner=Depends(auth)):return [representation(r)|{'title':r.name
 def create_conversation(body:ConversationInput,owner=Depends(auth)):
     dataset_id=body.dataset_id or body.kb_id
     if body.mode=='general' and (dataset_id or body.document_ids):raise HTTPException(422,'General chat cannot include document references. Choose a document conversation.')
-    if body.dataset_id and body.kb_id and body.dataset_id!=body.kb_id:raise HTTPException(400,'Conflicting dataset identifiers')
+    if body.dataset_id and body.kb_id and body.dataset_id!=body.kb_id:raise HTTPException(400,'Conflicting collection identifiers')
     if dataset_id or body.document_ids:dataset,_=routing.documents_scope(owner,dataset_id,body.document_ids);dataset_id=dataset.id
     for id in body.document_ids:temporary_files.keep(id)
     r=new_record('conversation',owner,body.title[:200],parent=dataset_id,data=body.model_dump()|{'dataset_id':dataset_id,'kb_id':dataset_id,'messages':[]});return representation(r)|store.json(r.ref)
@@ -441,11 +511,11 @@ class MessageInput(BaseModel):
     _agent_context:dict|None=PrivateAttr(default=None)
 _locks={}
 def message_execution(body,owner,data):
-    if body.dataset_id and body.kb_id and body.dataset_id!=body.kb_id:raise HTTPException(400,'Conflicting dataset identifiers')
+    if body.dataset_id and body.kb_id and body.dataset_id!=body.kb_id:raise HTTPException(400,'Conflicting collection identifiers')
     ids=body.document_ids if body.document_ids is not None else data.get('document_ids',[])
     dataset_id=body.dataset_id if body.dataset_id is not None else body.kb_id if body.kb_id is not None else data.get('dataset_id') or data.get('kb_id','')
     if data.get('mode')=='general':
-        if dataset_id or ids:raise HTTPException(409,'Start a document conversation to use a dataset.')
+        if dataset_id or ids:raise HTTPException(409,'Start a document conversation to use a collection.')
         from .temporary_chat import chat_snapshot
         snapshot=chat_snapshot(owner,body.model_id or '')
         snapshot['settings']['general_chat']=True
@@ -455,10 +525,10 @@ def message_execution(body,owner,data):
     pinned=data.get('dataset_id') or data.get('kb_id')
     if not pinned and data.get('document_ids'):
         try:previous,_=routing.documents_scope(owner,'',data['document_ids']);pinned=previous.id
-        except HTTPException:raise HTTPException(409,'Start a new conversation scoped to one dataset.')
-    if data.get('messages') and not pinned:raise HTTPException(409,'Start a new conversation scoped to one dataset.')
+        except HTTPException:raise HTTPException(409,'Start a new conversation scoped to one collection.')
+    if data.get('messages') and not pinned:raise HTTPException(409,'Start a new conversation scoped to one collection.')
     dataset,docs=routing.documents_scope(owner,dataset_id,ids)
-    if pinned and dataset.id!=pinned:raise HTTPException(409,'A conversation stays within its original dataset. Start a new conversation for another dataset.')
+    if pinned and dataset.id!=pinned:raise HTTPException(409,'A conversation stays within its original collection. Start a new conversation for another collection.')
     snapshot=routing.execution_snapshot(dataset,'chat',body.model_id);routing.require_indexes(docs,snapshot)
     snapshot['settings'].pop('general_chat',None)
     data['dataset_id']=dataset.id;data['kb_id']=dataset.id
@@ -515,7 +585,7 @@ class TemplateInput(BaseModel):
 def uploaded_template(body,owner):
     if not body.source_filename:return None
     matches=[r for r in records(owner,'template') if r.parent_id==(body.dataset_id or '') and (store.json(r.ref).get('source_filename') or '').casefold()==body.source_filename.casefold()]
-    if len(matches)>1:raise HTTPException(409,'Multiple templates have this filename in the selected dataset. Resolve the duplicate filenames before uploading again.')
+    if len(matches)>1:raise HTTPException(409,'Multiple templates have this filename in the selected collection. Resolve the duplicate filenames before uploading again.')
     return matches[0] if matches else None
 def check_schema(schema):
     def location(path):return '$'+''.join('['+str(part)+']' if isinstance(part,int) else '.'+str(part) for part in path)
@@ -559,7 +629,7 @@ def validate_template(body:TemplateInput,owner=Depends(auth)):
     return {'valid':True,'name':body.source_filename or body.name,'schema':body.schema_,'dataset_id':body.dataset_id}|({'existing_template_id':existing.id if existing else None} if body.source_filename else {})
 @app.post('/api/templates')
 def create_template(body:TemplateInput,owner=Depends(auth)):
-    if body.dataset_id:get_record(body.dataset_id,owner,'knowledge_base')
+    if body.dataset_id:get_record(body.dataset_id,owner,'knowledge_base',level='editor')
     check_schema(body.schema_)
     def save():
         existing=uploaded_template(body,owner)
@@ -573,10 +643,10 @@ def create_template(body:TemplateInput,owner=Depends(auth)):
 @app.put('/api/templates/{id}')
 def update_template(id:str,body:TemplateInput,owner=Depends(auth)):
     check_schema(body.schema_)
-    get_record(id,owner,'template')
+    get_record(id,owner,'template',level='editor')
     with document_lock('template-'+id):
         r=get_record(id,owner,'template');version=r.version+1;ref=f'template/{id}/v{version}.json'
-        if body.dataset_id and body.dataset_id!=r.parent_id:raise HTTPException(400,'Template dataset association cannot be changed. Import a new template for the destination dataset.')
+        if body.dataset_id and body.dataset_id!=r.parent_id:raise HTTPException(400,'Template collection association cannot be changed. Import a new template for the destination collection.')
         source_filename=body.source_filename or store.json(r.ref).get('source_filename')
         name=source_filename or body.name
         store.put_json(ref,{'name':name,'schema':body.schema_,'instructions':body.instructions,'version':version,'dataset_id':r.parent_id or None,'source_filename':source_filename})
@@ -606,6 +676,8 @@ class ExtractInput(BaseModel):
     display_name:str|None=Field(default=None,min_length=1,max_length=200)
     idempotency_key:str|None=Field(default=None,min_length=1,max_length=160)
     wait_for_index:bool=False
+    # Spreadsheets: the field -> column mapping the person confirmed ({field: {sheet, column}} or null to leave empty).
+    column_mapping:dict[str,dict[str,str]|None]|None=Field(default=None,max_length=100)
 @app.get('/api/extractions')
 def extractions(owner=Depends(auth)):
     output=[]
@@ -672,7 +744,8 @@ def create_extraction(body:ExtractInput,owner=Depends(auth)):
 
 def _create_extraction(body,owner):
     t=get_record(body.template_id,owner,'template');dataset,docs=routing.documents_scope(owner,body.dataset_id,body.document_ids)
-    if t.parent_id and t.parent_id!=dataset.id:raise HTTPException(400,'Choose a prompt template belonging to the selected dataset.')
+    access.require_level(owner,dataset.id,'editor')
+    if t.parent_id and t.parent_id!=dataset.id:raise HTTPException(400,'Choose a prompt template belonging to the selected collection.')
     snapshot=routing.execution_snapshot(dataset,'extraction',body.model_id)
     pending=[d for d in docs if d.status!='ready']
     if not pending:routing.require_indexes(docs,snapshot)
@@ -729,7 +802,7 @@ class ReviewInput(BaseModel):
 @app.patch('/api/extractions/{id}')
 def review_extraction(id:str,body:ReviewInput,owner=Depends(auth)):
     with document_lock(id):
-        r=get_record(id,owner,'extraction');data=store.json(r.ref)
+        r=get_record(id,owner,'extraction',level='editor');data=store.json(r.ref)
         from . import parquet_results
         try:data=parquet_results.load(data)
         except (ValueError,OSError):raise HTTPException(503,'Saved Parquet could not be read. Your edits are retained; retry loading.')
@@ -763,14 +836,14 @@ class ResumeExtraction(Consent):
 @app.post('/api/extractions/{id}/resume')
 def resume_extraction(id:str,body:ResumeExtraction,owner=Depends(auth)):
     with document_lock('submit-'+id),document_lock(id):
-        r=get_record(id,owner,'extraction')
+        r=get_record(id,owner,'extraction',level='editor')
         if r.status!='failed' or r.version!=body.version:raise HTTPException(409,'Reload the failed extraction before correcting its prompt')
         with Session() as session:
             if session.scalar(select(Job).where(Job.target_id==id,Job.status.in_(['queued','running','blocked']))):raise HTTPException(409,'This extraction already has an active job')
         data=store.json(r.ref)
         if data.get('review_status')=='reviewed':raise HTTPException(409,'This extraction is Reviewed and locked. Create a separate result.')
         template=get_record(body.template_id,owner,'template')
-        if template.parent_id and template.parent_id!=r.parent_id:raise HTTPException(400,'Choose a prompt in this extraction dataset')
+        if template.parent_id and template.parent_id!=r.parent_id:raise HTTPException(400,'Choose a prompt in this extraction collection')
         prompt=store.json(template.ref);check_schema(prompt['schema'])
         dataset,docs=routing.documents_scope(owner,r.parent_id,data['document_ids'])
         snapshot=routing.execution_snapshot(dataset,'extraction')
@@ -794,7 +867,7 @@ def resume_extraction(id:str,body:ResumeExtraction,owner=Depends(auth)):
 
 @app.post('/api/extractions/{id}/reextract')
 def reextract_result(id:str,body:ReextractInput,owner=Depends(auth)):
-    if get_record(id,owner,'extraction').status!='ready':raise HTTPException(409,'Wait for extraction to complete.')
+    if get_record(id,owner,'extraction',level='editor').status!='ready':raise HTTPException(409,'Wait for extraction to complete.')
     with document_lock('submit-'+id),document_lock(id):
         r=get_record(id,owner,'extraction');data=store.json(r.ref)
         if r.status!='ready' or r.version!=body.version:raise HTTPException(409,'Reload the completed extraction before re-extracting.')
@@ -864,6 +937,7 @@ def retry_job(id:str,owner=Depends(auth)):
     with Session() as s:initial=s.get(Job,id)
     with Session() as s:
         if not access.job_allowed(initial,owner,s):raise HTTPException(404,'Not found')
+    access.require_job_change(initial,owner)
     with document_lock('submit-'+initial.target_id),document_lock(initial.target_id),Session.begin() as s:
         j=s.get(Job,id)
         if not access.job_allowed(j,owner,s):raise HTTPException(404,'Not found')
@@ -881,14 +955,14 @@ def retry_job(id:str,owner=Depends(auth)):
             if not saved.get('settings',{}).get('_ocr_cloud_only') and not (cloud and cloud_ocr.provider(cloud)):
                 raise HTTPException(409,'This old indexing job saved the local OCR route. Use Reindex on the document to apply its current cloud OCR model; the old job was not restarted.')
             current=routing.execution_snapshot(routing.owned(target.parent_id,owner,'knowledge_base'),'embedding')
-            if not routing.same_run_models(saved,current):raise HTTPException(409,'Dataset model mappings changed. Use Reindex on the document to apply its current embedding and OCR models.')
+            if not routing.same_run_models(saved,current):raise HTTPException(409,'Collection model mappings changed. Use Reindex on the document to apply its current embedding and OCR models.')
         if j.kind=='extract':
-            if target.status=='ready':raise HTTPException(409,'This extraction already has a successful result. Use Re-extract to create a new result with current dataset models.')
+            if target.status=='ready':raise HTTPException(409,'This extraction already has a successful result. Use Re-extract to create a new result with current collection models.')
             data=store.json(target.ref)
             if data.get('review_status')=='reviewed':raise HTTPException(409,'This extraction is Reviewed and locked. Create a separate re-extraction.')
             saved=store.json('jobs/'+id+'.json').get('execution') or {}
             current=routing.execution_snapshot(routing.owned(target.parent_id,owner,'knowledge_base'),'extraction')
-            if not routing.same_run_models(saved,current):raise HTTPException(409,'Dataset model mappings changed. Use Re-extract with current dataset models; this historical job was not restarted.')
+            if not routing.same_run_models(saved,current):raise HTTPException(409,'Collection model mappings changed. Use Re-extract with current collection models; this historical job was not restarted.')
             docs=[s.get(Record,did) for did in data['document_ids']]
             waiting=any(d and d.status in ('queued','processing') for d in docs)
             if any(not d or d.status in ('failed','deleting') for d in docs):raise HTTPException(409,'Retry the failed source indexing jobs first')
@@ -900,6 +974,9 @@ def retry_job(id:str,owner=Depends(auth)):
     return job_repr(j)
 @app.post('/api/jobs/{id}/cancel')
 def cancel_job(id:str,owner=Depends(auth)):
+    with Session() as s:
+        if not access.job_allowed(s.get(Job,id),owner,s):raise HTTPException(404,'Not found')
+        access.require_job_change(s.get(Job,id),owner)
     with Session.begin() as s:
         j=s.get(Job,id)
         if not access.job_allowed(j,owner,s):raise HTTPException(404,'Not found')
@@ -964,7 +1041,7 @@ def _save_settings(body,owner):
     if cfg['chunk_overlap']>=cfg['chunk_size']:raise HTTPException(400,'Chunk overlap must be smaller than chunk size')
     if any(cfg[k]!=settings()[k] for k in ('storage_provider','oci_storage_namespace','oci_storage_bucket','oci_storage_prefix','oci_storage_region')):
         with Session() as session:
-            if session.scalar(select(Record).where(Record.kind!='config_profile').limit(1)):raise HTTPException(409,'Storage switching requires an empty workspace or an operator-led data migration; existing objects cannot be silently moved')
+            if session.scalar(select(Record).where(Record.kind!='config_profile').limit(1)):raise HTTPException(409,'Storage switching requires an empty collection or an operator-led data migration; existing objects cannot be silently moved')
         if cfg['storage_provider']=='oci':
             from .oci_adapters import OCIStorageAdapter
             try:oci_storage(cfg).test_connection()
@@ -1133,7 +1210,7 @@ def revise_profile(id:str,body:ProfileInput,owner=Depends(auth)):return write_pr
 @app.post('/api/settings/profiles/{id}/activate')
 def activate_profile(id:str,owner=Depends(auth)):
     r=get_record(id,owner,'config_profile');data=local_store.json(r.ref);cfg=data['settings'].copy()
-    if data.get('registration_model_id'):raise HTTPException(400,'Apply registered models through the dataset Model Mapping screen.')
+    if data.get('registration_model_id'):raise HTTPException(400,'Apply registered models through the collection Model Mapping screen.')
     for target,key in [('openai.enc','api_key'),('oci.enc','oci_api_key')]:
         try:
             encrypted=local_store.get(f'secrets/profiles/{id}/v{r.version}/{target}');cfg[key]=secret_cipher().decrypt(encrypted).decode()

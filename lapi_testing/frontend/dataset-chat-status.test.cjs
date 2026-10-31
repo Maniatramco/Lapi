@@ -7,7 +7,7 @@ const text=node=>node==null?'':typeof node==='string'||typeof node==='number'?St
 const all=node=>!node||typeof node!=='object'?[]:Array.isArray(node)?node.flatMap(all):[node,...all(node.props?.children)];
 test('status starts collapsed and distinguishes checked sources from cited sources',()=>{
  const tree=DatasetChatStatus({message:{status:'completed',source_summary:{checked_count:3,cited_count:1,documents:1,saved_results:1,dataset_descriptions:1}}});
- assert.equal(tree.type,'details');assert.equal(tree.props.open,undefined);assert.match(text(tree),/3 sources checked · 1 cited/);assert.match(text(tree),/1 document · 1 saved result · 1 dataset description/);
+ assert.equal(tree.type,'details');assert.equal(tree.props.open,undefined);assert.match(text(tree),/3 sources checked · 1 cited/);assert.match(text(tree),/1 document · 1 saved result · 1 collection description/);
 });
 test('live retrieval counts stay visible during generation without expanding workflow details',()=>{
  const tree=DatasetChatStatus({message:{status:'streaming',source_summary:{checked_count:2,documents:1,dataset_descriptions:1},answer_workflow:{status:'running',steps:[{id:'answer',label:'Generating grounded answer',status:'running'}]}}});
@@ -22,7 +22,7 @@ test('older answers and failed retrieval never invent checked-source counts',()=
 test('general answers explicitly disclose no knowledge lookup without invented retrieval counts',()=>{
  const tree=DatasetChatStatus({message:{status:'completed',request_route:{routing_mode:'dataset_general_chat'},source_summary:{knowledge_used:false,checked_count:0,cited_count:0,dataset_count:0}}});
  assert.match(text(tree),/General answerNo knowledge lookup/);assert.match(text(tree),/Unified Knowledge was not searched/);
- assert.doesNotMatch(text(tree),/sources checked|datasets searched|Source counts were not recorded/);
+ assert.doesNotMatch(text(tree),/sources checked|collections searched|Source counts were not recorded/);
 });
 
 test('routing a question does not claim that retrieval has started',()=>{

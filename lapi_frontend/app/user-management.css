@@ -3,3 +3,13 @@
 
 .account-form select{width:100%;min-height:42px}
 .user-management .account-delete{color:#b42318}.user-management .account-delete-confirm{background:#b42318;color:#fff;border-color:#b42318}.user-management .account-delete-confirm:hover{background:#912018}.user-management .account-delete:disabled{color:var(--muted)}
+
+/* My sessions and Authenticator app (account-security.tsx). */
+.account-security .notice{margin-top:14px}.account-security .account-form{margin-top:16px}
+.session-list{display:grid;gap:8px;margin:16px 0 0;padding:0;list-style:none}
+.session-list li{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px}
+.session-list li>div{display:grid;gap:3px;min-width:0}.session-list small{overflow-wrap:anywhere}
+.session-current{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;background:var(--blue-soft);color:var(--blue-strong);font-size:12px;font-weight:700}
+.totp-steps{display:grid;gap:8px;margin:0 0 10px;padding-left:20px;font-size:14px}
+.totp-secret{display:inline-block;padding:2px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--line);font-size:15px;letter-spacing:.04em;overflow-wrap:anywhere}
+@media(max-width:640px){.session-list li{flex-direction:column;align-items:stretch}.session-list .btn{width:100%}}

@@ -8,6 +8,7 @@ from langgraph.graph import StateGraph, START, END
 from langsmith import tracing_context
 from .. import core, providers, workflow, extraction_retrieval, parquet_results
 from .agent_checkpoints import ExternalCheckpointSaver
+from . import table_extraction
 
 
 class State(TypedDict):
@@ -35,6 +36,24 @@ def run(jid, record, data, snapshot, documents, sources, check):
 
     def stage(name, status='running'):
         check(); workflow.transition(jid, name, status)
+
+    # Spreadsheets whose columns are the requested fields: one record per row, read from the table.
+    chosen = None if data.get('merge_records') else table_extraction.plan(data['schema'], documents, override=data.get('column_mapping'))
+    if chosen:
+        stage('retrieving'); stage('retrieving', 'completed'); stage('reranking', 'completed'); stage('generate')
+        selection = data.get('model_selection') or {}
+        result, evidence, notice = table_extraction.extract(data['schema'], chosen, sources, check,
+            limits={'context': selection.get('context_limit'), 'output': selection.get('max_output_tokens')})
+        data['column_plan'] = table_extraction.preview(chosen)
+        data['schema'] = table_extraction.schema_for(data['schema'])
+        stage('generate', 'completed'); stage('validate')
+        validate(result, data['schema']); parquet_results.encoded(result); stage('validate', 'completed')
+        stage('writing_output')
+        output = parquet_results.persist(record.id, record.version, data | {'result': result, 'evidence': evidence})
+        stage('writing_output', 'completed')
+        data.update(result=result, evidence=evidence, table_rows=True, table_notice=notice,
+                    retrieval={'method': 'spreadsheet rows', 'rows': len(result['records'])}, **output)
+        return data
 
     def retrieve(state):
         stage('retrieving')

@@ -3,7 +3,7 @@ function view(isAdmin=true,reply=async()=>({user:{is_admin:true},sessions_revoke
  let index=0,root;const hooks=[],calls=[],notices=[];
  const react={useState(initial){const slot=index++;if(!(slot in hooks))hooks[slot]=initial;return [hooks[slot],value=>hooks[slot]=typeof value==='function'?value(hooks[slot]):value];},useRef(initial){const slot=index++;if(!(slot in hooks))hooks[slot]={current:initial};return hooks[slot];},useEffect(){}};
  const filename=path.resolve(__dirname,'../../lapi_frontend/app/user-management.tsx'),compiled=new Module(filename,module);compiled.filename=filename;compiled.paths=module.paths;const original=compiled.require.bind(compiled);
- compiled.require=id=>id==='react'?react:id==='./action-button'?{ActionButton:'button'}:id==='./user-management.css'?{}:id==='lucide-react'||id==='./dataset-assignments'||id==='./summary-tiles'?new Proxy({},{get:()=>()=>null}):original(id);
+ compiled.require=id=>id==='react'?react:id==='./action-button'?{ActionButton:'button'}:id==='./user-management.css'?{}:id==='lucide-react'||id==='./dataset-assignments'||id==='./summary-tiles'||id==='./account-security'?new Proxy({},{get:()=>()=>null}):original(id);
  compiled._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,filename);
  const account={id:self?'acting':'target',username:self?'Acting':'Target',role:'user',is_admin:false,created_at:1,updated_at:1};hooks[0]=[account];
  const props={user:{id:'acting',username:'Acting',is_admin:isAdmin},api:async(...args)=>{calls.push(args);return args[0]==='/users'?[account]:reply(...args);},onRoleChanged:()=>notices.push('role'),onPasswordChanged:()=>notices.push('password')};
@@ -24,7 +24,7 @@ test('delete requires exact username and administrator password and submits only
  v.find('id','account-delete-username').props.onChange({target:{value:'Target'}});v.render();
  await v.find('aria-label','Delete user').props.onSubmit({preventDefault(){}});v.render();
  assert.deepEqual(v.calls[0],['/users/target','DELETE',{username:'Target',current_password:'Synthetic acting password'}]);
- assert.equal(v.find('id','account-current-password'),undefined);assert.match(v.find('role','status').props.children,/dataset access were removed/);
+ assert.equal(v.find('id','account-current-password'),undefined);assert.match(v.find('role','status').props.children,/collection access were removed/);
 });
 test('delete is hidden from ordinary users, disabled for self, and cancel makes no request',()=>{
  assert.equal(view(false).find('label','Delete user Target'),undefined);

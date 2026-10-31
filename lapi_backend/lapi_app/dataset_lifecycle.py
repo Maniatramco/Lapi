@@ -18,7 +18,7 @@ def receipt_ref(id):
 def deleted_dataset(id, session):
     row = session.get(core.Record, id)
     if not row or row.kind != 'knowledge_base' or row.status != 'deleted':
-        raise HTTPException(404, 'Deleted dataset not found.')
+        raise HTTPException(404, 'Deleted collection not found.')
     return row
 
 
@@ -36,29 +36,29 @@ def active_submission(call):
 def ensure_idle(dataset, session, ignore_workflows=()):
     targets = select(core.Record.id).where((core.Record.parent_id == dataset.id) | (core.Record.id == dataset.id))
     if session.scalar(select(core.Job.id).where(core.Job.target_id.in_(targets), core.Job.status.in_(['queued', 'running'])).limit(1)):
-        raise HTTPException(409, 'Finish or cancel this dataset’s processing jobs before deleting it.')
+        raise HTTPException(409, 'Finish or cancel this collection’s processing jobs before deleting it.')
     for row in session.scalars(select(core.Record).where(core.Record.kind.in_(['agent_plan', 'agent_onboarding']), core.Record.parent_id.in_([dataset.id, '']))):
         if row.id in ignore_workflows:continue
         try:
             data = core.store.json(row.ref)
         except FileNotFoundError:
             if row.parent_id == dataset.id:
-                raise HTTPException(409, 'An Agent workflow cannot be checked. Restore its saved state before deleting this dataset.')
+                raise HTTPException(409, 'An Agent workflow cannot be checked. Restore its saved state before deleting this collection.')
             continue
         if (row.parent_id or data.get('dataset_id') or data.get('kb_id')) != dataset.id:
             continue
         if (data.get('goal') or {}).get('status') in ('queued', 'running', 'retry_wait') or data.get('status') == 'running' or any(active_submission(call) for call in data.get('calls', [])):
-            raise HTTPException(409, 'Finish or stop this dataset’s active Agent workflow before deleting it.')
+            raise HTTPException(409, 'Finish or stop this collection’s active Agent workflow before deleting it.')
 
 
 def delete_dataset(id, body, actor):
-    access.require_admin(actor)
+    access.require_contributor(actor)
     with core.document_lock('dataset-' + id):
         row = access.get_record(id, actor, 'knowledge_base')
         if body.confirmation != row.name:
-            raise HTTPException(400, 'Type the exact dataset name to confirm deletion.')
+            raise HTTPException(400, 'Type the exact collection name to confirm deletion.')
         if body.expected_version != row.version:
-            raise HTTPException(409, 'Dataset changed. Refresh it before deleting.')
+            raise HTTPException(409, 'Collection changed. Refresh it before deleting.')
         with core.Session.begin() as session:
             current = session.get(core.Record, id)
             ensure_idle(current, session)
@@ -70,14 +70,14 @@ def delete_dataset(id, body, actor):
 
 
 def trash(actor):
-    access.require_admin(actor)
+    access.require_contributor(actor)
     with core.Session() as session:
         rows = session.scalars(select(core.Record).where(core.Record.kind == 'knowledge_base', core.Record.status == 'deleted').order_by(core.Record.updated_at.desc()))
         return [dict(core.store.json(receipt_ref(row.id)), version=row.version) for row in rows]
 
 
 def restore_dataset(id, actor):
-    access.require_admin(actor)
+    access.require_contributor(actor)
     with core.document_lock('dataset-' + id):
         with core.Session.begin() as session:
             row = deleted_dataset(id, session)

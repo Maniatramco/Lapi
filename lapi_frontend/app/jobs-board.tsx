@@ -72,7 +72,7 @@ export function JobsBoard({jobs,documents,datasets=[],extractions=[],busy,format
      <div className="jobs-tabs" role="group" aria-label="Filter jobs">{JOB_TABS.map(([id,label])=><button key={id} type="button" aria-pressed={tab===id} onClick={()=>setTab(id)}>{label}<span>{counts[id]}</span></button>)}</div>
      <select className="jobs-filter" aria-label="Started by" value={person} onChange={event=>setPerson(event.target.value)}><option value="">Everyone</option>{people.map(row=><option key={row.key} value={row.key}>{row.label}</option>)}</select>
      {kinds.length>1&&<select className="jobs-filter" aria-label="Job type" value={kind} onChange={event=>setKind(event.target.value)}><option value="">All types</option>{kinds.map(value=><option key={value} value={value}>{kindLabel(value)}</option>)}</select>}
-     <label className="jobs-search"><Search size={14} aria-hidden="true"/><input aria-label="Search jobs" placeholder="Search file, dataset or job ID" value={query} onChange={event=>setQuery(event.target.value)}/></label>
+     <label className="jobs-search"><Search size={14} aria-hidden="true"/><input aria-label="Search jobs" placeholder="Search file, collection or job ID" value={query} onChange={event=>setQuery(event.target.value)}/></label>
     </div>
     <p className="jobs-refresh small muted">Refreshes automatically every few seconds.{filtered&&<> · <button type="button" className="text-button" onClick={()=>{setPerson('');setKind('');setQuery('');}}>Clear filters</button></>}</p>
     <div className="jobs-table" role="region" aria-label="Job list" tabIndex={0}>

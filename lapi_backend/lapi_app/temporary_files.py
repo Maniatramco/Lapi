@@ -74,4 +74,4 @@ def install(app,auth):
     @app.post('/api/documents/{id}/keep')
     def keep_document(id:str,owner=Depends(auth)):
         from .main import get_record
-        get_record(id,owner,'document');keep(id);return {'ok':True,'temporary':False}
+        get_record(id,owner,'document',level='editor');keep(id);return {'ok':True,'temporary':False}

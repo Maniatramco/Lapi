@@ -46,7 +46,7 @@ test('syntax errors give correction guidance without exposing the file contents'
 const {promptSelections,restoreSavedPrompt,rememberSavedPrompt}=load(path.resolve(__dirname,'../../lapi_frontend/app/agent-prompt-selection.ts'));
 const {rememberAssistantDataset,assistantDatasetPreference}=load(path.resolve(__dirname,'../../lapi_frontend/app/agent-prompt-selection.ts'));
 
-test('new workspace dataset takes precedence over old Assistant history and prompt selection',()=>{
+test('new collection collection takes precedence over old Assistant history and prompt selection',()=>{
  const values=new Map();const storage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)};
  rememberAssistantDataset(storage,'alice','old');
  rememberSavedPrompt(storage,'prompts','old','old-prompt');
@@ -62,7 +62,7 @@ test('new workspace dataset takes precedence over old Assistant history and prom
  assert.equal(assistantDatasetPreference(storage,'alice',datasets,'old'),'old');
  assert.equal(assistantDatasetPreference(storage,'alice',datasets,'deleted'),'');
 });
-test('saved selection survives reload, remains scoped to its dataset, and can be cleared',()=>{
+test('saved selection survives reload, remains scoped to its collection, and can be cleared',()=>{
  const values=new Map();const storage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)};
  const templates=[{id:'a',name:'First',parent_id:'one'},{id:'b',name:'Second',parent_id:'two'}];
  rememberSavedPrompt(storage,'prompts','one','a');rememberSavedPrompt(storage,'prompts','two','b');
@@ -75,9 +75,9 @@ test('saved selection survives reload, remains scoped to its dataset, and can be
  for(const invalid of ['bad','[]','null','42'])assert.deepEqual(promptSelections(invalid),{});
 });
 test('review dialog shows complete escaped JSON and requires an explicit confirmation',()=>{
- const preview=renderToStaticMarkup(React.createElement(PromptUploadPreview,{prompt:{fileName:'invoice.json',name:'Invoice',schema,preview:JSON.stringify({...schema,description:'<script>alert(1)</script>'},null,2)},datasetName:'QA dataset',onConfirm:()=>{},onCancel:()=>{}}));
+ const preview=renderToStaticMarkup(React.createElement(PromptUploadPreview,{prompt:{fileName:'invoice.json',name:'Invoice',schema,preview:JSON.stringify({...schema,description:'<script>alert(1)</script>'},null,2)},datasetName:'QA collection',onConfirm:()=>{},onCancel:()=>{}}));
  assert.match(preview,/Review uploaded prompt/);assert.match(preview,/Uploaded prompt JSON/);
- assert.match(preview,/Confirm prompt/);assert.match(preview,/Cancel/);assert.match(preview,/QA dataset/);
+ assert.match(preview,/Confirm prompt/);assert.match(preview,/Cancel/);assert.match(preview,/QA collection/);
  assert.match(preview,/&lt;script&gt;/);assert.doesNotMatch(preview,/<script>/);
  assert.match(preview,/Use Send to save it/);
 });
@@ -99,13 +99,13 @@ test('dataset filtering keeps scoped prompts separate and legacy prompts accessi
 });
 
 test('uploaded filenames and prompt names are both searchable within the selected dataset',()=>{
- const prompts=[{id:'a',name:'Dataset prompt rows QA',source_filename:'mani.json',dataset_id:'one'},{id:'b',name:'Other',source_filename:'mani.json',dataset_id:'two'},{id:'c',name:'Legacy',dataset_id:'one'}];
+ const prompts=[{id:'a',name:'Collection prompt rows QA',source_filename:'mani.json',dataset_id:'one'},{id:'b',name:'Other',source_filename:'mani.json',dataset_id:'two'},{id:'c',name:'Legacy',dataset_id:'one'}];
  assert.deepEqual(filterPromptTemplates(prompts,'one',' MANI.JSON ').map(t=>t.id),['a']);
  assert.deepEqual(filterPromptTemplates(prompts,'one','rows QA').map(t=>t.id),['a']);
  assert.deepEqual(filterPromptTemplates(prompts,'all','mani.json').map(t=>t.id),['a','b']);
  assert.deepEqual(filterPromptTemplates(prompts,'one','legacy').map(t=>t.id),['c']);
 });
-test('download round trips complete nested schema through Upload Prompt without binding destination dataset',async()=>{
+test('download round trips complete nested schema through Upload Prompt without binding destination collection',async()=>{
  const nested={...schema,description:'Find amounts',properties:{group:{type:'object',properties:{amount:{type:['number','null'],description:'Total',minimum:0}},required:['amount'],additionalProperties:false}},required:['group']};
  const exported=promptTemplateDownload({name:'Invoice / totals?',schema:nested,version:3,dataset_id:'source'});
  assert.equal(exported.fileName,'Invoice - totals--v3.json');
@@ -117,7 +117,7 @@ test('download round trips complete nested schema through Upload Prompt without 
  assert.equal(promptTemplateDownload({name:'mani.json',schema,source_filename:'mani.json',version:3}).fileName,'mani.json');
 });
 test('template list renders one row per selected dataset prompt with all row actions',()=>{
- const markup=renderToStaticMarkup(React.createElement(PromptTemplates,{templates:[{id:'a',name:'Invoice one',source_filename:'mani.json',schema,dataset_id:'one',version:2},{id:'b',name:'Other dataset',schema,dataset_id:'two'}],datasets:[{id:'one',name:'Invoices'},{id:'two',name:'Other'}],selectedDataset:'one',initialId:'',api:async()=>{},onSaved:()=>{},onUse:()=>{},onDirty:()=>{}}));
+ const markup=renderToStaticMarkup(React.createElement(PromptTemplates,{templates:[{id:'a',name:'Invoice one',source_filename:'mani.json',schema,dataset_id:'one',version:2},{id:'b',name:'Other collection',schema,dataset_id:'two'}],datasets:[{id:'one',name:'Invoices'},{id:'two',name:'Other'}],selectedDataset:'one',initialId:'',api:async()=>{},onSaved:()=>{},onUse:()=>{},onDirty:()=>{}}));
  assert.match(markup,/aria-label="Prompt templates"/);assert.match(markup,/Invoice one/);assert.doesNotMatch(markup,/Prompt template Other dataset/);
  assert.match(markup,/title="mani.json">mani.json/);assert.match(markup,/Search by name or filename/);
  for(const label of ['Edit','Versions','Download','Use template'])assert.match(markup,new RegExp(label));
@@ -125,6 +125,6 @@ test('template list renders one row per selected dataset prompt with all row act
 });
 test('editing a scoped template displays its fixed dataset and existing fields',()=>{
  const markup=renderToStaticMarkup(React.createElement(PromptTemplates,{templates:[{id:'a',name:'Invoice',schema,dataset_id:'one'}],datasets:[{id:'one',name:'Invoices'}],selectedDataset:'one',initialId:'a',api:async()=>{},onSaved:()=>{},onUse:()=>{},onDirty:()=>{}}));
- assert.match(markup,/<select aria-label="Template dataset"[^>]*disabled/);
- assert.match(markup,/The dataset is fixed/);assert.match(markup,/Save new version/);
+ assert.match(markup,/<select aria-label="Template collection"[^>]*disabled/);
+ assert.match(markup,/The collection is fixed/);assert.match(markup,/Save new version/);
 });

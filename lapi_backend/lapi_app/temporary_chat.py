@@ -110,7 +110,7 @@ def install(app, auth):
         if not pages:
             raise HTTPException(400, 'No readable text was found. Upload a document containing legible text or a clearer scan.')
         if text_bytes > MAX_TEXT_BYTES:
-            raise HTTPException(413, 'This document exceeds the 40 KB text limit for direct chat. Use a shorter document or the regular dataset workflow. No text was indexed or embedded.')
+            raise HTTPException(413, 'This document exceeds the 40 KB text limit for direct chat. Use a shorter document or the regular collection workflow. No text was indexed or embedded.')
         doc = {'id': core.uid(), 'owner': owner, 'session_id': session_id, 'name': name,
                'size': len(raw), 'text_bytes': text_bytes, 'pages': pages,
                'expires_at': time.time() + RETENTION_SECONDS}

@@ -1,0 +1,29 @@
+/* The first-sign-in chat with Lapi: a small chat window on computers, the whole screen on phones. */
+.setup-chat-backdrop{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:16px;background:rgba(15,23,42,.5)}
+.setup-chat{display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;width:100%;max-width:460px;height:min(640px,calc(100dvh - 32px));box-sizing:border-box;border-radius:24px;background:#fff;color:var(--ink);box-shadow:0 24px 60px rgba(15,23,42,.3);overflow:hidden}
+.setup-chat-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.setup-chat-head div{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.setup-chat-close{display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:50%;background:var(--blue-soft);color:var(--ink);cursor:pointer}
+.setup-chat-close:disabled{opacity:.4;cursor:default}.setup-chat-head strong{font-size:16px}.setup-chat-head small{font-size:13px;color:var(--muted)}
+.setup-chat-thread{display:flex;flex-direction:column;gap:10px;padding:16px 20px;overflow-y:auto;background:#f5f7fb}
+.setup-chat-line{margin:0;white-space:pre-line;max-width:86%;padding:11px 15px;border-radius:18px;font-size:15px;line-height:1.5;overflow-wrap:anywhere;animation:setup-chat-in .25s ease-out both}
+.setup-chat-line.is-lapi{align-self:flex-start;border-radius:4px 18px 18px 18px;background:#fff;border:1px solid var(--line)}
+.setup-chat-line.is-you{align-self:flex-end;width:fit-content;border-radius:18px 18px 4px 18px;background:var(--blue);color:#fff}
+.setup-chat-line.is-error{border-color:var(--orange-line);background:var(--orange-soft);color:var(--orange-strong)}
+.setup-chat-quick{display:flex;flex-wrap:wrap;gap:8px;padding:12px 20px 0}
+.setup-chat-quick button{min-height:42px;padding:0 14px;border:1px solid var(--blue-line);border-radius:999px;background:#fff;color:var(--blue-strong);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.setup-chat-quick button:hover:not(:disabled){background:var(--blue-soft)}.setup-chat-quick button:disabled{opacity:.5}
+.setup-chat-compose{display:flex;align-items:center;gap:6px;padding:12px 16px calc(14px + env(safe-area-inset-bottom))}
+.setup-chat-compose input{flex:1;min-width:0;min-height:48px;padding:0 14px;border:1px solid var(--line);border-radius:24px;font:inherit;font-size:16px;color:var(--ink)}
+.setup-chat-compose button{display:grid;place-items:center;flex:none;width:46px;height:46px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--ink);cursor:pointer}
+.setup-chat-compose button.is-on{background:var(--orange-soft);border-color:var(--orange-line);color:var(--orange-strong)}
+.setup-chat-compose .setup-chat-send{border:0;background:var(--blue);color:#fff}
+.setup-chat-compose button:disabled{opacity:.5;cursor:default}
+.setup-chat :is(button,input):focus-visible{outline:3px solid #315de7;outline-offset:2px}
+@keyframes setup-chat-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.setup-chat-line{animation:none}}
+@media (max-width: 640px), (pointer: coarse) and (max-width: 1100px) {
+ .setup-chat-backdrop{padding:0;place-items:stretch}
+ .setup-chat{max-width:none;height:100%;border-radius:0}
+ .setup-chat-head{padding-top:calc(14px + env(safe-area-inset-top))}
+}

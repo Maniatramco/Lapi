@@ -125,7 +125,7 @@ const expandedDocument=graph([recordNodes[1],runNode],[{id:'doc-run',source:'doc
 const expandedRun=graph([runNode,modelNode],[{id:'model-run',source:'model:new',target:'run:new',label:'used by'}]);
 async function recordsView(v){v.key('Document','Enter');v.all().find(n=>n.type==='button'&&v.text(n)==='Explore documents').props.onClick();await v.settle();}
 
-test('double-click exploration and expansion retain exact dataset scope; collapse removes orphaned branches',async t=>{
+test('double-click exploration and expansion retain exact collection scope; collapse removes orphaned branches',async t=>{
  const v=await mount(t,{expandResponse:url=>new URLSearchParams(url.split('?')[1]).get('focus')==='run:new'?expandedRun:expandedDocument});v.node('Document').props.onDoubleClick({preventDefault(){}});await v.settle();
  const before=v.point('document:one');v.key('document:one','Enter');v.click('Expand node connections');await v.settle();assert.ok(v.node('run:new'));assert.deepEqual(v.point('document:one'),before);assert.equal(v.node('document:one').props['data-expanded'],true);
  const query=new URLSearchParams(v.calls.at(-1).split('?')[1]);assert.deepEqual(query.getAll('dataset_id'),['a','b']);assert.equal(query.get('focus'),'document:one');assert.equal(query.get('limit'),'1');

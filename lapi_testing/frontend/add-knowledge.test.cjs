@@ -45,3 +45,11 @@ test('every storage provider has a complete step-by-step guide that renders',()=
  assert.match(html,/<details class="connector-guide" open="">/);assert.match(html,/Part 1: Create a Google Cloud project/);
  assert.match(html,/<code>drive.google.com<\/code>/);assert.match(html,/What goes where/);assert.match(html,/If Test connection shows an error/);
 });
+
+test('#Add knowledge/<provider> preselects a known provider only',()=>{
+ const {requestedProvider}=mod.exports;
+ assert.equal(requestedProvider('#Add%20knowledge/google_drive'),'google_drive');
+ assert.equal(requestedProvider('#add knowledge/SharePoint/'),'sharepoint');
+ for(const id of STORAGE_PROVIDERS.map(p=>p.id))assert.equal(requestedProvider('#Add%20knowledge/'+id),id);
+ for(const bad of ['#Add%20knowledge','#Add%20knowledge/dropbox','#Datasets/s3','#Add%20knowledge/s3/extra','#%E0%A4%A','',undefined&&''])assert.equal(requestedProvider(bad),'');
+});

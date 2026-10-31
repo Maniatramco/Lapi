@@ -23,12 +23,23 @@ log = logging.getLogger(__name__)
 
 STORE_NAME = 'lapi'
 WORKSPACE = 'lapi:workspace'
+LEVELS = ('viewer', 'editor', 'owner')  # Each includes the ones before it.
+_GRANTEES = [{'type': 'user'}, {'type': 'team', 'relation': 'member'}]
+_DIRECT = lambda types: {'directly_related_user_types': types}
 MODEL = {'schema_version': '1.1', 'type_definitions': [
     {'type': 'user'},
-    {'type': 'lapi', 'relations': {'administrator': {'this': {}}},
-     'metadata': {'relations': {'administrator': {'directly_related_user_types': [{'type': 'user'}]}}}},
-    {'type': 'dataset', 'relations': {'viewer': {'this': {}}},
-     'metadata': {'relations': {'viewer': {'directly_related_user_types': [{'type': 'user'}]}}}},
+    {'type': 'team', 'relations': {'member': {'this': {}}},
+     'metadata': {'relations': {'member': _DIRECT([{'type': 'user'}])}}},
+    {'type': 'lapi', 'relations': {'administrator': {'this': {}}, 'auditor': {'this': {}}, 'contributor': {'this': {}}},
+     'metadata': {'relations': {role: _DIRECT([{'type': 'user'}]) for role in ('administrator', 'auditor', 'contributor')}}},
+    # Screens: enabled for everyone (user:*), a team's members, or a person (screens.py).
+    {'type': 'screen', 'relations': {'enabled': {'this': {}}},
+     'metadata': {'relations': {'enabled': _DIRECT([{'type': 'user'}, {'type': 'user', 'wildcard': {}}, {'type': 'team', 'relation': 'member'}])}}},
+    {'type': 'dataset', 'relations': {
+        'owner': {'this': {}},
+        'editor': {'union': {'child': [{'this': {}}, {'computedUserset': {'relation': 'owner'}}]}},
+        'viewer': {'union': {'child': [{'this': {}}, {'computedUserset': {'relation': 'editor'}}]}}},
+     'metadata': {'relations': {level: _DIRECT(_GRANTEES) for level in LEVELS}}},
 ]}
 WRITE_LIMIT = 100  # OpenFGA's default maximum tuples per write request.
 
@@ -135,16 +146,39 @@ def _key(user, relation, obj):
     return {'user': user, 'relation': relation, 'object': obj}
 
 
+def _level(value):
+    return value if value in LEVELS else 'viewer'
+
+
 def _desired(user_id=None):
+    """Tuples the database implies: for one person (their roles, grants and team
+    memberships), or for everyone plus every team's grants when user_id is None."""
     from . import core, relational
     with core.Session() as session:
         admins = select(core.User.id).where(core.User.role == 'administrator')
-        grants = select(relational.UserDataset.user_id, relational.UserDataset.dataset_id).where(relational.UserDataset.enabled == True)
+        auditors = select(relational.WorkspaceRole.user_id).where(relational.WorkspaceRole.role == 'auditor')
+        contributors = select(relational.WorkspaceContributor.user_id)
+        grants = select(relational.UserDataset.user_id, relational.UserDataset.dataset_id, relational.UserDataset.access_level).where(relational.UserDataset.enabled == True)
+        members = select(relational.TeamMember.user_id, relational.TeamMember.team_id)
         if user_id is not None:
             admins = admins.where(core.User.id == user_id)
+            auditors = auditors.where(relational.WorkspaceRole.user_id == user_id)
+            contributors = contributors.where(relational.WorkspaceContributor.user_id == user_id)
             grants = grants.where(relational.UserDataset.user_id == user_id)
+            members = members.where(relational.TeamMember.user_id == user_id)
         tuples = {('user:' + admin, 'administrator', WORKSPACE) for admin in session.scalars(admins)}
-        tuples |= {('user:' + user, 'viewer', 'dataset:' + dataset) for user, dataset in session.execute(grants)}
+        tuples |= {('user:' + auditor, 'auditor', WORKSPACE) for auditor in session.scalars(auditors)}
+        tuples |= {('user:' + contributor, 'contributor', WORKSPACE) for contributor in session.scalars(contributors)}
+        tuples |= {('user:' + user, _level(level), 'dataset:' + dataset) for user, dataset, level in session.execute(grants)}
+        tuples |= {('user:' + user, 'member', 'team:' + team) for user, team in session.execute(members)}
+        if user_id is None:
+            team_grants = select(relational.TeamDataset.team_id, relational.TeamDataset.dataset_id, relational.TeamDataset.access_level)
+            tuples |= {('team:' + team + '#member', _level(level), 'dataset:' + dataset) for team, dataset, level in session.execute(team_grants)}
+            from . import screens
+            tuples |= screens.tuples(session)
+        else:
+            from . import screens
+            tuples |= {t for t in screens.tuples(session) if t[0] == 'user:' + user_id}
     return tuples
 
 
@@ -176,13 +210,20 @@ def _reconcile(store, user_id=None):
         current = _read(store)
     else:
         user = 'user:' + user_id
-        current = _read(store, {'user': user, 'object': 'dataset:'}) | _read(store, _key(user, 'administrator', WORKSPACE))
+        current = (_read(store, {'user': user, 'object': 'dataset:'}) | _read(store, {'user': user, 'object': 'team:'}) | _read(store, {'user': user, 'object': 'screen:'})
+                   | _read(store, _key(user, 'administrator', WORKSPACE)) | _read(store, _key(user, 'auditor', WORKSPACE))
+                   | _read(store, _key(user, 'contributor', WORKSPACE)))
     _write(store, desired - current, current - desired)
 
 
 def sync_user(user_id):
     """Make OpenFGA match the database for one user (after a role or grant change)."""
     _with_store(lambda store: _reconcile(store, user_id))
+
+
+def sync_all():
+    """Make OpenFGA match the database for everyone (after a team or team-grant change)."""
+    _with_store(lambda store: _reconcile(store))
 
 
 def _remembered(question, ask):
@@ -202,13 +243,40 @@ def is_administrator(user_id):
         'POST', f'/stores/{store}/check', {'tuple_key': _key('user:' + user_id, 'administrator', WORKSPACE)}).get('allowed') is True)
 
 
-def viewable_datasets(user_id):
-    """Dataset IDs the user is a viewer of (administrators see every dataset by role, not by tuple)."""
+def is_auditor(user_id):
+    if not user_id:
+        return False
+    return _remembered(('auditor', user_id), lambda store: _call(
+        'POST', f'/stores/{store}/check', {'tuple_key': _key('user:' + user_id, 'auditor', WORKSPACE)}).get('allowed') is True)
+
+
+def is_contributor(user_id):
+    if not user_id:
+        return False
+    return _remembered(('contributor', user_id), lambda store: _call(
+        'POST', f'/stores/{store}/check', {'tuple_key': _key('user:' + user_id, 'contributor', WORKSPACE)}).get('allowed') is True)
+
+
+def enabled_screens(user_id):
+    """Screen objects (screen:<id>, screen:<id>-phone) the person may see."""
+    def ask(store):
+        objects = _call('POST', f'/stores/{store}/list-objects', {'type': 'screen', 'relation': 'enabled', 'user': 'user:' + user_id}).get('objects') or []
+        return frozenset(objects)
+    return _remembered(('screens', user_id), ask) if user_id else frozenset()
+
+
+def datasets_at(user_id, level):
+    """Dataset IDs where the user has at least this level, directly or through a team."""
     def ask(store):
         objects = _call('POST', f'/stores/{store}/list-objects',
-                        {'type': 'dataset', 'relation': 'viewer', 'user': 'user:' + user_id}).get('objects') or []
+                        {'type': 'dataset', 'relation': level, 'user': 'user:' + user_id}).get('objects') or []
         return frozenset(obj.split(':', 1)[1] for obj in objects)
-    return _remembered(('datasets', user_id), ask) if user_id else frozenset()
+    return _remembered(('datasets', level, user_id), ask) if user_id else frozenset()
+
+
+def viewable_datasets(user_id):
+    """Dataset IDs the user can open (administrators see every dataset by role, not by tuple)."""
+    return datasets_at(user_id, 'viewer')
 
 
 # Keep OpenFGA in step with the database: note which users' roles or grants a
@@ -222,8 +290,10 @@ def _note_changes(session, context):
     for row in list(session.new) + list(session.dirty) + list(session.deleted):
         if isinstance(row, core.User):
             touched.add(row.id)
-        elif isinstance(row, relational.UserDataset):
+        elif isinstance(row, (relational.UserDataset, relational.WorkspaceRole, relational.WorkspaceContributor, relational.TeamMember)):
             touched.add(row.user_id)
+        elif isinstance(row, (relational.Team, relational.TeamDataset, relational.ScreenGrant)):
+            touched.add(None)  # A team's grants reach all its members: rebuild everything.
 
 
 @event.listens_for(ORMSession, 'after_commit')
@@ -234,9 +304,9 @@ def _sync_committed(session):
     answers = _answers.get()
     if answers is not None:
         answers.clear()
-    for user_id in sorted(touched):
+    for user_id in [None] if None in touched else sorted(touched):
         try:
-            sync_user(user_id)
+            sync_all() if user_id is None else sync_user(user_id)
         except AuthorizationUnavailable:
             # The change is saved in the database; rebuild everything on the next check.
             log.warning('OpenFGA was not updated after a permission change; it will be rebuilt.')

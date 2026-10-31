@@ -87,8 +87,8 @@ def test_colleague_account_logs_in_and_duplicate_never_changes_password(system, 
     assert login.status_code == 200
     system.api.headers['X-CSRF-Token'] = login.json()['csrf_token']
     d = system.api.post('/api/datasets', json={'name': 'Colleague data'})
-    assert d.status_code == 403  # Dataset configuration is administrator-managed.
-    assert system.api.get('/api/datasets').json() == []
+    assert d.status_code == 200  # Anyone may start a workspace, and sees only their own.
+    assert [row['id'] for row in system.api.get('/api/datasets').json()] == [d.json()['id']]
     with pytest.raises(ValueError, match='already exists'):
         create_account('colleague', 'Replacement-password-123')
     bad = system.api.post('/api/auth/login', json={'username': 'colleague', 'password': 'Replacement-password-123'})

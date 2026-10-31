@@ -1,0 +1,117 @@
+{
+  "realm": "lapi",
+  "displayName": "Lapi",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "passwordPolicy": "length(12) and notUsername and notEmail and passwordHistory(5)",
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 43200,
+  "accessTokenLifespan": 300,
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "roles": {
+    "realm": [
+      {"name": "lapi-administrator", "description": "Lapi administrators (an authenticator app is required at sign-in)"},
+      {"name": "lapi-auditor", "description": "Lapi auditors: read people, access and activity; change nothing"},
+      {"name": "lapi-contributor", "description": "Lapi contributors: Owner on every dataset and can create datasets; cannot manage the workspace (users, storage, settings, models)"}
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "lapi",
+      "name": "Lapi",
+      "protocol": "openid-connect",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "$${LAPI_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "rootUrl": "${lapi_url}",
+      "baseUrl": "${lapi_url}/",
+      "redirectUris": ["${lapi_url}/api/auth/keycloak/callback"],
+      "webOrigins": ["${lapi_url}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${lapi_url}/",
+        "backchannel.logout.url": "${lapi_url}/api/auth/keycloak/backchannel-logout",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {"claim.name": "groups", "full.path": "true", "id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "true"}
+        },
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "config": {"id.token.claim": "true", "access.token.claim": "true", "introspection.token.claim": "true"}
+        }
+      ]
+    }
+  ],
+  "browserFlow": "lapi browser",
+  "authenticationFlows": [
+    {
+      "alias": "lapi browser",
+      "description": "Browser sign-in; administrators also enter a code from an authenticator app",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {"authenticator": "auth-cookie", "authenticatorFlow": false, "requirement": "ALTERNATIVE", "priority": 10, "userSetupAllowed": false},
+        {"authenticator": "identity-provider-redirector", "authenticatorFlow": false, "requirement": "ALTERNATIVE", "priority": 15, "userSetupAllowed": false},
+        {"authenticatorFlow": true, "flowAlias": "lapi browser forms", "requirement": "ALTERNATIVE", "priority": 20, "userSetupAllowed": false}
+      ]
+    },
+    {
+      "alias": "lapi browser forms",
+      "description": "Username and password, then an authenticator code for administrators",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {"authenticator": "auth-username-password-form", "authenticatorConfig": "lapi amr pwd", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 10, "userSetupAllowed": false},
+        {"authenticatorFlow": true, "flowAlias": "lapi administrator otp", "requirement": "CONDITIONAL", "priority": 20, "userSetupAllowed": false}
+      ]
+    },
+    {
+      "alias": "lapi administrator otp",
+      "description": "People with the lapi-administrator role must use an authenticator app (set up on first sign-in)",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {"authenticator": "conditional-user-role", "authenticatorConfig": "lapi administrator role", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 10, "userSetupAllowed": false},
+        {"authenticator": "auth-otp-form", "authenticatorConfig": "lapi amr otp", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 20, "userSetupAllowed": false}
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {"alias": "lapi administrator role", "config": {"condUserRole": "lapi-administrator", "negate": "false"}},
+    {"alias": "lapi amr pwd", "config": {"default.reference.value": "pwd"}},
+    {"alias": "lapi amr otp", "config": {"default.reference.value": "otp"}}
+  ]
+}

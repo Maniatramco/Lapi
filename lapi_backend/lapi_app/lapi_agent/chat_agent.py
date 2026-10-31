@@ -30,7 +30,7 @@ def routing_context(body,owner):
     if body.submitted_prompt_id:
         if body.submitted_prompt_id!=body.template_id:raise HTTPException(422,'The submitted prompt must match the selected saved template.')
         template=dataset_access.get_record(body.template_id,owner,'template')
-        if template.parent_id and template.parent_id!=body.dataset_id:raise HTTPException(422,'Choose a prompt from the selected dataset.')
+        if template.parent_id and template.parent_id!=body.dataset_id:raise HTTPException(422,'Choose a prompt from the selected collection.')
         receipt={'name':core.store.json(template.ref).get('source_filename') or template.name,'version':template.version}
     return {'available_result_fields':[],'latest_workflow':None,'recent_dataset_onboarding':[],
         'submitted_prompt':receipt,'selected_document_ids':body.document_ids,'selected_prompt_id':body.template_id}
@@ -101,9 +101,9 @@ class ChatAgent:
         for extra in f.get('supplementary_sources',[]):types.update(SOURCE_TYPES.get(extra,[]))
         global_scope=f.get('knowledge_scope')=='accessible_datasets' or reads==['list_datasets']
         if global_scope and types-{'dataset','model','application'}:
-            raise HTTPException(422,'Select a dataset before searching its document content or saved results.')
+            raise HTTPException(422,'Select a collection before searching its document content or saved results.')
         if types&{'document','document_chunk','extraction','prompt'} and not body.dataset_id:
-            raise HTTPException(422,'Choose a dataset to query its indexed documents, prompts and saved values.')
+            raise HTTPException(422,'Choose a collection to query its indexed documents, prompts and saved values.')
         with self.progress.step('Chat Agent · Querying vector knowledge'):
             view=PublishedKnowledge(self.tools.owner,'' if global_scope else body.dataset_id,[] if global_scope else body.document_ids)
             names=f.get('document_names') or [];resolved_names=False

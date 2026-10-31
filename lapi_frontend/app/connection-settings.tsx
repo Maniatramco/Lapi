@@ -235,7 +235,7 @@ export function ConnectionSettings({api,onChanged,onModels}:{api:Api;onChanged:(
                   <Field
                     label="OpenAI API key"
                     help={
-                      settings.local_only ? "Provider credentials are disabled in this local-only workspace." : settings.api_key_configured
+                      settings.local_only ? "Provider credentials are disabled in this local-only installation." : settings.api_key_configured
                         ? "A key is configured. Leave blank to keep it unchanged."
                         : "No key configured. Enter your own provider key; it is encrypted by the server."
                     }

@@ -68,8 +68,9 @@ resource "oci_vault_secret" "master_key" {
 
 # Keycloak client secret: Terraform only creates the secret; paste the real value
 # from Keycloak (Clients > lapi > Credentials) as a new version in the Console.
+# With keycloak_hosted the secret is generated instead (keycloak.tf).
 resource "oci_vault_secret" "keycloak_client" {
-  count          = local.keycloak_secret ? 1 : 0
+  count          = local.keycloak_secret && !var.keycloak_hosted ? 1 : 0
   compartment_id = var.compartment_ocid
   vault_id       = local.vault_id
   key_id         = local.key_id

@@ -117,7 +117,7 @@ def publish_knowledge(data,owner):
 
 def validate_setup(owner, data):
     if not data['name'].strip():
-        raise HTTPException(422, 'Enter a dataset name.')
+        raise HTTPException(422, 'Enter a collection name.')
     versions = {}
     for role, key in ROLES:
         model = routing.owned(data[key], owner, 'model')
@@ -135,7 +135,7 @@ def validate_setup(owner, data):
             from .. import workspace_defaults
             pinned = workspace_defaults.embedding()
             if pinned and pinned['model_id'] != model.id and not workspace_defaults.same_space(workspace_defaults.pin_embedding(model), pinned['snapshot']):
-                raise HTTPException(422, 'Datasets use the workspace Default embedding model. Choose it, or change the Default in Model Registration.')
+                raise HTTPException(422, 'Collections use the overall Default embedding model. Choose it, or change the Default in Model Registration.')
         try:
             core.enforce_local_only(cfg)
         except ValueError as exc:
@@ -158,7 +158,7 @@ def publish_receipt(record, data, owner, completed=False):
     with core.document_lock('agent-' + data['plan_id']):
         plan = routing.owned(data['plan_id'], owner, 'agent_plan'); value = core.store.json(plan.ref)
         if not value.get('onboarding'):
-            raise HTTPException(409, 'This chat does not contain a dataset onboarding proposal.')
+            raise HTTPException(409, 'This chat does not contain a collection onboarding proposal.')
         value['onboarding_workflow_id'] = record.id
         if completed:
             names = ', '.join(role.title() + ': ' + data['models'][key]['name'] for role, key in ROLES)
@@ -203,22 +203,22 @@ def install(app, auth):
     from .. import main
     @app.get('/api/agent-v2/onboarding')
     def history(owner=Depends(auth)):
-        access.require_admin(owner)
+        access.require_contributor(owner)
         return [public(r) for r in routing.rows(owner, 'agent_onboarding')][:20]
 
     @app.get('/api/agent-v2/onboarding/{id}')
     def read(id: str, owner=Depends(auth)):
-        access.require_admin(owner)
+        access.require_contributor(owner)
         return public(routing.owned(id, owner, 'agent_onboarding'))
 
     @app.post('/api/agent-v2/onboarding')
     def prepare(body: Setup, owner=Depends(auth)):
-        access.require_admin(owner)
+        access.require_contributor(owner)
         values = body.model_dump(mode='json', by_alias=True); values['name'] = values['name'].strip()
         if body.plan_id:
             plan = routing.owned(body.plan_id, owner, 'agent_plan')
             if not core.store.json(plan.ref).get('onboarding'):
-                raise HTTPException(409, 'Choose a chat with a dataset onboarding proposal.')
+                raise HTTPException(409, 'Choose a chat with a collection onboarding proposal.')
         id = str(uuid.uuid5(uuid.NAMESPACE_URL, 'lapi:onboarding:' + owner + ':' + str(body.request_id)))
         with core.document_lock('onboarding-' + id):
             with core.Session() as session:
@@ -254,7 +254,7 @@ def install(app, auth):
 
     @app.post('/api/agent-v2/onboarding/{id}/files')
     async def stage_files(id: str, files: list[UploadFile] = File(...), owner=Depends(auth)):
-        access.require_admin(owner)
+        access.require_contributor(owner)
         with core.document_lock('onboarding-' + id):
             record = routing.owned(id, owner, 'agent_onboarding'); data = core.store.json(record.ref)
             processing = data.get('processing')
@@ -287,7 +287,7 @@ def install(app, auth):
 
 async def advance_workflow(id: str, owner: str, retry=False):
     from .. import main
-    access.require_admin(owner)
+    access.require_contributor(owner)
     with core.document_lock('onboarding-' + id):
         record = routing.owned(id, owner, 'agent_onboarding'); data = core.store.json(record.ref)
         if data['status'] == 'completed':
@@ -324,7 +324,7 @@ async def advance_workflow(id: str, owner: str, retry=False):
             if not data.get('processing') and index==len(data['steps'])-1:
                 dataset = routing.dataset_public(routing.owned(data['dataset_id'], owner, 'knowledge_base'))
                 if not dataset['active'] or not dataset['models_complete'] or any(dataset[k] != data[k] for _, k in ROLES):
-                    raise HTTPException(409, 'Dataset configuration changed. Review its model mappings before continuing.')
+                    raise HTTPException(409, 'Collection configuration changed. Review its model mappings before continuing.')
                 data['dataset'] = dataset
             if data.get('processing') and index >= 3:
                 waiting = await process_stage(record, data, index, owner, main)
@@ -402,7 +402,7 @@ async def process_stage(record, data, index, owner, main):
     cfg = data['processing']; retry = data.get('retry_count', 0)
     dataset = routing.dataset_public(routing.owned(data['dataset_id'], owner, 'knowledge_base'))
     if not dataset['active'] or any(dataset[key] != data[key] for _, key in ROLES) or validate_setup(owner, data) != data['models']:
-        raise HTTPException(409, 'Dataset or model configuration changed after confirmation. Restore the confirmed configuration before resuming.')
+        raise HTTPException(409, 'Collection or model configuration changed after confirmation. Restore the confirmed configuration before resuming.')
     if index >= 4:
         prompt = core.store.json(routing.owned(data['template_id'], owner, 'template').ref)
         if prompt['schema'] != cfg['schema'] or prompt.get('instructions', '') != cfg['instructions']:

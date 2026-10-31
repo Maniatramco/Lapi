@@ -1,0 +1,58 @@
+# Local Keycloak + OpenFGA demo: sign in to Lapi with Keycloak on your own PC.
+# See README.md. Everything binds to 127.0.0.1; the accounts and secret are test values.
+name: lapi-keycloak-demo
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    command: start-dev --import-realm --http-port=8180
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # The browser and the api both reach Keycloak as localhost:8180, so the issuer matches.
+      KC_HOSTNAME: http://localhost:8180
+    volumes:
+      - ./realm-lapi.json:/opt/keycloak/data/import/realm-lapi.json:ro
+    ports:
+      - '127.0.0.1:8180:8180'
+      - '127.0.0.1:3100:3000'
+  # api and openfga share Keycloak's network namespace: localhost:8180 is Keycloak for them too.
+  openfga:
+    image: openfga/openfga:v1.22.0
+    command: run
+    network_mode: service:keycloak
+    environment:
+      OPENFGA_DATASTORE_ENGINE: memory
+      OPENFGA_HTTP_ADDR: 127.0.0.1:8080
+      OPENFGA_GRPC_ADDR: 127.0.0.1:8081
+      OPENFGA_PLAYGROUND_ENABLED: 'false'
+      OPENFGA_METRICS_ENABLED: 'false'
+  api:
+    image: ${LAPI_API_IMAGE:-ap-mumbai-1.ocir.io/bmyljaecivrj/lapi/api:26.1.16.13}
+    command: uvicorn lapi_app.main:app --host 127.0.0.1 --port 8000
+    network_mode: service:keycloak
+    depends_on: [keycloak, openfga]
+    environment:
+      DATABASE_URL: sqlite:////data/lapi.db
+      LAPI_STORAGE_ROOT: /data
+      LAPI_MASTER_KEY: ${LAPI_MASTER_KEY:?Run start.ps1, which creates .env}
+      LAPI_OPENFGA_URL: http://127.0.0.1:8080
+      LAPI_KEYCLOAK_URL: http://localhost:8180
+      LAPI_KEYCLOAK_REALM: lapi
+      LAPI_KEYCLOAK_CLIENT_ID: lapi
+      LAPI_KEYCLOAK_CLIENT_SECRET_FILE: /run/keycloak/client-secret
+      LAPI_KEYCLOAK_ADMIN_ROLE: lapi-administrator
+      LAPI_PUBLIC_URL: http://localhost:3100
+      # Company sign-in buttons, once the providers exist in Keycloak (README).
+      LAPI_KEYCLOAK_IDENTITY_PROVIDERS: ${LAPI_KEYCLOAK_IDENTITY_PROVIDERS:-}
+    volumes:
+      - data:/data
+      - ./client-secret.txt:/run/keycloak/client-secret:ro
+  web:
+    image: ${LAPI_WEB_IMAGE:-ap-mumbai-1.ocir.io/bmyljaecivrj/lapi/web:26.1.16.13}
+    network_mode: service:keycloak
+    depends_on: [api]
+    environment:
+      API_INTERNAL_URL: http://127.0.0.1:8000
+      LAPI_DEPLOYMENT_TARGET: local
+volumes:
+  data:

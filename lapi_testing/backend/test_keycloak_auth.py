@@ -128,6 +128,22 @@ def test_role_follows_keycloak_at_every_sign_in(accounts, keycloak):
     assert client.get('/api/auth/me').status_code == 401  # The role changed: older sessions end.
 
 
+def test_contributor_role_follows_keycloak(accounts, keycloak):
+    from lapi_app import relational
+    keycloak.roles = ['lapi-contributor']
+    sign_in(accounts, keycloak)
+    user = me(accounts)
+    assert user['is_contributor'] is True and user['is_admin'] is False
+    with core.Session() as session:
+        assert session.get(relational.WorkspaceContributor, user['id']) is not None
+    keycloak.roles = []
+    with TestClient(main.app) as second:
+        sign_in(second, keycloak)
+        assert me(second)['is_contributor'] is False
+    with core.Session() as session:
+        assert session.get(relational.WorkspaceContributor, user['id']) is None
+
+
 def test_only_local_administrators_keep_password_sign_in(accounts, keycloak):
     client = accounts
     refused = client.post('/api/auth/login', json={'username': 'Colleague', 'password': OLD})
@@ -145,7 +161,7 @@ def test_keycloak_accounts_manage_passwords_and_roles_in_keycloak(accounts, keyc
         assert person.post('/api/auth/password', json=body(current_password='x')).status_code == 409
     login(client)
     assert client.post('/api/users/' + kc_id + '/password', json=body(current_password=OLD)).status_code == 409
-    assert 'Keycloak role lapi-administrator' in client.patch('/api/users/' + kc_id + '/role', json={'role': 'administrator', 'current_password': OLD}).json()['detail']
+    assert 'Keycloak roles lapi-administrator' in client.patch('/api/users/' + kc_id + '/role', json={'role': 'administrator', 'current_password': OLD}).json()['detail']
     users = {row['id']: row for row in client.get('/api/users').json()}
     assert users[kc_id]['sign_in'] == 'keycloak' and users['colleague']['sign_in'] == 'password'
 
@@ -199,3 +215,16 @@ def test_sign_in_is_off_without_configuration(accounts, monkeypatch):
     assert accounts.get('/api/auth/status').json()['keycloak'] is False
     assert accounts.get('/api/auth/keycloak/start', follow_redirects=False).status_code == 404
     assert login(accounts, 'Colleague')['user']['is_admin'] is False
+
+
+def test_company_sign_in_buttons_go_straight_to_the_listed_provider(accounts, keycloak, monkeypatch):
+    client = accounts
+    assert client.get('/api/auth/status').json()['providers'] == []
+    monkeypatch.setenv('LAPI_KEYCLOAK_IDENTITY_PROVIDERS', 'microsoft=Microsoft, google=Google,Bad Alias=x,microsoft=Again')
+    assert client.get('/api/auth/status').json()['providers'] == [{'alias': 'microsoft', 'label': 'Microsoft'}, {'alias': 'google', 'label': 'Google'}]
+    start = client.get('/api/auth/keycloak/start', params={'provider': 'microsoft'}, follow_redirects=False)
+    assert start.status_code == 302 and 'kc_idp_hint=microsoft' in start.headers['location']
+    plain = client.get('/api/auth/keycloak/start', follow_redirects=False)
+    assert 'kc_idp_hint' not in plain.headers['location']
+    unknown = client.get('/api/auth/keycloak/start', params={'provider': 'github'}, follow_redirects=False)
+    assert unknown.status_code == 302 and unknown.headers['location'] == '/?sign_in_error=failed'

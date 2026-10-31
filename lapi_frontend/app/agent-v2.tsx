@@ -1,20 +1,24 @@
 "use client";
 import {ActionButton} from "./action-button";
 import {useCallback, useEffect, useLayoutEffect, useRef, useState,type DragEvent} from 'react';
-import {Database,History,Square, Plus, CheckCircle2, Loader2, Mic, ArrowUp, ArrowDown,X,FileText,UploadCloud,Eraser,RotateCcw} from 'lucide-react';
+import {Info,Database,History,Square, Plus, CheckCircle2, Loader2, Mic, ArrowUp, ArrowDown,X,FileText,UploadCloud,Eraser,RotateCcw,ChevronDown,MessageSquare,Table2} from 'lucide-react';
 import {isFileDrag,mergeAgentAttachments,attachmentSize,attachmentKey,isJsonAttachment} from './agent-attachments';
 import {readPromptUpload,type PromptUpload} from './prompt-upload';
 import {PromptUploadPreview} from './prompt-upload-preview';
 import {AgentPromptProgress,type PromptProgress} from './agent-prompt-progress';
 import {promptSelections,restoreSavedPrompt,rememberSavedPrompt,rememberAssistantDataset,assistantDatasetPreference} from './agent-prompt-selection';
 import {AgentDocumentFilter} from './agent-document-filter';
+import {useDevice} from './use-device';
+import {scopeCatalog} from './workspace-scope';
 import {documentMention,documentOptionLabel,matchingDocuments,readyDatasetDocuments,eligibleAgentModels} from './agent-document-selection';
-import {agentCommands,agentMention,agentOperation,agentInputIssue,insertAgentCommand,isManageCommand} from './agent-commands';
+import {agentCommands,agentMention,agentOperation,agentInputIssue,insertAgentCommand,isManageCommand,isStartCommand} from './agent-commands';
+import {guideIntent,guideFor,guidedOperation,type GuideStep,type GuideAction} from './agent-guide';
 import {readChatStream} from './chat-stream';
 import {AgentChatAnswer,AgentRequest,conversationExchanges} from './agent-v2-chat';
 import {BatchProgress} from './batch-progress';
 import {WorkflowStepper} from './workflow-stepper';
 import {AgentLogo} from './agent-logo';
+import {TemplateHelper} from './template-helper';
 import {AgentActivity,AgentPresence,planActivity} from './agent-activity';
 import {AgentOnboarding} from './agent-onboarding';
 import {onboardingDraft} from './onboarding-draft';
@@ -26,6 +30,8 @@ import {currentUploadStep, type UploadProgressItem} from './batch-workflow';
 import './agent-v2.css';
 import './agent-workspace.css';
 import {speechCapabilities,startSpeechInput,type SpeechEnvironment} from './agent-voice';
+import {AgentTraining,openAgentTraining} from './agent-training';
+import {openQuickStart} from './quick-start-flow';
 
 type Entity=Record<string,any>;
 const goalWorkflow=(plan:Entity)=>{
@@ -43,15 +49,18 @@ export const explainPlan=(plan:Entity)=>{
  return `Proposed workflow: ${plan.calls.map((call:Entity)=>labels[call.tool]).join(' → ')}. Review the details and confirm the workflow before it runs.${plan.calls.some((call:Entity)=>call.tool==='upload')&&plan.calls.some((call:Entity)=>call.tool==='extract'||call.tool==='reextract')?' Extraction will use the uploaded references after indexing finishes.':''}${plan.calls.some((call:Entity)=>call.tool==='reextract')?' Earlier extraction results will be retained.':''}`;
 };
 
-export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPromptSaved,onDatasetChange,onWorkspaceChanged,maxUploadMb=25,catalogRevision=0,renderManage}:{api:Api;stream:(path:string,body:unknown,signal:AbortSignal)=>Promise<Response>;username:string;onJobs:(jobs:Entity[])=>void;onVisibleJobs:(ids:string[])=>void;onReview:(id:string)=>void;onPromptSaved?:(template:Entity)=>void;onDatasetChange?:(id:string)=>void;onWorkspaceChanged?:()=>void;maxUploadMb?:number;catalogRevision?:number;renderManage?:(request:{datasetId:string;onClose:()=>void;onCommand:(label:string)=>void})=>React.ReactNode}) {
+export function AgentV2({displayName='',workspaceId,api,stream,username,onJobs,onVisibleJobs,onReview,onPromptSaved,onDatasetChange,onWorkspaceChanged,maxUploadMb=25,catalogRevision=0,renderManage}:{displayName?:string;workspaceId?:string;api:Api;stream:(path:string,body:unknown,signal:AbortSignal)=>Promise<Response>;username:string;onJobs:(jobs:Entity[])=>void;onVisibleJobs:(ids:string[])=>void;onReview:(id:string)=>void;onPromptSaved?:(template:Entity)=>void;onDatasetChange?:(id:string)=>void;onWorkspaceChanged?:()=>void;maxUploadMb?:number;catalogRevision?:number;renderManage?:(request:{datasetId:string;onClose:()=>void;onCommand:(label:string)=>void})=>React.ReactNode}) {
  const [managing,setManaging]=useState<string|null>(null);
- const [catalog,setCatalog]=useState<Entity>({datasets:[],documents:[],templates:[],models:[]});
+ const [allCatalog,setCatalog]=useState<Entity>({datasets:[],documents:[],templates:[],models:[]});
+ const catalog=scopeCatalog(allCatalog,workspaceId);
  const catalogRef=useRef(catalog);catalogRef.current=catalog;
  const [catalogLoading,setCatalogLoading]=useState(true);const [catalogError,setCatalogError]=useState('');const [catalogAttempt,setCatalogAttempt]=useState(0);
  const [plans,setPlans]=useState<Entity[]>([]);
  const [history,setHistory]=useState<Entity[]>([]); const [historyOpen,setHistoryOpen]=useState(false);
  const [documents,setDocuments]=useState<string[]>([]); const conversations=useRef<Record<string,string>>({}); const answerController=useRef<AbortController|null>(null);
  const [dataset,setDataset]=useState(''); const [planner,setPlanner]=useState('');
+ // A guided step shown when a plain request ("upload this one") cannot run yet; the text stays in the composer.
+ const [guide,setGuide]=useState<(GuideStep&{request:string})|null>(null);
  const [scopeReady,setScopeReady]=useState(false);const datasetChangeRef=useRef(onDatasetChange);datasetChangeRef.current=onDatasetChange;
  const [caret,setCaret]=useState(0);const [mentionClosed,setMentionClosed]=useState(false);const [mentionIndex,setMentionIndex]=useState(0);
  const [text,setText]=useState(''); const [files,setFiles]=useState<File[]>([]);
@@ -75,6 +84,9 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  const composerContainer=useRef<HTMLDivElement>(null);
  const composerHighlight=useRef<HTMLDivElement>(null);
  const thread=useRef<HTMLDivElement>(null);const followBottom=useRef(true);const [showLatest,setShowLatest]=useState(false);
+ // Phones and tablets: connections, version and privacy stay out of the chat until asked for.
+ const [infoOpen,setInfoOpen]=useState(false);
+ useEffect(()=>{if(typeof document==='undefined')return;if(infoOpen)document.body.dataset.chatInfo='on';else delete document.body.dataset.chatInfo;return()=>{delete document.body.dataset.chatInfo;};},[infoOpen]);
  const lock=useRef(false); const mounted=useRef(true); const recognition=useRef<any>(null);
  const onJobsRef=useRef(onJobs); onJobsRef.current=onJobs;
  const onVisibleJobsRef=useRef(onVisibleJobs); onVisibleJobsRef.current=onVisibleJobs;
@@ -89,7 +101,9 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
   setError('');followBottom.current=true;setShowLatest(false);composer.current?.focus();
  };
  const datasetConfig=catalog.datasets.find((d:Entity)=>d.id===dataset);
- const chatModels=eligibleAgentModels(catalog.models,datasetConfig);
+ const device=useDevice();
+ const [sheetOpen,setSheetOpen]=useState(false);  // Phones: collection, model, history and chat actions in one sheet.
+ const chatModels=eligibleAgentModels(catalog.models,datasetConfig,device);
  // Resolve the displayed model synchronously: history restoration and catalog effects
  // can settle in different orders after returning from Review. Send uses this same ID.
  const effectivePlanner=chatModels.find((m:Entity)=>m.id===planner)?.id||chatModels.find((m:Entity)=>m.id===datasetConfig?.default_chat_model_id)?.id||chatModels[0]?.id||planner||'';
@@ -114,7 +128,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  };
  const chooseJsonPrompt=async(file:File)=>{
   if(attachmentsBlocked)return;
-  if(!dataset){setError('Choose a dataset before attaching a prompt template.');return;}
+  if(!dataset){setError('Choose a collection before attaching a prompt template.');return;}
   if(promptAttachment&&promptAttachment.fileKey!==attachmentKey(file)){setError('Remove the current prompt template before choosing another. Use one prompt per message.');return;}
   const token=++promptReadToken.current;lock.current=true;setWorking('Validating prompt.');setError('');
   setPromptProgress({name:file.name,phase:'validating'});
@@ -129,7 +143,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  const confirmPrompt=()=>{
   if(!promptPreview||promptPreview.datasetId!==dataset)return;
   setPromptAttachment(promptPreview);setJsonDocuments(previous=>{const next={...previous};delete next[promptPreview.fileKey];return next;});setPromptPreview(null);
-  setPromptNotice('Prompt confirmed. Send to save it for this dataset; extraction still requires confirmation.');setError('');
+  setPromptNotice('Prompt confirmed. Send to save it for this collection; extraction still requires confirmation.');setError('');
   setPromptProgress({name:promptPreview.fileName,phase:'confirmed'});
  };
  const attachFiles=(incoming:File[])=>{
@@ -143,7 +157,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  const onFileDrop=(event:DragEvent<HTMLElement>)=>{
   if(!isFileDrag(Array.from(event.dataTransfer.types)))return;event.preventDefault();event.stopPropagation();dragDepth.current=0;setDragging(false);
   const folder=Array.from(event.dataTransfer.items||[]).some(item=>item.kind==='file'&&item.webkitGetAsEntry?.()?.isDirectory);
-  if(folder){setError('Folders are not supported. Drop PDF, DOCX, TXT, JSON or image files instead.');return;}
+  if(folder){setError('Folders are not supported. Drop PDF, DOCX, TXT, JSON, spreadsheet or image files instead.');return;}
   attachFiles(Array.from(event.dataTransfer.files));
  };
  useEffect(()=>{
@@ -171,7 +185,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  const loadCatalog=useCallback(async()=>{
   setCatalogLoading(true);setCatalogError('');
   try{const result=await api('/agent-v2/catalog?selectors_only=true','GET',undefined,undefined,true);if(mounted.current){catalogLoaded.current=true;setCatalog(result);}return result;}
-  catch(e){if(mounted.current)setCatalogError(e instanceof Error?e.message:'Could not load datasets and models.');throw e;}
+  catch(e){if(mounted.current)setCatalogError(e instanceof Error?e.message:'Could not load collections and models.');throw e;}
   finally{if(mounted.current)setCatalogLoading(false);}
  },[api]);
  useEffect(()=>{if(catalogLoaded.current)void loadCatalog().catch(()=>{});},[catalogRevision,loadCatalog]);
@@ -245,6 +259,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
     const bound=submittedFiles.current[plan.id];const uploadFiles=bound?.length?bound:documentFiles;
     if(!uploadFiles.length||(!bound?.length&&unresolvedJson.length))throw new Error('Attach documents and choose how to use each JSON attachment before uploading.');
     const data=new FormData();for(const file of uploadFiles)data.append('files',file);data.append('dataset_id',plan.dataset_id);data.append('allow_external',String(external));data.append('confirmed','true');
+    if(!plan.calls.some((c:Entity)=>c.tool==='extract'||c.tool==='reextract')&&plan.extraction_mode==='merge'&&uploadFiles.length>1)data.append('extraction_mode','merge');  // Stitch into one document.
     if(plan.calls.some((c:Entity)=>c.tool==='extract'||c.tool==='reextract')){data.append('continue_extraction','true');data.append('template_id',plan.template_id);if(plan.extraction_mode)data.append('extraction_mode',plan.extraction_mode);data.append('merge_strategy',plan.merge_strategy||'records');data.append('display_name',plan.display_name||'');}
     result=await api(`/agent-v2/plans/${plan.id}/calls/${index}/upload`,'POST',data,undefined,true);if(!bound?.length){result.messageAttachments=uploadFiles.map(file=>({name:file.name,size:file.size}));setFiles(previous=>previous.filter(file=>!uploadFiles.includes(file)));}
     delete submittedFiles.current[plan.id];
@@ -278,12 +293,20 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  },[activeIds,replacePlan]);
  const send=async()=>{
   if(lock.current||onboardingBusy||promptPreview||(!text.trim()&&!files.length)||plans.some(active))return;
-  if(isManageCommand(text)){if(!dataset){setError('Choose a dataset above, then use /Manage to edit it here.');return;}setError('');setManaging(dataset);setText('');followLatest();return;}
+  if(isManageCommand(text)){if(!dataset){setError('Choose a collection above, then use /Manage to edit it here.');return;}setError('');setManaging(dataset);setText('');followLatest();return;}
+  if(isStartCommand(text)){setText('');openQuickStart();return;}  // Guided first workflow, from the agent.
   const issue=agentInputIssue(text);if(issue){setError('');setMentionClosed(false);composer.current?.focus();return;}
-  const requestedOperation=agentOperation(text);const onboardingRequest=requestedOperation==='onboard';
-  if(onboardingRequest&&!catalog.can_onboard_datasets){setError('Only the administrator can onboard datasets.');return;}
+  // Plain words first: lead the person through what is missing instead of letting the model guess.
+  // Retries re-send an accepted request; they are never guided again.
+  const intent=agentOperation(text)||retryPlanId.current||retrySubmittedPrompt.current?null:guideIntent(text);
+  if(intent==='start'){setText('');openQuickStart(documentFiles);return;}
+  const step=guideFor(intent,{dataset:Boolean(dataset),files:files.length+(promptAttachment||savedPrompt?1:0),templates:catalog.templates.filter((t:Entity)=>!t.parent_id||t.parent_id===dataset).length,canOnboard:Boolean(catalog.can_onboard_datasets),datasets:catalog.datasets.length,promptAttached:Boolean(promptAttachment||savedPrompt)});
+  if(step){setGuide({...step,request:text});setError('');followLatest();return;}
+  setGuide(null);
+  const requestedOperation=agentOperation(text)||guidedOperation(intent);const onboardingRequest=requestedOperation==='onboard';
+  if(onboardingRequest&&!catalog.can_onboard_datasets){setError('Only the administrator can onboard collections.');return;}
   if(unresolvedJson.length){setError('Is each JSON attachment a prompt template or a document? Choose below its filename.');return;}
-  if(promptAttachment&&promptAttachment.datasetId!==dataset){setError('Attach the prompt again for the selected dataset.');return;}
+  if(promptAttachment&&promptAttachment.datasetId!==dataset){setError('Attach the prompt again for the selected collection.');return;}
   followLatest();
   const savePromptOnly=Boolean(promptAttachment)&&!text.trim()&&!documentFiles.length;
   if(!savePromptOnly&&!effectivePlanner){setError('Choose an Agent Model to continue.');return;}
@@ -291,7 +314,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
   // Chat/proposals use configured providers directly. File processing approval
   // is requested only by the confirmed workflow submission/onboarding paths.
   const external=true;
-  const outgoing=files;let answering=false,accepted=false;let receipt:PromptProgress['receipt'];lock.current=true;setRequestStartedAt(Date.now());setPendingRequest(request);setPendingFiles(outgoing);setFiles([]);setText('');setWorking(promptAttachment&&!promptAttachment.savedId&&!onboardingRequest?'Saving prompt.':'Checking workspace and request.');setError('');
+  const outgoing=files;let answering=false,accepted=false;let receipt:PromptProgress['receipt'];lock.current=true;setRequestStartedAt(Date.now());setPendingRequest(request);setPendingFiles(outgoing);setFiles([]);setText('');setWorking(promptAttachment&&!promptAttachment.savedId&&!onboardingRequest?'Saving prompt.':'Checking collection and request.');setError('');
   if(promptAttachment&&!onboardingRequest)setPromptProgress({name:promptAttachment.fileName,phase:promptAttachment.savedId?'preparing':'saving'});else setPromptProgress(null);
   try{
    let attachedTemplateId=promptAttachment?.savedId||savedPrompt?.id||retrySubmittedPrompt.current||'';
@@ -400,9 +423,23 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
  useEffect(()=>{let live=true;void api('/conversations','GET',undefined,undefined,true).then(result=>{if(live&&Array.isArray(result))setHistory(result);}).catch(()=>{});return()=>{live=false;};},[api,plans.length,catalogRevision]);
  const openSaved=(conversation:Entity)=>void api(`/conversations/${conversation.id}`,'GET',undefined,undefined,true).then(saved=>{restoreConversation(saved);sessionStorage.setItem(key+'-conversation',conversation.id);sessionStorage.removeItem(key);sessionStorage.removeItem(key+'-history');setHistoryOpen(false);setError('');}).catch(e=>setError(e.message));
  const latestWorkflow=[...plans].reverse().find(plan=>plan.calls?.length);
+ const runGuide=(action:GuideAction)=>{
+  if(action==='attach'){fileInput.current?.click();return;}
+  if(action==='quick-start'){setGuide(null);openQuickStart(files.filter(file=>!isJsonAttachment(file)||jsonDocuments[attachmentKey(file)]));return;}
+  if(action==='choose-dataset'){document.querySelector<HTMLSelectElement>('select[aria-label="Agent collection"]')?.focus();return;}
+  if(action==='prompt'){setGuide(null);onReview?.('Prompt templates');return;}
+  if(action==='onboard'){setGuide(null);startWorkflow('/Onboard');return;}
+  setGuide(null);void send();
+ };
  const startWorkflow=(label:string)=>{const next=`${label} `;setText(next);setCaret(next.length);setMentionClosed(true);requestAnimationFrame(()=>{composer.current?.focus();composer.current?.setSelectionRange(next.length,next.length);});};
  const commandToken=/^(\s*)([/@]\S+)(?=\s|$)/.exec(text);
  const highlightedCommand=commandToken&&agentCommands.some(command=>command.label.slice(1).toLowerCase()===commandToken[2].slice(1).toLowerCase())?commandToken:null;
+ const chooseDataset=(value:string)=>{if(value===dataset)return;retrySubmittedPrompt.current='';retryPlanId.current='';setPromptProgress(null);setDataset(value);sessionStorage.setItem(key+'-dataset',value);setSavedPromptId('');setDocuments([]);setMentionClosed(true);cancelPrompt();setPromptAttachment(null);setPromptNotice('');};
+ // A first name from the sign-in name, when it looks like one.
+ const firstName=(()=>{const given=displayName.trim().split(/\s+/)[0];if(given)return given;const raw=(username||'').split('@')[0].split(/[._\-\s]+/)[0]||'';if(raw.length<2||/\d/.test(raw)||/^(admin|administrator|user|test)$/i.test(raw))return '';return raw[0].toUpperCase()+raw.slice(1).toLowerCase();})();
+ const greeting=firstName?`Hi ${firstName}, how can I help?`:'How can I help?';
+ const scopeLabel=dataset?(catalog.datasets.find((d:Entity)=>d.id===dataset)?.name||'Collection'):'General chat';
+ const scopeChip=(extra:string)=><button type="button" className={`agent-v2-scope-chip${extra}`} aria-haspopup="dialog" aria-label={`Chat options · ${scopeLabel}`} onClick={()=>setSheetOpen(true)}><span>{scopeLabel}</span><ChevronDown size={14} aria-hidden="true"/></button>;
  return <section className={`agent-v2 agent-workspace${dragging?' agent-v2-dragging':''}`} aria-label="Lapi Agent conversation" onDragEnter={onFileDragEnter} onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onFileDrop}>
   {dragging&&<div className="agent-v2-drop-overlay" role="status"><UploadCloud size={36}/><strong>{attachmentsBlocked?'Finish the current workflow first':'Drop documents here'}</strong><span>{attachmentsBlocked?'You can attach files when it finishes.':`PDF, DOCX, TXT, JSON · up to 20 files · ${maxUploadMb} MB each`}</span></div>}
   <aside className="agent-rail" aria-label="Agent conversations">
@@ -410,25 +447,35 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
    <h2>Recent</h2>
    <ul className="agent-rail-list">{history.slice(0,30).map(conversation=><li key={conversation.id}><button type="button" aria-current={conversation.id===savedConversation?'true':undefined} disabled={busyNow} onClick={()=>openSaved(conversation)} title={conversation.title||conversation.name}>{conversation.title||conversation.name||'Untitled chat'}</button></li>)}</ul>
    {!history.length&&<p className="agent-rail-empty">Your saved chats appear here.</p>}
-   <p className="agent-rail-note">Chats are private to you. Answers stay within your dataset access.</p>
+   <p className="agent-rail-note">Chats are private to you. Answers stay within your collection access.</p>
   </aside>
   <div className="agent-main">
   <header className="agent-v2-context">
-   <label>Dataset<select aria-label="Agent dataset" value={dataset} disabled={attachmentsBlocked||(!catalogLoaded.current&&catalogLoading)} onChange={e=>{if(e.target.value===dataset)return;retrySubmittedPrompt.current='';retryPlanId.current='';setPromptProgress(null);setDataset(e.target.value);sessionStorage.setItem(key+'-dataset',e.target.value);setSavedPromptId('');setDocuments([]);setMentionClosed(true);cancelPrompt();setPromptAttachment(null);setPromptNotice('');}}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading datasets…':catalogError?'Datasets unavailable':'General chat'):'General chat'}</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+   <label>Collection<select aria-label="Agent collection" value={dataset} disabled={attachmentsBlocked||(!catalogLoaded.current&&catalogLoading)} onChange={e=>chooseDataset(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading collections…':catalogError?'Collections unavailable':'General chat'):'General chat'}</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
    {dataset&&<AgentDocumentFilter key={dataset} documents={readyDocuments} selected={documents} onChange={setDocuments} disabled={Boolean(working)||onboardingBusy||plans.some(active)}/>}
+   <button type="button" className="btn icon agent-v2-info" aria-label="About this chat" aria-expanded={infoOpen} title="Privacy, connections and version" onClick={()=>setInfoOpen(open=>!open)}><Info size={18}/></button>
    <button className="btn icon" aria-label="Agent chat history" title="Chat history" disabled={Boolean(working)||onboardingBusy||plans.some(active)} onClick={()=>void api('/conversations','GET',undefined,undefined,true).then(result=>{setHistory(result);setHistoryOpen(!historyOpen);}).catch(e=>setError(e.message))}><History size={18}/></button>
    <button className="btn icon" aria-label="New agent conversation" title="New conversation" disabled={Boolean(working)||onboardingBusy||plans.some(active)||!scopeReady} onClick={clearConversation}><Plus size={18}/></button>
    <button className="btn agent-v2-clear-chat" aria-label="Clear agent chat" title="Clear the current chat. Saved chats remain in history." disabled={Boolean(working)||onboardingBusy||plans.some(active)||!scopeReady||(!plans.length&&!pendingRequest)} onClick={clearConversation}><Eraser size={16}/><span>Clear chat</span></button>
   </header>
+  {infoOpen&&<div className="agent-v2-info-panel"><p>Chat uses your configured model and indexed knowledge directly. Onboarding, upload, extraction and re-extraction ask for external processing approval before sending files. Workflow requests and results are saved in Lapi.</p><p>Browser speech recognition may send audio to its speech service; voice is optional and text remains available.</p></div>}
   {historyOpen&&<div className="agent-v2-history"><strong>Saved chats · shared with Lapi Agent</strong><ActionButton className="text-button" onClick={()=>setHistoryOpen(false)} label="Close" action="close"/>{history.length?history.map(c=><button className="text-button" key={c.id} onClick={()=>void api(`/conversations/${c.id}`,'GET',undefined,undefined,true).then(conversation=>{restoreConversation(conversation);sessionStorage.setItem(key+'-conversation',c.id);sessionStorage.removeItem(key);sessionStorage.removeItem(key+'-history');setHistoryOpen(false);setError('');}).catch(e=>setError(e.message))}>{c.title||c.name}</button>):<p>No saved chats yet.</p>}</div>}
   <div ref={thread} className="agent-v2-thread" aria-label="Agent conversation" tabIndex={0} onScroll={event=>{const area=event.currentTarget;const bottom=area.scrollHeight-area.scrollTop-area.clientHeight<64;followBottom.current=bottom;setShowLatest(!bottom);}}>
    {onboardingOpen&&catalog.can_onboard_datasets&&<AgentOnboarding initialDocuments={documentFiles} initialPrompt={promptAttachment||undefined} onReview={onReview} api={api} models={catalog.models} defaults={datasetConfig} storageKey={key+'-onboarding'} onBusy={setOnboardingBusy} onReady={()=>{onWorkspaceChanged?.();void loadCatalog().catch(e=>setError(e.message));}} onEdit={id=>setManaging(id)} onUse={id=>{setDataset(id);setDocuments([]);setSavedPromptId('');rememberAssistantDataset(sessionStorage,username,id);setOnboardingOpen(false);sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}} onClose={completed=>{setOnboardingOpen(false);if(completed){sessionStorage.removeItem(key+'-onboarding');sessionStorage.removeItem(key+'-onboarding-request');}}}/>}
-   {catalogError&&<div className="agent-v2-catalog-error" role="alert"><span>Could not load datasets and models. {catalogError}</span><ActionButton className="btn" disabled={catalogLoading} onClick={()=>{setError('');setCatalogAttempt(value=>value+1);}} label="Retry datasets and models" action="retry"/></div>}
-   {!plans.length&&!onboardingOpen&&<div className="agent-v2-welcome"><AgentLogo size={64} label="Lapi Agent"/>{!scopeReady?<p role="status">{catalogError?'Workspace choices are unavailable. Retry loading above.':'Preparing your workspace…'}</p>:<><div className="agent-welcome-hero"><div><h2>How can I help?</h2><p>Ask about Lapi, search indexed documents and saved results, or onboard and extract in one conversation. Answers are retrieved, reranked and checked against cited evidence.</p></div></div>
-    <h3 className="agent-welcome-label">Start a workflow</h3>
-    <div className="agent-workflow-cards">{agentCommands.filter(command=>!['skill','instructions','optimize'].includes(command.operation)).map(command=><button key={command.operation} type="button" className="agent-workflow-card" data-operation={command.operation} disabled={attachmentsBlocked} onClick={()=>startWorkflow(command.label)}><span className="agent-workflow-tag">{command.label}</span><strong>{({onboard:'Set up a dataset',upload:'Upload and index',extract:'Extract fields',reextract:'Re-extract',manage:'Manage a dataset'} as Record<string,string>)[command.operation]}</strong><span>{command.description}</span></button>)}</div>
-    <h3 className="agent-welcome-label">Or ask about your knowledge</h3>
-    <div className="agent-v2-suggestions">{['What can you do?','Summarize the key points','Upload and extract documents'].map(s=><button key={s} className="btn" onClick={()=>setText(s)}>{s}</button>)}</div></>}</div>}
+   {catalogError&&<div className="agent-v2-catalog-error" role="alert"><span>Could not load collections and models. {catalogError}</span><ActionButton className="btn" disabled={catalogLoading} onClick={()=>{setError('');setCatalogAttempt(value=>value+1);}} label="Retry collections and models" action="retry"/></div>}
+   <AgentTraining api={api} userId={username} onTry={(action,example)=>{if(action==='ask'&&example){setText(example);composer.current?.focus();}else if(action==='attach')fileInput.current?.click();else if(action==='quick-start')openQuickStart();}}/>
+   {!plans.length&&!onboardingOpen&&<div className="agent-v2-welcome"><AgentLogo size={64} label="Lapi Agent"/>{!scopeReady?<p role="status">{catalogError?'Choices are unavailable. Retry loading above.':'Preparing your collection…'}</p>:<><div className="agent-welcome-hero"><div><h2>{greeting}</h2>{device==='phone'&&scopeChip(' agent-v2-scope-chip-hero')}</div></div>
+    {device==='phone'?<><div className="agent-v2-starters" aria-label="Start with">
+     {!attachmentsBlocked&&<button type="button" onClick={()=>fileInput.current?.click()}><UploadCloud size={24} aria-hidden="true"/><span>Add documents</span></button>}
+     <button type="button" onClick={()=>startWorkflow('/Extract')}><Table2 size={24} aria-hidden="true"/><span>Pull out data</span></button>
+     <button type="button" onClick={()=>{setText('Summarize the key points');composer.current?.focus();}}><MessageSquare size={24} aria-hidden="true"/><span>Summarize my files</span></button>
+    </div><button type="button" className="text-button agent-v2-what" onClick={openAgentTraining}>What can you do?</button></>:
+    <div className="agent-v2-suggestions" aria-label="Suggestions">
+     <button className="btn" onClick={()=>{setText('Summarize the key points');composer.current?.focus();}}>Summarize the key points</button>
+     {!attachmentsBlocked&&<button className="btn" onClick={()=>fileInput.current?.click()}>Add documents</button>}
+     <button className="btn" onClick={()=>startWorkflow('/Extract')}>Pull out data</button>
+     <button className="btn" onClick={openAgentTraining}>What can you do?</button>
+    </div>}</>}</div>}
    {plans.map(plan=>{
     const index=nextCall(plan);const call=index>=0?plan.calls[index]:null;
     const needInputs=call?.status==='pending'&&!plan.superseded;const uploaded=plan.calls.some((c:Entity)=>c.uploaded_document_ids?.length);
@@ -466,14 +513,16 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
        <button className="text-button" disabled={attachmentsBlocked} onClick={()=>void recover(plan,i,'cancel')}>End this request</button>
       </div>}
      </li>)}</ol>}
-     {needInputs&&<div className="agent-v2-details"><strong>A few details to continue</strong><label>Dataset<select aria-label="Workflow dataset" value={plan.dataset_id} disabled={uploaded} onChange={e=>update(plan.id,{dataset_id:e.target.value,document_ids:[],template_id:''})}><option value="">Choose a dataset</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+     {needInputs&&<div className="agent-v2-details"><strong>A few details to continue</strong><label>Collection<select aria-label="Workflow collection" value={plan.dataset_id} disabled={uploaded} onChange={e=>update(plan.id,{dataset_id:e.target.value,document_ids:[],template_id:''})}><option value="">Choose a collection</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
       {call.tool!=='upload'&&(!uploaded||plan.recovery_document_ids)&&<label>Documents · choose up to 20<select aria-label="Workflow documents" multiple size={Math.min(4,Math.max(2,docs.length))} value={plan.document_ids} onChange={e=>update(plan.id,{document_ids:Array.from(e.target.selectedOptions).map(o=>o.value).slice(0,20)})}>{docs.filter((d:Entity)=>!plan.recovery_document_ids||plan.recovery_document_ids.includes(d.id)).map((d:Entity)=><option key={d.id} value={d.id}>{d.name}{docs.filter((other:Entity)=>other.name===d.name).length>1?` · ${new Date(d.created_at*1000).toLocaleString()}`:''}{d.status!=='ready'?` · ${d.status}`:''}</option>)}</select></label>}
-      {plan.calls.some((c:Entity)=>c.tool!=='upload')&&<label>Prompt template<select aria-label="Workflow prompt template" value={plan.template_id} onChange={e=>update(plan.id,{template_id:e.target.value})}><option value="">Choose a template</option>{templates.map((t:Entity)=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
+      {plan.calls.some((c:Entity)=>c.tool!=='upload')&&<label>Prompt template<select aria-label="Workflow prompt template" value={plan.template_id} onChange={e=>update(plan.id,{template_id:e.target.value})}><option value="">{templates.length?'Choose a template':'No template yet'}</option>{templates.map((t:Entity)=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
+      {plan.calls.some((c:Entity)=>c.tool!=='upload')&&!plan.template_id&&plan.dataset_id&&<TemplateHelper api={api} datasetId={plan.dataset_id} documentIds={docs.filter((d:Entity)=>plan.document_ids.includes(d.id)&&d.status==='ready').map((d:Entity)=>d.id)} collectionType={catalog.datasets.find((d:Entity)=>d.id===plan.dataset_id)?.collection_type||''} onCreated={template=>{update(plan.id,{template_id:template.id});void loadCatalog().catch(()=>undefined);}}/>}
       {call.tool==='upload'&&<p className="small">{uploadFiles.length?`${uploadFiles.length} files attached to this request.`:'Attach the original files again to confirm upload.'}</p>}
+      {!hasExtraction&&call?.tool==='upload'&&count>1&&<label>How should these {count} files be added?<select aria-label="Merge files" value={plan.extraction_mode==='merge'?'merge':'independent'} onChange={e=>update(plan.id,{extraction_mode:e.target.value==='merge'?'merge':null})}><option value="independent">Keep as separate documents</option><option value="merge">Merge into one document — pages of one paper document</option></select><span className="small muted">Merging stitches the files in this order into one document before it is read, and keeps every original file and page.</span></label>}
       {hasExtraction&&count>1&&<label>How should these {count} documents be extracted?<select aria-label="Extraction mode" value={plan.extraction_mode||''} onChange={e=>update(plan.id,{extraction_mode:e.target.value})}><option value="">Choose single or independent extraction</option><option value="merge">Single extraction — merge files into one result</option><option value="independent">Extract independently - one result per document</option></select><span className="small muted">Merge creates one extraction ID and retains every original file. Independent creates a separate extraction ID per document.</span></label>}
       {hasExtraction&&plan.extraction_mode==='merge'&&<label>What do the merged files contain?<select aria-label="Merged content" value={plan.merge_strategy||'records'} onChange={e=>update(plan.id,{merge_strategy:e.target.value})}><option value="records">Different profiles or items — keep every file's fields</option><option value="single">Parts of the same profile or item — combine fields</option></select><span className="small muted">Separate profiles are extracted one source at a time and collected into one result, so one person's name cannot replace the others. Each source still follows your template.</span></label>}
       {hasExtraction&&<label>Extraction name<input aria-label="Extraction name" maxLength={200} placeholder={count>1?`Merged extraction - ${count} documents`:(uploadFiles[0]?.name?.replace(/\.[^.]+$/, '')||'Document extraction')} value={plan.display_name||''} onChange={e=>update(plan.id,{display_name:e.target.value})}/><span className="small muted">Edit this name if needed. The suffix uses your local date and time.</span></label>}
-      <p className="small muted">{call.tool==='upload'&&hasExtraction?'Confirm once to upload, index and extract with the selected template and mode. Any failure pauses the workflow.':call.tool!=='upload'&&docs.some((doc:Entity)=>plan.document_ids.includes(doc.id)&&doc.requires_reindex)?'Selected documents need their indexes rebuilt. Confirm once to reindex them, then extract with the selected template. Originals and earlier results are retained.':'Review the selected dataset, files and template, then confirm. Outdated document indexes will be rebuilt automatically before extraction.'} {plan.goal&&'After processing, Lapi will inspect the saved results and finish your original request, even if you close this page.'}</p>
+      <p className="small muted">{call.tool==='upload'&&hasExtraction?'Confirm once to upload, index and extract with the selected template and mode. Any failure pauses the workflow.':call.tool!=='upload'&&docs.some((doc:Entity)=>plan.document_ids.includes(doc.id)&&doc.requires_reindex)?'Selected documents need their indexes rebuilt. Confirm once to reindex them, then extract with the selected template. Originals and earlier results are retained.':'Review the selected collection, files and template, then confirm. Outdated document indexes will be rebuilt automatically before extraction.'} {plan.goal&&'After processing, Lapi will inspect the saved results and finish your original request, even if you close this page.'}</p>
       <button className="btn primary" disabled={attachmentsBlocked||!plan.dataset_id||(hasExtraction&&count>1&&!plan.extraction_mode)||(call.tool==='upload'?(!uploadFiles.length||(!boundFiles?.length&&Boolean(unresolvedJson.length))||(hasExtraction&&!plan.template_id)):(!count||!plan.template_id))} onClick={()=>void perform(plan,index)}>{call.tool==='upload'?(hasExtraction?(plan.calls.some((c:Entity)=>c.tool==='reextract')?'Confirm upload and re-extraction':'Confirm upload and extraction'):'Confirm upload'):call.tool==='reextract'?'Confirm re-extraction':'Confirm extraction'}</button>
      </div>}
      {plan.calls.some((call:Entity)=>['running','waiting'].includes(call.status))&&<ActionButton className="text-button" onClick={()=>void api(`/agent-v2/plans/${plan.id}`,'GET',undefined,undefined,true).then(replacePlan).catch(e=>setError(e.message))} label="Check status" action="status"/>}
@@ -485,14 +534,25 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
    {promptProgress&&<AgentPromptProgress progress={promptProgress}/>}
    {working&&pendingRequest&&!promptProgress&&<div className="agent-v2-speaker"><AgentActivity task={/sav/i.test(working)?'save':'think'} size={24}/><strong>Lapi Agent</strong><AgentAnswerWorkflow workflow={{status:'running',started_at:requestStartedAt,steps:[{id:'submitting',label:'Submitting request',status:'running',started_at:requestStartedAt}]}}/></div>}
    {working&&!pendingRequest&&!plans.some(p=>p.chat?.status==='streaming')&&<p className="agent-v2-working" role="status"><AgentActivity task={/sav/i.test(working)?'save':'think'} size={18} compact/>{working}</p>}
-   {managing&&renderManage&&<article className="agent-v2-exchange agent-manage-exchange" aria-label="Manage dataset"><div className="agent-v2-speaker"><AgentLogo size={24}/><strong>Lapi Agent</strong></div>{renderManage({datasetId:managing,onClose:()=>setManaging(null),onCommand:label=>{setDataset(managing);setManaging(null);startWorkflow(label);}})}</article>}
+   {guide&&<article className="agent-v2-exchange agent-guide-exchange" aria-label="Guided step"><AgentRequest text={guide.request} attachments={files.map(file=>({name:file.name,size:file.size}))}/><div className="agent-v2-speaker"><AgentLogo size={24}/><strong>Lapi Agent</strong></div><div className="agent-guide"><p>{guide.text}</p><div className="agent-v2-chips" aria-label="Next steps">{guide.actions.map(item=><button key={item.action} type="button" className="agent-chip" onClick={()=>runGuide(item.action)}>{item.label}</button>)}<button type="button" className="text-button" onClick={()=>setGuide(null)}>Dismiss</button></div></div></article>}
+   {managing&&renderManage&&<article className="agent-v2-exchange agent-manage-exchange" aria-label="Manage collection"><div className="agent-v2-speaker"><AgentLogo size={24}/><strong>Lapi Agent</strong></div>{renderManage({datasetId:managing,onClose:()=>setManaging(null),onCommand:label=>{setDataset(managing);setManaging(null);startWorkflow(label);}})}</article>}
    {error&&!displayedChatError&&<p className="agent-v2-error" role="alert">{error}</p>}<div ref={end}/>
   </div>
+  {sheetOpen&&device==='phone'&&<div className="agent-v2-sheet-backdrop" onClick={()=>setSheetOpen(false)}><div className="agent-v2-sheet" role="dialog" aria-modal="true" aria-label="Chat options" onClick={event=>event.stopPropagation()}>
+   <label className="agent-v2-sheet-field">Collection<select aria-label="Agent collection" value={dataset} disabled={attachmentsBlocked||(!catalogLoaded.current&&catalogLoading)} onChange={e=>chooseDataset(e.target.value)}><option value="">General chat</option>{catalog.datasets.map((d:Entity)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+   <label className="agent-v2-sheet-field">Agent Model<select aria-label="Agent Model" value={effectivePlanner} disabled={busyNow||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">Choose an Agent Model</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select>{catalogLoaded.current&&!catalogLoading&&!chatModels.length&&<small>No chat model is on for phones. An administrator can turn one on in Settings › Enabled models.</small>}</label>
+   <button type="button" className="agent-v2-sheet-row" disabled={attachmentsBlocked} onClick={()=>{setSheetOpen(false);fileInput.current?.click();}}><UploadCloud size={20} aria-hidden="true"/>Add documents</button>
+   <button type="button" className="agent-v2-sheet-row" disabled={busyNow} onClick={()=>{setSheetOpen(false);void api('/conversations','GET',undefined,undefined,true).then(result=>{setHistory(result);setHistoryOpen(true);}).catch(e=>setError(e.message));}}><History size={20} aria-hidden="true"/>Chat history</button>
+   <button type="button" className="agent-v2-sheet-row" disabled={busyNow||!scopeReady} onClick={()=>{setSheetOpen(false);clearConversation();}}><Plus size={20} aria-hidden="true"/>New chat</button>
+   <button type="button" className="agent-v2-sheet-row" disabled={busyNow||!scopeReady||(!plans.length&&!pendingRequest)} onClick={()=>{setSheetOpen(false);clearConversation();}}><Eraser size={20} aria-hidden="true"/>Clear this chat</button>
+   <button type="button" className="agent-v2-sheet-row" aria-expanded={infoOpen} onClick={()=>{setSheetOpen(false);setInfoOpen(open=>!open);}}><Info size={20} aria-hidden="true"/>About this chat</button>
+   <button type="button" className="agent-v2-sheet-done" onClick={()=>setSheetOpen(false)}>Done</button>
+  </div></div>}
   <div className="agent-v2-composer" ref={composerContainer}>
    {showLatest&&<button className="agent-v2-latest btn" aria-label="Scroll to latest message" onClick={followLatest}><ArrowDown size={16}/>Latest message</button>}
    {savedPrompt&&!promptAttachment&&<div className="agent-v2-selected-documents" aria-label="Selected saved prompt"><span>Prompt: {savedPrompt.name}<button title="Clear selected prompt" aria-label="Clear selected prompt" disabled={attachmentsBlocked} onClick={clearSavedPrompt}><X size={12}/></button></span></div>}
    {documents.length>0&&<div className="agent-v2-selected-documents" aria-label="Selected document filters">{documents.map(id=>{const doc=readyDocuments.find((d:Entity)=>d.id===id);return doc?<span key={id} title={documentOptionLabel(doc,readyDocuments)}>{documentOptionLabel(doc,readyDocuments)}<button title={`Remove document ${documentOptionLabel(doc,readyDocuments)}`} aria-label={`Remove document ${documentOptionLabel(doc,readyDocuments)}`} disabled={Boolean(working)||onboardingBusy||plans.some(active)} onClick={()=>setDocuments(previous=>previous.filter(value=>value!==id))}><X size={12}/></button></span>:null;})}<ActionButton className="text-button" disabled={Boolean(working)||onboardingBusy||plans.some(active)} onClick={()=>setDocuments([])} label="Clear filter" action="close"/></div>}
-   {mention&&<div className="agent-v2-mention-popover agent-v2-document-popover"><div className="agent-v2-picker-heading"><strong>Documents in this dataset</strong><button title="Close document suggestions" className="btn icon" aria-label="Close document suggestions" onClick={()=>{setMentionClosed(true);composer.current?.focus();}}><X size={15}/></button></div><div id="agent-document-mentions" role="listbox" aria-label="Dataset document suggestions" className="agent-v2-document-options">{mentionDocuments.map((doc:Entity,index:number)=><button type="button" role="option" id={`agent-document-option-${doc.id}`} key={doc.id} aria-selected={index===mentionIndex} onMouseDown={e=>e.preventDefault()} onClick={()=>chooseMention(doc)}><span>{documentOptionLabel(doc,readyDocuments)}</span>{documents.includes(doc.id)&&<CheckCircle2 size={14}/>}</button>)}{!mentionDocuments.length&&<p>{dataset?'No matching ready documents.':'Choose a dataset to see its documents.'}</p>}</div><p className="muted small">↑ ↓ to browse · Enter to select · Esc to close</p></div>}
+   {mention&&<div className="agent-v2-mention-popover agent-v2-document-popover"><div className="agent-v2-picker-heading"><strong>Documents in this collection</strong><button title="Close document suggestions" className="btn icon" aria-label="Close document suggestions" onClick={()=>{setMentionClosed(true);composer.current?.focus();}}><X size={15}/></button></div><div id="agent-document-mentions" role="listbox" aria-label="Collection document suggestions" className="agent-v2-document-options">{mentionDocuments.map((doc:Entity,index:number)=><button type="button" role="option" id={`agent-document-option-${doc.id}`} key={doc.id} aria-selected={index===mentionIndex} onMouseDown={e=>e.preventDefault()} onClick={()=>chooseMention(doc)}><span>{documentOptionLabel(doc,readyDocuments)}</span>{documents.includes(doc.id)&&<CheckCircle2 size={14}/>}</button>)}{!mentionDocuments.length&&<p>{dataset?'No matching ready documents.':'Choose a collection to see its documents.'}</p>}</div><p className="muted small">↑ ↓ to browse · Enter to select · Esc to close</p></div>}
    {commandMention&&<div className="agent-v2-mention-popover agent-v2-document-popover agent-v2-command-popover"><div className="agent-v2-picker-heading"><strong>Choose an agent</strong><button title="Close agent suggestions" className="btn icon" aria-label="Close agent suggestions" onClick={()=>{setMentionClosed(true);composer.current?.focus();}}><X size={15}/></button></div><div id="agent-command-mentions" role="listbox" aria-label="Agent shortcuts" className="agent-v2-document-options">{commandOptions.map((command,index)=><button type="button" role="option" id={`agent-command-${command.operation}`} key={command.operation} aria-selected={index===mentionIndex} onMouseDown={event=>event.preventDefault()} onClick={()=>chooseCommand(command)}>{command.operation==='onboard'?<Database size={18}/>:command.operation==='upload'?<UploadCloud size={18}/>:command.operation==='reextract'?<RotateCcw size={18}/>:<FileText size={18}/>}<span><strong>{command.label}</strong><small>{command.description}</small></span></button>)}{!commandOptions.length&&<p>Choose an available agent from the menu.</p>}</div><p className="muted small">↑ ↓ to browse · Enter to select · Esc to close</p></div>}
    <div className="agent-v2-compose-box">
     {files.length>0&&<div className="agent-v2-files" aria-label="Attached files">{files.map(file=>{
@@ -501,7 +561,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
     })}<ActionButton className="text-button" disabled={attachmentsBlocked} onClick={()=>{setFiles([]);setJsonDocuments({});setAttachmentErrors({});setPromptAttachment(null);clearSavedPrompt();cancelPrompt();}} label="Clear files" action="close"/></div>}
     <div className="agent-v2-input"><div className="agent-v2-editor">
     <div ref={composerHighlight} className="agent-v2-input-highlight" aria-hidden="true">{highlightedCommand?<>{highlightedCommand[1]}<span className="agent-v2-command-token">{highlightedCommand[2]}</span>{text.slice(highlightedCommand[0].length)}</>:text}{text.endsWith('\n')?' ':''}</div>
-    <textarea ref={composer} aria-label="Message Lapi Agent" placeholder="Ask anything · / commands · # documents" value={text} rows={1} aria-autocomplete="list" aria-expanded={Boolean(mention||commandMention)} aria-controls={commandMention?'agent-command-mentions':mention?'agent-document-mentions':undefined} aria-activedescendant={commandMention&&commandOptions[mentionIndex]?`agent-command-${commandOptions[mentionIndex].operation}`:mentionDocuments[mentionIndex]?`agent-document-option-${mentionDocuments[mentionIndex].id}`:undefined} onScroll={e=>{if(composerHighlight.current){composerHighlight.current.scrollTop=e.currentTarget.scrollTop;composerHighlight.current.scrollLeft=e.currentTarget.scrollLeft;}}} onSelect={e=>setCaret(e.currentTarget.selectionStart)} onChange={e=>{setText(e.target.value);setCaret(e.target.selectionStart);setMentionClosed(false);setMentionIndex(0);}} onKeyDown={e=>{
+    <textarea ref={composer} aria-label="Message Lapi Agent" placeholder="Ask anything…" value={text} rows={1} aria-autocomplete="list" aria-expanded={Boolean(mention||commandMention)} aria-controls={commandMention?'agent-command-mentions':mention?'agent-document-mentions':undefined} aria-activedescendant={commandMention&&commandOptions[mentionIndex]?`agent-command-${commandOptions[mentionIndex].operation}`:mentionDocuments[mentionIndex]?`agent-document-option-${mentionDocuments[mentionIndex].id}`:undefined} onScroll={e=>{if(composerHighlight.current){composerHighlight.current.scrollTop=e.currentTarget.scrollTop;composerHighlight.current.scrollLeft=e.currentTarget.scrollLeft;}}} onSelect={e=>setCaret(e.currentTarget.selectionStart)} onChange={e=>{setText(e.target.value);setCaret(e.target.selectionStart);setMentionClosed(false);setMentionIndex(0);}} onKeyDown={e=>{
      if(commandMention){
       if(e.key==='Escape'){e.preventDefault();setMentionClosed(true);return;}
       if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();setMentionIndex(index=>commandOptions.length?(index+(e.key==='ArrowDown'?1:-1)+commandOptions.length)%commandOptions.length:0);return;}
@@ -515,9 +575,10 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
      if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}
     }}/></div></div>
     <div className="agent-v2-compose-controls">
-     <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json,.png,.jpg,.jpeg,.webp" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>
-     <button className="btn icon" aria-label="Attach documents for agent" title="Attach PDF, DOCX, TXT, JSON or images (PNG, JPG, WEBP)" disabled={attachmentsBlocked} onClick={()=>fileInput.current?.click()}><Plus size={21}/></button>
-     <label className="agent-v2-model-control"><span>Agent Model</span><select aria-label="Agent Model" value={effectivePlanner} disabled={Boolean(working)||onboardingBusy||plans.some(active)||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading models…':catalogError?'Models unavailable':'Choose an Agent Model'):'Choose an Agent Model'}</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+     <input ref={fileInput} type="file" hidden multiple accept=".pdf,.docx,.txt,.json,.xlsx,.csv,.tsv,.png,.jpg,.jpeg,.webp" onChange={e=>{attachFiles(Array.from(e.target.files||[]));e.target.value='';}}/>
+     <button className="btn icon" aria-label="Attach documents for agent" title="Attach PDF, DOCX, TXT, JSON, spreadsheets (XLSX, CSV, TSV) or images (PNG, JPG, WEBP)" disabled={attachmentsBlocked} onClick={()=>fileInput.current?.click()}><Plus size={21}/></button>
+     {device==='phone'&&scopeChip('')}
+     <label className="agent-v2-model-control"><span>Agent Model</span><select aria-label="Agent Model" value={effectivePlanner} disabled={Boolean(working)||onboardingBusy||plans.some(active)||(!catalogLoaded.current&&catalogLoading)} onChange={e=>setPlanner(e.target.value)}><option value="">{!catalogLoaded.current?(catalogLoading?'Loading models…':catalogError?'Models unavailable':'Choose an Agent Model'):'Choose an Agent Model'}</option>{chatModels.map((m:Entity)=><option key={m.id} value={m.id}>{m.name}</option>)}</select>{catalogLoaded.current&&!catalogLoading&&!chatModels.length&&<small className="agent-v2-model-empty">{`No chat model is on for ${device==='phone'?'phones':'computers'}. An administrator can turn one on in Settings › Enabled models.`}</small>}</label>
      <div className="agent-v2-send-controls">
       <button className={`btn icon${listening?' primary':''}`} aria-label={listening?'Stop listening':'Speak your request'} title={voiceSupported?'Speech input':'Speech input unavailable in this browser'} disabled={!voiceSupported||Boolean(working)} onClick={toggleMic}><Mic size={20}/></button>
       {working&&answerController.current?<button title="Stop answer" className="btn icon agent-v2-send" aria-label="Stop answer" onClick={()=>answerController.current?.abort()}><Square size={18}/></button>:<button title="Send agent request" className="btn icon agent-v2-send" aria-label="Send agent request" disabled={(!text.trim()&&!files.length)||Boolean(mention||commandMention)||attachmentsBlocked||Boolean(unresolvedJson.length)||Boolean(inputIssue)} onClick={()=>void send()}><ArrowUp size={21}/></button>}
@@ -526,7 +587,7 @@ export function AgentV2({api,stream,username,onJobs,onVisibleJobs,onReview,onPro
    </div>
    {inputIssue&&<p className="agent-v2-prompt-notice" role="status">{inputIssue}</p>}
    {promptNotice&&<p className="agent-v2-prompt-notice" role="status">{promptNotice}</p>}
-   <div className="agent-v2-footer"><span>Drag & drop PDF, DOCX, TXT, JSON or images · up to 20 files</span><details><summary>Privacy & providers</summary><p>Chat uses your configured model and indexed knowledge directly. Onboarding, upload, extraction and re-extraction ask for external processing approval before sending files. Workflow requests and results are saved in your workspace.</p><p>Browser speech recognition may send audio to its speech service; voice is optional and text remains available.</p></details></div>
+   <div className="agent-v2-footer"><details><summary>Privacy & providers</summary><p>Chat uses your configured model and indexed knowledge directly. Onboarding, upload, extraction and re-extraction ask for external processing approval before sending files. Workflow requests and results are saved in Lapi.</p><p>Browser speech recognition may send audio to its speech service; voice is optional and text remains available.</p></details></div>
   </div>
   </div>
   <aside className="agent-context-panel" aria-label="Agent context">

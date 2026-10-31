@@ -420,3 +420,54 @@ def test_embedding_parameters_change_requires_remapping_and_reindex(system,monke
     new_cfg=routing.execution_snapshot(routing.owned(d['id'],s.owner,'knowledge_base'),'embedding')['settings']
     assert providers.fingerprint(new_cfg)!=old_fingerprint
     assert s.api.get('/api/documents/'+doc['id']).json()['requires_reindex']
+
+
+def test_administrators_switch_models_on_and_off_without_editing_them(system):
+    s = system; m = register(s, body('chat'))
+    switch = lambda value: s.api.put('/api/model-registrations/' + m['id'] + '/enabled', json={'enabled': value})
+    offered = lambda: [x['id'] for x in s.api.get('/api/agent-v2/catalog?selectors_only=true').json()['models']]
+    assert m['id'] in offered()
+    r = switch(False); assert r.status_code == 200, r.text
+    assert r.json()['enabled'] is False and m['id'] not in offered()
+    assert next(x for x in s.api.get('/api/models').json() if x['id'] == m['id'])['enabled'] is False
+    assert switch(False).status_code == 200  # Already off: nothing changes.
+    r = switch(True); assert r.status_code == 200 and r.json()['enabled'] is True and m['id'] in offered()
+    assert make_default(s, m, 'chat').status_code == 200
+    r = switch(False); assert r.status_code == 409 and 'Default' in r.json()['detail']
+    assert switch('maybe').status_code == 422
+
+
+def test_models_are_offered_on_phones_computers_or_both_and_keep_it_across_edits(system):
+    s = system; m = register(s, body('chat'))
+    put = lambda **value: s.api.put('/api/model-registrations/' + m['id'] + '/enabled', json={'enabled': True} | value)
+    devices = lambda: next(x for x in s.api.get('/api/models').json() if x['id'] == m['id'])['devices']
+    assert devices() == ['computer', 'phone']  # Both until an administrator chooses.
+    r = put(devices=['phone']); assert r.status_code == 200, r.text
+    assert r.json()['devices'] == ['phone'] and devices() == ['phone']
+    assert next(x for x in s.api.get('/api/agent-v2/catalog?selectors_only=true').json()['models'] if x['id'] == m['id'])['devices'] == ['phone']
+    assert put().json()['devices'] == ['phone']  # Omitted keeps the choice.
+    assert put(devices=['computer', 'phone', 'phone']).json()['devices'] == ['computer', 'phone']
+    put(devices=['computer'])
+    edited = s.api.put('/api/model-registrations/' + m['id'], json=body('chat', name='Renamed'))
+    assert edited.status_code == 200, edited.text
+    assert edited.json()['devices'] == ['computer'] and devices() == ['computer']
+    assert put(devices=[]).status_code == 400
+    assert put(devices=['tablet']).status_code == 422
+
+
+def test_models_are_offered_on_phones_computers_or_both_and_keep_it_across_edits(system):
+    s = system; m = register(s, body('chat'))
+    put = lambda **value: s.api.put('/api/model-registrations/' + m['id'] + '/enabled', json={'enabled': True} | value)
+    devices = lambda: next(x for x in s.api.get('/api/models').json() if x['id'] == m['id'])['devices']
+    assert devices() == ['computer', 'phone']  # Both until an administrator chooses.
+    r = put(devices=['phone']); assert r.status_code == 200, r.text
+    assert r.json()['devices'] == ['phone'] and devices() == ['phone']
+    assert next(x for x in s.api.get('/api/agent-v2/catalog?selectors_only=true').json()['models'] if x['id'] == m['id'])['devices'] == ['phone']
+    assert put().json()['devices'] == ['phone']  # Omitted keeps the choice.
+    assert put(devices=['computer', 'phone', 'phone']).json()['devices'] == ['computer', 'phone']
+    put(devices=['computer'])
+    edited = s.api.put('/api/model-registrations/' + m['id'], json=body('chat', name='Renamed'))
+    assert edited.status_code == 200, edited.text
+    assert edited.json()['devices'] == ['computer'] and devices() == ['computer']
+    assert put(devices=[]).status_code == 400
+    assert put(devices=['tablet']).status_code == 422

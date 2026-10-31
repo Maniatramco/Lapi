@@ -54,18 +54,49 @@ NOTES = {
     'PUT /api/storage': 'Administrator only: save a verified file destination; stored files retain their individually pinned routes.',
     'PUT /api/storage/database': 'Administrator only: save verified database configuration and encrypted credentials without activating it.',
     'GET /api/auth/status': 'Check whether the first administrator has been created. The first administrator is created on the server with python -m lapi_app.create_admin, never through the API.',
-    'POST /api/auth/login': 'Verify credentials, set the HTTP-only session cookie, and return the user and CSRF token. Login attempts are rate limited.',
+    'POST /api/auth/login': 'Failed sign-ins are limited per username (5 in 15 minutes) and per address (20); accounts with an authenticator app also send code. Verify credentials, set the HTTP-only session cookie, and return the user and CSRF token. Login attempts are rate limited.',
     'GET /api/auth/me': 'Read the signed-in user and the CSRF token used for subsequent cookie-authenticated changes.',
     'POST /api/auth/logout': 'Invalidate the current session and clear its cookie. For a Keycloak account, logout_url ends the Keycloak session too.',
     'GET /api/auth/keycloak/start': 'Begin Keycloak sign-in (authorization code with PKCE): redirect to Keycloak with a short-lived, encrypted flow cookie.',
     'GET /api/auth/keycloak/callback': 'Finish Keycloak sign-in: verify state, nonce and token signatures, create or update the account, set the session cookie and return to Lapi.',
-    'GET /api/users': 'Administrator only: list account identity and audit metadata. Password hashes are never returned.',
+    'GET /api/users': 'Administrators and Auditors: list account identity, workspace role (administrator, auditor or user) and audit metadata. Password hashes are never returned.',
     'POST /api/users': 'Administrator only: create a user with matching passwords of 12–200 characters and a unique username. The account starts with no dataset assignments.',
     'POST /api/users/{user_id}/password': 'Administrator only: verify the administrator current password, reset another user password, and revoke all target sessions. Existing documents and results are preserved.',
     'PATCH /api/users/{user_id}/role': 'Administrator only: verify the acting administrator password, change role, revoke target sessions, preserve dataset assignments, and protect the last administrator.',
     'POST /api/auth/password': 'Change your own password after verifying your current password. Revoke all your sessions and sign in again. Cookie authentication requires X-CSRF-Token.',
-    'GET /api/users/{user_id}/datasets': 'Administrator only: read the user dataset assignments and their audit metadata. The administrator has automatic access to every dataset.',
-    'PUT /api/users/{user_id}/datasets': 'Administrator only: replace dataset assignments atomically. Assigned users can use shared documents, prompts and extraction results; revoked access blocks new reads and operations immediately. Empty assignments remove all dataset access. Existing content is preserved.',
+    'GET /api/users/{user_id}/datasets': 'Administrators and Auditors: read the user dataset assignments, their levels and their audit metadata. The administrator has automatic access to every dataset.',
+    'PUT /api/users/{user_id}/datasets': 'Administrator only: replace dataset assignments atomically, with an optional level per dataset (viewer: read and chat; editor: also upload, extract and review; owner: also the dataset\'s settings and members; new grants default to viewer). Assigned users can use shared documents, prompts and extraction results; revoked access blocks new reads and operations immediately. Empty assignments remove all dataset access. Existing content is preserved.',
+    'GET /api/access-map': 'Administrators and Auditors: every person\'s dataset levels (own grants and through teams), teams, and OpenFGA\'s answer for each person with any difference flagged. can_edit is false for Auditors.',
+    'GET /api/teams': 'Administrators and Auditors: teams with their source (local or Keycloak), member IDs and dataset levels.',
+    'POST /api/teams': 'Administrator only: create a local team with a unique name.',
+    'PUT /api/teams/{team_id}/members': 'Administrator only: replace a local team\'s members. Keycloak teams take their members from Keycloak groups at each sign-in (409).',
+    'PUT /api/teams/{team_id}/datasets': 'Administrator only: replace a team\'s dataset levels (viewer, editor or owner); every member gets them. OpenFGA is updated after the change commits.',
+    'DELETE /api/teams/{team_id}': 'Administrator only: delete a team and the access it gave. Keycloak re-creates a Keycloak team at the next sign-in of anyone still in the group.',
+    'GET /api/datasets/{id}/members': 'Dataset Owners and administrators: people and teams with access to this dataset and their levels, plus the people and teams that can be added.',
+    'PUT /api/datasets/{id}/members': 'Dataset Owners and administrators: set (viewer, editor, owner) or remove (null) the level of the named people and teams; others are unchanged. Administrators always have access and cannot be listed.',
+    'GET /api/me/walkthrough': 'Whether you have seen the current 1-minute product tour.',
+    'GET /api/me/agent-training': 'Whether you have been through the short in-agent training.',
+    'POST /api/me/agent-training': 'Record that you finished the in-agent training (version).',
+    'GET /api/me/screens': 'Screens you may see on this device (query device=phone|computer), decided by OpenFGA; Dashboard, Lapi Agent and Quick start are always on.',
+    'GET /api/screens': 'Administrator only: who sees each screen on phones and computers (everyone, teams, people, or off).',
+    'PUT /api/screens': 'Administrator only: change screen grants; saved to the database and OpenFGA, applied within a minute without a deploy.',
+    'POST /api/screens/preset': 'Administrator only: apply a preset (agent-only-phone or everything).',
+    'POST /api/me/walkthrough': 'Record that you have seen this version of the 1-minute product tour, so it does not open again on any device.',
+    'POST /api/auth/keycloak/backchannel-logout': 'Called by Keycloak when a Keycloak session ends: verifies the signed logout token (issuer, audience, logout event, no nonce) and ends the matching Lapi sessions at once.',
+    'GET /api/me/sessions': 'Your signed-in sessions: when they started, last activity, address and browser, which one is this browser, and the idle timeout in minutes.',
+    'DELETE /api/me/sessions/{short_id}': 'Sign out one of your sessions by the 16-character id from GET /api/me/sessions; signing out this browser also clears its cookie.',
+    'POST /api/me/sessions/sign-out-others': 'Sign out all your other sessions and keep this one.',
+    'POST /api/users/{user_id}/sessions/sign-out': 'Administrator only: sign a person out of every session at once.',
+    'GET /api/auth/totp': 'Whether your account has an authenticator app (a second factor for password sign-in) set up or pending confirmation.',
+    'POST /api/auth/totp/setup': 'Start setting up an authenticator app for a password account: confirm your current password; returns the key and otpauth link to add to the app. Keycloak accounts use Keycloak MFA (409).',
+    'POST /api/auth/totp/confirm': 'Finish authenticator setup with a current 6-digit code. From then on password sign-in also needs a code.',
+    'POST /api/auth/totp/disable': 'Turn off your authenticator app with your current password and a current code.',
+    'POST /api/users/{user_id}/totp/reset': 'Administrator only, with your password: remove a colleague\'s authenticator (lost phone) and sign them out; they set it up again at their next sign-in.',
+    'GET /api/me/preferences': 'Your answers to the "Let\'s set you up" questions (what you want to do and where your knowledge is), and whether you finished them or hid the Dashboard next steps. Empty until you answer.',
+    'PUT /api/me/preferences': 'Save your set-up answers: goals (ask, extract, research, knowledge_base), sources (files, google_drive, sharepoint, s3, azure_blob, gcs, oci_object, not_sure), completed and dismissed_next_steps. Unknown values or fields are refused (422). Cookie authentication requires X-CSRF-Token.',
+    'POST /api/templates/suggest': "Editor of the dataset: suggest extraction fields for ready documents with the dataset's extraction model (from the start of their text), or rewrite the current fields as requested; returns the fields and the JSON Schema to save as a prompt. Needs allow_external when that model is external.",
+    'POST /api/setup/interpret': 'Signed in: read one set-up chat answer (stage, answer, options) with the overall Default chat model; {decision: rules} when the screen should use its own rules.',
+    'POST /api/templates/table-plan': "Editor of the dataset: for spreadsheet documents, how each prompt field will be read - matched to a column by meaning with the dataset's model (checked against the real columns and types; a column on another sheet only through a key link), read per row by the model, about the whole table, or not available. Send column_mapping to change it; the same mapping goes on the extraction. Needs allow_external when that model is external.",
     'POST /api/auth/recovery/prepare': 'Prepare a loopback-only native SQLite recovery challenge. A private legacy grant token is optional; direct desktop recovery uses the recovery cookie and CSRF challenge. The application API proxy blocks this route. Oracle and network deployments do not enable it.',
     'POST /api/auth/recovery/reset': 'Complete native SQLite desktop recovery with its recovery cookie, X-CSRF-Token, and matching new passwords; supply a token only for the legacy private-grant flow. Loopback and origin checks apply. Oracle and network deployments do not enable this route.',
     'GET /health': 'Basic process liveness check. A running API does not by itself prove that its dependencies are ready.',
@@ -99,6 +130,7 @@ NOTES = {
     'GET /api/admin/token-usage/export': 'Administrator only: download the filtered per-call token usage rows as CSV with approximate cost, Not reported or Price not set per row.',
     'GET /api/token-usage/conversations/{id}': 'Your own provider-reported token totals and approximate cost for one conversation.',
     'PUT /api/model-registrations/{id}/default': 'Administrator only: make a tested, enabled model the workspace Default for one role (chat, extraction or embedding). One Default per role. Changing the Embedding Default requires acknowledge_index_rebuild: the knowledge index is deleted immediately and every document is reindexed in the background. No rollback.',
+    'PUT /api/model-registrations/{id}/enabled': 'Administrator only: turn a registered model on or off for new work (chat pickers, mappings), and choose where it is offered (devices: phone, computer or both), without editing its connection. A model that is a workspace Default stays on until another Default is chosen.',
     'GET /api/workspace/defaults': 'Read the workspace Default model per role, the knowledge index status and the documents and knowledge items a Default embedding change would rebuild.',
     'GET /api/workspace/knowledge-index': 'Read the one knowledge index: active collection, state and reindex progress (X of Y indexed, failures). Failure details are shown to administrators only.',
     'POST /api/workspace/knowledge-index/retry': 'Administrator only: queue reindexing again for documents that failed after a Default embedding change.',
@@ -111,6 +143,11 @@ NOTES = {
     'DELETE /api/admin/documents/{id}': 'Administrator only: confirm exact filename, expected_version and expected_impact from deletion-preview. Block active dataset work; permanently clean up this document and related artifacts/results. Partial failures remain quarantined and deletion can resume. Retain content-free terminal queue audit rows.',
     'POST /api/admin/documents/{id}/retry': 'Administrator only: queue fresh indexing using current dataset embedding/OCR models, with explicit external transmission consent. Use the existing extraction rerun endpoint to create new structured results.',
     'GET /api/documents/{id}': 'Read document metadata, processing status, and dataset/index compatibility.',
+    'GET /api/workspaces': 'List the workspaces this person belongs to, creating their personal workspace if needed, and whether they may create a team workspace.',
+    'POST /api/workspaces': 'Create a team workspace. Each person may have one; administrators have no limit.',
+    'GET /api/workspaces/{id}/members': 'Workspace owners: read the people and teams in a workspace.',
+    'PUT /api/workspaces/{id}/members': 'Workspace owners: add, change or remove people and teams; applies to every collection in the workspace. Personal workspaces cannot be shared.',
+    'GET /api/documents/{id}/row-context': 'Read one spreadsheet row with its notes, the images and files attached to it and the matching rows of linked sheets.',
     'GET /api/documents/{id}/preview': 'Read a JSON text preview containing text, chunks, and document metadata. Before processing finishes, the text explains that it is not available yet. Use /source to view supported original files.',
     'GET /api/documents/{id}/download': 'Download the original uploaded file with a download filename.',
     'GET /api/documents/{id}/source': 'Return an original PDF, UTF-8 TXT, or JSON file inline for source viewing. DOCX inline viewing is rejected with 415; download DOCX to inspect its original layout.',
@@ -172,6 +209,8 @@ NOTES = {
     'GET /api/documentation': 'Read this live API contract and learning notes. No document data, user records, or configured credential values are included.',
     'GET /api/skills': 'List the skills you can use in chat: your own, those shared with a dataset or the workspace, and built-in playbooks.',
     'POST /api/skills': 'Create a skill (name, description, steps, optional allowed tools and output format). Sharing with a dataset or the workspace requires an administrator.',
+    'POST /api/skills/upload': 'Upload a skill as a SKILL.md file: front matter (name, description, allowed_tools, output_format, and when it applies: document_types, domains, keywords, documents) followed by the steps. Uploading a name you already have replaces your skill.',
+    'GET /api/skills/{skill_id}/download': 'Download a skill as SKILL.md, ready to share or upload elsewhere.',
     'PUT /api/skills/{skill_id}': 'Save a new version of a skill you own (administrators can edit shared skills).',
     'DELETE /api/skills/{skill_id}': 'Remove a skill you own from chat. Built-in skills cannot be removed.',
     'GET /api/me/memory': 'Read your chat memory: the short preference note, whether memory is on, and your recent questions (kept 90 days, private to you).',
@@ -269,7 +308,13 @@ def documented_routes(app):
     from .browser_recovery import router
     from .user_management import router as account_router
     from .keycloak_auth import router as keycloak_router
-    for route in [*app.routes, *router.routes, *account_router.routes, *keycloak_router.routes]:
+    def walk(routes):
+        for route in routes:
+            if type(route).__name__ == '_IncludedRouter':  # Lazily included routers (FastAPI 0.14x).
+                yield from walk(route.original_router.routes)
+            else:
+                yield route
+    for route in walk([*app.routes, *router.routes, *account_router.routes, *keycloak_router.routes]):
         if isinstance(route, APIRoute) and (route.path, frozenset(route.methods)) not in seen:
             seen.add((route.path, frozenset(route.methods)))
             yield route

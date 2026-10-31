@@ -3,6 +3,7 @@ import {ActionButton} from "./action-button";
 import {useEffect,useRef,useState} from 'react';
 import {X} from 'lucide-react';
 import {citationRequest,recordedPage,extractionCitationId,citedValues,evidenceExcerpt} from './citation-source';
+import {citedRows} from './answer-reading';
 import './citation-panel.css';
 type Entity=Record<string,any>;
 type Api=(path:string,method?:string,body?:unknown,signal?:AbortSignal,quiet?:boolean)=>Promise<any>;
@@ -45,11 +46,27 @@ export function CitationPanel({source,api,onClose,onReview}:{source:Entity;api:A
   return()=>{active=false;controller.abort();};
  },[base,page,origin?.excerpt,api]);
  useEffect(()=>{setImageFailed(false);},[base,page]);
+ // Spreadsheet citations also open their row and everything connected to it.
+ const [tab,setTab]=useState('source'),[rowChoice,setRowChoice]=useState(0),[rowData,setRowData]=useState<Entity|null>(null),[rowError,setRowError]=useState('');
+ const cited=extractedValues?null:citedRows(source,published),citedDocument=published?.document_id||source.document_id,citedRow=cited?.rows[rowChoice]??cited?.rows[0],citedSheet=cited?.sheet;
+ useEffect(()=>{
+  setRowData(null);setRowError('');if(!citedSheet||!citedRow||!citedDocument)return;
+  const controller=new AbortController();let active=true;
+  void api(`/documents/${citedDocument}/row-context?sheet=${encodeURIComponent(citedSheet)}&row=${citedRow}`,'GET',undefined,controller.signal,true).then(value=>{if(active)setRowData(value);}).catch(err=>{if(active)setRowError(err.message);});
+  return()=>{active=false;controller.abort();};
+ },[citedSheet,citedRow,citedDocument,api]);
+ const tabs=rowData?[['source','Source'],['row','Row'],['attached',`Attached · ${rowData.attached?.length||0}`],['linked',`Linked · ${rowData.linked_rows?.length||0}`]]:[];
  return <dialog ref={dialog} className="citation-panel" aria-labelledby="citation-panel-title" onClose={onClose} onCancel={onClose}>
   <header><div><span className="citation-panel-eyebrow">Citation [{source.index}]</span><h2 id="citation-panel-title">Source evidence</h2></div><button title="Close citation source" className="btn icon" aria-label="Close citation source" onClick={()=>dialog.current?.close()}><X size={18}/></button></header>
   <div className="citation-panel-body">
    {loading&&<p role="status">Loading the saved source…</p>}{error&&<p className="review-error" role="alert">{error}</p>}
-   {!loading&&!error&&published&&<>
+   {tabs.length>0&&<div className="citation-tabs" role="tablist" aria-label="What is connected to this row">{tabs.map(([id,label])=><button key={id} type="button" role="tab" aria-selected={tab===id} onClick={()=>setTab(id)}>{label}</button>)}</div>}
+   {rowError&&tab!=='source'&&<p className="review-error" role="alert">{rowError}</p>}
+   {rowData&&tab!=='source'&&(cited?.rows.length||0)>1&&<label className="citation-page-picker">Row<select aria-label="Cited row" value={rowChoice} onChange={event=>setRowChoice(Number(event.target.value))}>{cited!.rows.map((row,index)=><option key={row} value={index}>{cited!.sheet} · row {row}</option>)}</select></label>}
+   {rowData&&tab==='row'&&<section><h3>{rowData.sheet} · row {rowData.row}</h3><dl className="citation-row-values">{Object.entries(rowData.values||{}).map(([name,value])=><div key={name}><dt>{name}</dt><dd>{String(value)||'—'}</dd></div>)}</dl>{rowData.notes?.length>0&&<><h3>Notes</h3><ul className="citation-row-notes">{rowData.notes.map((note:string)=><li key={note}>{note}</li>)}</ul></>}</section>}
+   {rowData&&tab==='attached'&&<section>{rowData.attached?.length?rowData.attached.map((item:Entity)=><article className="citation-row-item" data-differs={item.differs?true:undefined} key={item.id}><h3>{item.id} · {item.where}</h3><p>{item.content}</p>{item.differs&&<p className="citation-row-differs" role="alert">Amounts differ: the {item.kind} shows {(item.differs.item||[]).join(', ')}, the row says {Object.entries(item.differs.row||{}).map(([name,value])=>`${name} ${value}`).join(', ')}. Check the original.</p>}{item.agrees?.length>0&&<p className="citation-panel-note">Matches {item.agrees.join(', ')}.</p>}<p className="citation-panel-note">Connected {item.how} ({item.strength}). Image text is OCR: check it against the original.</p></article>):<p>Nothing is attached to this row.</p>}</section>}
+   {rowData&&tab==='linked'&&<section>{rowData.linked_rows?.length?rowData.linked_rows.map((link:Entity)=><article className="citation-row-item" key={link.sheet+link.row}><h3>{link.sheet} · row {link.row}</h3><p className="citation-panel-note">Through {link.through} ({link.strength})</p><dl className="citation-row-values">{Object.entries(link.values||{}).map(([name,value])=><div key={name}><dt>{name}</dt><dd>{String(value)||'—'}</dd></div>)}</dl></article>):<p>No linked rows.</p>}</section>}
+   {!loading&&!error&&published&&(tab==='source'||!rowData)&&<>
     <dl className="citation-panel-metadata"><div><dt>Document / source</dt><dd>{origin?.document_name||published.title||source.document_name||'Application metadata'}</dd></div><div><dt>Page</dt><dd>{page||'Not recorded'}</dd></div><div><dt>Saved version</dt><dd>{evidence?.version||published.source_version||source.version||'—'}</dd></div>{evidence&&<div><dt>Extraction</dt><dd>{evidence.extraction_name}<small>{evidence.extraction_id}</small></dd></div>}</dl>
     {sources.length>1&&<label className="citation-page-picker">Recorded document / page<select aria-label="Citation document and page" value={selected} onChange={event=>setSelected(Number(event.target.value))}>{sources.map((s,index)=><option key={index} value={index}>{s.document_name} · {s.page?`page ${s.page}`:'page not recorded'}{s.field?` · ${s.field}`:''}</option>)}</select></label>}
     <section><h3>{extractedValues?'Cited extracted values':evidence?'Cited extraction metadata':'Cited source passage'}</h3><pre className="citation-panel-values">{extractedValues&&evidence?JSON.stringify(values,null,2):published.text||source.text||source.excerpt||JSON.stringify(published.value??published,null,2)}</pre></section>

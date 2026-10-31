@@ -51,7 +51,7 @@ def dataset_snapshot(dataset):
     data = routing.dataset_config(dataset)
     selected = data.get('ocr_model_id')
     if selected == 'local':
-        raise HTTPException(409, 'Select a cloud OCR model in Dataset Model Mapping. Local OCR is no longer selectable.')
+        raise HTTPException(409, 'Select a cloud OCR model in Collection Model Mapping. Local OCR is no longer selectable.')
     if not selected:
         selected = workspace_defaults.default_id('ocr')
     if selected:

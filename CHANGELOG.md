@@ -2,6 +2,304 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.46 - 31 October 2026
+
+Lapi sets you up in a chat
+
+- `setup-chat.tsx`, `setup-chat-script.ts`: first sign-in is a scripted chat (no model call): name, team workspace, which workspace, first collection and type; answers typed, tapped or spoken (browser speech recognition). Shown when the person has no name yet or the workspace gate would ask; the gate dialogs remain for team members and later use.
+- The chat continues through the first round after a collection is made here: `suggestFields` prefills fields from everyday words (presets for invoices, candidates, contracts, purchase orders, bank statements, identity documents, reports, plus the person's own words); `applyChange` edits them in words; documents by camera or picker; consent asked in the chat; upload, read, template, extraction and results, then Review. The page keeps the chat mounted until it reports done.
+- `preferences.py`: `name` (free text, 60 chars; omitted on save keeps it). `display_name` on `/api/auth/me` and sign-in. `workspaces.rename_personal` renames the personal workspace while it still has its default name; `_display` prefers the given name.
+- `setup_assist.py` `POST /api/setup/interpret` (signed in): reads one chat answer with the overall Default chat model pinned like a collection's model (`chat_snapshot`); strict JSON output (decision yes/no/change/skip/answer/unclear, name, pick, fields, message); `{decision: rules}` when there is no model or it cannot be read, and the screen's rules take over. Taps are never sent.
+- `template-helper.tsx` in the Agent's details card when no template is chosen: fields from words at once (`suggestFields`), or from the document (`/templates/suggest`) once it is read; edits in words; saved as the template for the request.
+- `lapi-bot-button.tsx` (Help Bot): `HelpBotIcon` (animated logo with a `?` badge) as a Help item in the phone tab bar and `HelpBotMenuButton` at the bottom of the side menu; nothing floats over the screen. Opens `SetupChat` with `entry='help'` (stages `help`, `email`, `sent`); `support.ts` holds the support address and builds a `mailto:` with name, workspace, screen, version, the error shown and the device. Error notices get an "Email for help" button (`entry='email'`).
+- `agent-logo.tsx`: two inline, animated marks. `variant='agent'` is the Reader spark (a page in the Lapi tile; an orange spark reads down the lines, which light in turn, then flares in the corner); `variant='help'` is the friendly robot (blink, glance, wave, "?" bubble). Chosen on the design canvas after looking at how AI products mark agents (the sparkle is common but tested as unread; robots read as a character, which Help already is); none under prefers-reduced-motion.
+- Quick start on phones: starts on documents for Quick Extract and creates the collection at upload; `quick-start-scope` chip, scan-style pick tiles, `quick-start-ring`, `quick-start-field-chips`.
+
+## v26.1.16.45 - 31 October 2026
+
+Private workspaces and a calmer phone
+
+- `dataset_access.py`: `dataset_ids` and `dataset_levels` no longer grant every collection to administrators and contributors over HTTP; the creator is Owner unless a disabled `UserDataset` row says they were removed. Trusted internal calls (no request actor) are unchanged.
+- `workspaces.py`: `visible` skips other people's personal workspaces; only administrators are Owner of the Organization workspace, and opening it grants them its collections. Administrators can be workspace and collection members like anyone else (`all_datasets` is always false).
+- Phone layout: single top row (`topbar-attention`, account menu), greeting by first name, `agent-v2-starters`, `agent-v2-scope-chip` and the options sheet replacing `agent-v2-context` and the model picker, `quick-start-figures`, floating `mobile-tab-bar`.
+- `chat-design.css`: the question bubble is `width:fit-content` inside a full-width request row.
+
+## v26.1.16.44 - 30 October 2026
+
+Workspaces hold collections
+
+- `workspaces.py`: workspaces are `core.Record` rows of kind `workspace` (`audience`, `members`, `teams`, `organization`), with `GET/POST /api/workspaces` and `GET/PUT /api/workspaces/{id}/members`. Access stays on collection grants; members are copied onto them.
+- Dataset JSON gains `workspace_id` and `collection_type`. `place_existing` runs on `GET /api/workspaces` and `POST /api/datasets`: unshared to the owner's personal workspace, shared to one Organization workspace where only administrators are Owner.
+- Limit moved to workspaces: one personal and one team per person, administrators unlimited.
+- `workspace-gate.tsx`, `workspace-scope.ts`: choose or create at login; a switcher in the top bar; documents, jobs, extractions and templates scoped to the open workspace.
+- Visible text says collection for the former dataset. Earlier local work included: fit on short touch screens, Latest message on empty chat, text sizes, the i panel.
+
+## v26.1.16.43 - 30 October 2026
+
+Workspaces
+
+- Visible text says workspace instead of dataset; code names, API paths and fields are unchanged. `#Workspaces` is the new page link; old links still work. Earlier uses became Settings and overall Default.
+- `first-workspace.tsx`: first sign-in with no workspace creates one for just me or my team, then adds people with the existing members screen.
+- `POST /api/datasets` is open to anyone signed in (creator becomes Owner), limited to one personal and one team workspace (`audience`, 409); Administrators have no limit. Personal workspaces refuse members (400). `migrate-settings` requires Owner. `GET /api/datasets` adds `mine`; `workspaceSlots` decides what Quick start offers.
+- Agent prompts say workspace; request matching accepts both words.
+
+## v26.1.16.42 - 30 October 2026
+
+Signing in starts fresh
+
+- `startFresh` (chat-login-session.ts): a full page load to the site root after password sign-in and sign-out; sign-out clears sessionStorage, including before the Keycloak logout redirect.
+
+## v26.1.16.41 - 30 October 2026
+
+A calmer Agent
+
+- Opening screen is the greeting and four suggestions; removes the explanation paragraph, workflow cards, composer chips and hint text. Commands and document mentions still work when typed. `phone-status` is one row of short pills.
+
+## v26.1.16.40 - 30 October 2026
+
+Foldables and tablets get the phone layout
+
+- `deviceFor(width, touch)` and `currentDevice()`: phone below 640 px, or on a touch screen up to 1100 px. Phone style sheets use `(max-width: 640px), (pointer: coarse) and (max-width: 1100px)`. Wider sizes keep the drawer menu and a 760 px reading column.
+
+## v26.1.16.39 - 30 October 2026
+
+Phones: Agent and Quick Extract
+
+- No Dashboard on phones for anyone (`phoneRedirect`, `viewAllowed`); phones land on Lapi Agent; Review always allowed on phones. Tabs: Agent, Quick Extract, More when not agent-only. Removes the phone Home and hero.
+- `QuickStart` `quickExtract`: extract path preset, consent and Continue in place of the ask-or-extract choice.
+- `phone-status.tsx` replaces the floating progress card on phones. Composer is one row; starter chips and footer hide once a conversation exists.
+- `query_table` citations carry `sheet`, `rows` and `reading`; `answer-reading.ts` shows the headline number and "How I read your question".
+- `workbook_context.row_context`, shared by the agent tool and `GET /api/documents/{id}/row-context`; citation Source, Row, Attached and Linked tabs.
+- Review: Previous / Next and swipe through records (`recordStep`), one-page layout on phones.
+
+## v26.1.16.38 - 30 October 2026
+
+Different models for phones and computers
+
+- Models store `devices` (`computer`, `phone`; missing means both). `PUT /api/model-registrations/{id}/enabled` accepts `devices` (omitted keeps it, empty is refused); registration edits and `PUT /api/models/{id}` keep it; `model_public` always returns it.
+- Enabled models: Phone and Computer toggles per model; counts of chat models per device.
+- `eligibleAgentModels(models, dataset, device)` with `useDevice()` (640 px, live on resize) filters Lapi Agent, Dataset Knowledge Chat and Quick start. Like screens per device, enforced in the app.
+
+## v26.1.16.37 - 30 October 2026
+
+Choose and switch models from a phone
+
+- `PUT /api/model-registrations/{id}/enabled` (administrators): turns a registered model on or off by writing a new model version with only `enabled` changed; `guard_disable` keeps a workspace Default on (409), archived registrations are refused.
+- Enabled models screen (`enabled-models.tsx`, Manage workspace, all screen sizes; admin-only `models` screen): one switch per model, uses and Default roles shown, Default switches locked with the reason.
+- Phones: the chat composer's Agent Model picker has its own labelled full-width row, with a hint when no chat model is on.
+
+## v26.1.16.36 - 30 October 2026
+
+A phone design that puts the answer first (phones only, up to 640px; computers unchanged)
+
+- `phone-home.tsx`, `phone-home-data.ts`, `phone-home.css`: Home with a greeting, the dataset's ready count, one ask box (questions go to Lapi Agent's composer), suggested questions from the newest ready files, Needs you (from `attentionItems`) and Reading now (step and share of workflow stages done). Replaces the phone hero, Quick start banner, floating Ask button and background progress card on Home.
+- Tab bar: Home, Ask, raised Add (Quick start), Review, More.
+- `phone-design.css`: chat question bubble and answer card, chip follow-ups and sources, rounded composer; citation panel as a bottom sheet; Quick start column check as cards; sticky Review buttons.
+- `howBadge` in `quick-start-flow.ts`: a short badge for each field's column choice, shown in the mapping on every screen size.
+
+## v26.1.16.35 - 29 October 2026
+
+Workbooks: everything read and connected (see `lapi_docs/workbooks.md`)
+
+- `workbook.py`: lists every package part; cells with formulas (pycel for results Excel never saved, `excel_functions.py` for COUNTA/XLOOKUP/XMATCH/TEXTJOIN/DATEDIF/NETWORKDAYS/WORKDAY/SWITCH/PROPER/MEDIAN/STDEV/RANK/COUNTBLANK), classic and threaded comments, hyperlinks, fills and text colours, hidden rows, dropdowns, highlight rules, named ranges; drawings (images via `ocr.read_image` + `ocr.describe`, charts with data from cells when no cache, text boxes, SmartArt), embedded files (OLE unwrapped with olefile), pivots, macros and external links noted; unknown parts reported. Relationships: formula links and per-cell lineage with labels, column formulas, key links between sheets (proven/likely), chart ranges, items linked to rows by anchor and by value, amount agreement. Meaning profiles. Coverage report. Saved as `documents/<id>/workbook.json`; row notes go into the row's text; items, profiles, lineage and coverage become searchable pages.
+- `table_extraction.py`: fields mapped by meaning with `providers.plan` over the profiles, checked (column exists, type fits, other sheets only through a key link; exact names win); columns on linked sheets looked up; non-column per-row fields read by the model from each row's own text in budgeted batches; whole-table fields named. `POST /api/templates/table-plan`; `column_mapping` on extractions; Quick start confirmation panel. Workbook field suggestions start from the profiles.
+- Chat: `query_table` `join` (same workbook or another spreadsheet), new tools `workbook_map` and `row_context`, and system guidance to map wording to real columns and values and state the mapping and joins.
+- `spreadsheet.py`: password-protected workbooks get a clear message. Requirements: pycel 1.0b30, networkx 2.6.3 (also in requirements-local), ruamel.yaml, olefile.
+
+## v26.1.16.34 - 29 October 2026
+
+Spreadsheets are extracted row by row
+
+- `lapi_agent/table_extraction.py`: `plan(schema, documents)` uses the stored tables when every document is a spreadsheet, the prompt is one object of plain values, and at least half of the fields match a column (by key or the label before ':' in the description; exact name first, then a column whose words are inside the field's, longer names first; each column once). `extract` returns `{"records": [{source_filename: "<file> · <sheet> row N", source_key, fields}]}` with values converted to the field type (dates `YYYY-MM-DD`), one evidence quote per row ("Row N") from its search chunk, and a notice listing the mapping and unmatched fields. `schema_for` is the matching records schema.
+- `extractor_agent.run`: takes that path before the model graph (stages still reported); sets `table_rows` and `table_notice`; `worker` appends the notice to `evidence_notice`.
+- Quick start: `resultRows` unwraps a record's `fields`; `recordCount` shows "record 1 of N". Review groups `table_rows` like merged records and opens on the first row.
+- Live cause: a 2,000-row sheet with row fields was sent whole to a cloud model registered with a 32,768-token context and was refused (needed ~69,000).
+
+## v26.1.16.33 - 29 October 2026
+
+Clearer extraction failures in Quick start
+
+- `quick-start-flow.ts`: `extractionStages(status, documents, reached?, error?)` marks a failure on the step it happened in: the furthest status seen while polling, else the step the error names (indexing / worker / recovery → "Waiting for a worker"), else "Reading … with the AI model". `blocked` counts as waiting.
+- `quick-start.tsx`: remembers the furthest status (`reached`), shows "The extraction stopped: <reason>" at the top of the Extracting step (the bottom alert is hidden there), and a poll timeout says the extraction is still running ("Still running") instead of "Stopped".
+
+## v26.1.16.32 - 29 October 2026
+
+The tour is a motion video
+
+- `lapi_frontend/public/tour/lapi-tour.mp4` (+ `.vtt` captions, `-poster.jpg`): 1280x720, 30 fps, ~67 s, H.264/AAC. Produced by `lapi_docs/tour-video/` (narration recorded with a neural voice from the scene script, word-timed; an original synthesised music bed; frames drawn with Pillow and timed to the narration; assembled with ffmpeg in a container). See `lapi_docs/tour-video.md` to re-render after a script change.
+- `walkthrough.tsx`: `TourVideo` player (play/pause, sound, progress, captions track, end card) used by `Walkthrough` unless `player: "scenes"`, reduced motion, or the video fails to load; the scene player remains as the fallback.
+
+## v26.1.16.31 - 29 October 2026
+
+Skills that apply themselves
+
+- `skills.py`: front matter `document_types`, `domains`, `keywords`, `documents` → `applies_to`; `applies(skill, text, document_names)` returns the reason (word match in the request, document-type or glob match on document names) or ''; `Library.relevant(...)` (at most 4); `render(skill)` writes SKILL.md; `POST /api/skills/upload` (multipart, replaces your skill of the same name), `GET /api/skills/{id}/download`; `SkillInput.applies_to` validated.
+- `agentic_chat.system()`: `_auto_skills()` loads matching skills before the answer and adds a "Skills in use (because …)" section; they still only narrow tool access. Built-in `invoice-review` carries applies_to as the example.
+- Skills & memory: Upload SKILL.md, "When it applies" fields, chips, Download. Training card "Teach me with a skill" (`TRAINING_VERSION` 2); tour scene "Skills" on both versions (`TOUR_VERSION` 3; 69 seconds).
+
+## v26.1.16.30 - 29 October 2026
+
+The agent guides plain requests end to end
+
+- `agent-guide.ts` (pure): `guideIntent(text)` reads plain words into upload / extract / dataset / prompt / start (commands, `#document` and knowledge questions are left alone); `guideFor(intent, state)` returns the step to show when something is missing (no files → Add documents; no dataset → Choose a dataset / Guided start; no prompt → Guided start / Write a prompt; contributor dataset creation → Guided start) or null; `guidedOperation` maps a ready intent to the deterministic server operation (`agent_operation`), bypassing the model's routing.
+- `agent-v2.tsx`: `send()` runs the guide before anything reaches the server; a guided step renders as a Lapi Agent exchange with chips (`runGuide`), the request text stays in the composer; "start" opens the Quick start with the attached documents.
+- `openQuickStart(files?)` carries attached documents into the Quick start (`initialFiles`).
+- Sign-in artwork (`lapi-banner.tsx`): the "1 CONNECT · 2 UNIFY · 3 ASK" row is gone (the title already says it); the viewBox is cropped to the remaining drawing.
+
+## v26.1.16.29 - 29 October 2026
+
+Dense pages are read in parts
+
+- `ocr.transcribe`: a page is read in parts (up to 8 strips) when its estimated answer would not fit the output budget (`estimate_tokens`, decided before the model is asked) or when the answer still comes back cut off. Cuts land in section gaps (`choose_cut`: a white gap clearly wider than the usual line spacing, nearest the middle), never inside a line or between a table's header and its rows; each lower strip gets the last lines of the strip above (`continuation`) so tables keep their columns. Progress shows why it takes longer ("Page 3 has a lot of text: reading it in parts…", "reading part 2 of 4"). The final error no longer asks people to change `LAPI_OCR_*` settings.
+- Deploy: `terraform.tfvars` holds `keycloak_identity_providers`; all three images carry the release tag.
+
+## v26.1.16.28 - 29 October 2026
+
+Sign in with Google
+
+- Hosted deployment: `keycloak_identity_providers = { google = "Google" }` (terraform.tfvars) turns on the Google button; Keycloak's `google` identity provider was already configured.
+- Sign-in popup wording never says "Keycloak": "Choose how you want to sign in", "Sign in with Google", "Sign in with a username and password instead", "Emergency administrator sign-in", and plain sign-in error messages.
+
+## v26.1.16.27 - 29 October 2026
+
+Agent-first phone version (mobile Release 1)
+
+- `screens.py` + `screen_grant_tbl`: every non-core screen is an OpenFGA object (`screen:<id>`, `screen:<id>-phone`) with relation `enabled` granted to `user:*`, `team#member` or a person; defaults are computer = everyone, phone = off; administrators always see all. `GET /api/me/screens?device=`, admin `GET/PUT /api/screens`, `POST /api/screens/preset` (`agent-only-phone`, `everything`). Grants sync to OpenFGA with the other tuples (`authz.enabled_screens` list-objects; wildcard type in the model).
+- Frontend `screens-client.ts`: device by width (< 640 px = phone), `viewAllowed`, `agentOnly`; `page.tsx` re-reads the state every minute and on device change, hides screens from the navigation (`WorkspaceNavigation allowed`), redirects hidden routes to the Dashboard, hides the phone More menu and drawer toggle when agent-only.
+- Access map → Screens tab (`screens-admin.tsx`): Phone / Computer grid (Everyone, Off, one team), presets, save bar.
+- Agent training (`agent-training.tsx`, `TRAINING_CARDS`; `GET/POST /api/me/agent-training`): five cards with Try it actions (ask example, open Quick start), shown once per person and from the chip.
+- Agent: quick-action chips (Guided start, Add documents, Pull out data, How the agent works), `/Start` opens Quick start (`openQuickStart` now in `quick-start-flow.ts`), Quick start's done step offers "Continue in Lapi Agent" with the dataset selected.
+- Phone Dashboard hero "Ask Lapi Agent / How it works" (`workspace-assist.tsx`, `mobile.css`).
+
+## v26.1.16.26 - 29 October 2026
+
+Spreadsheets, exact answers and charts
+
+- `spreadsheet.py` (new; `openpyxl` 3.1.5 + `et-xmlfile` 2.0.0): reads CSV/TSV (encoding fallback, delimiter sniffing) and XLSX (saved formula values, merged cells filled from their first cell, hidden sheets noted, `.xls` refused with advice). Header detection, blank/duplicate column names, per-column types (number incl. "1,234.50" and "(10)", ISO dates, booleans, text). Limits: 50,000 rows, 200 columns, 20 sheets, 2,000 characters per cell.
+- Indexing: per sheet a summary chunk (columns, types, counts, ranges, examples) and row chunks packed **only at row boundaries**, each starting with the sheet and its columns and each row written as `Row n · Column: value · …`; rows wider than a chunk are split between column/value pairs. Packing measures with the embedding model's own limit (MiniLM tokens, OpenAI bytes) and those chunks skip the generic re-splitting. Chunks carry `section` ("Sheet: X · rows a-b"), `sheet`, `row_start`, `row_end`, passed through to citations.
+- The typed table is stored as Parquet per sheet (`documents/<id>/tables/<n>.parquet` + `tables.json`).
+- Upload: XLSX/CSV/TSV accepted, validated fully at upload (renamed files, old `.xls`, empty sheets, limits) with plain messages; spreadsheets are never merged with other files (422).
+- Lapi Agent tool `query_table`: validated filters, group by (dates by day/month/quarter/year), count/sum/avg/min/max/count_distinct, row listing, sorting, limits; results cited as "Calculated from <file> · sheet <name>"; optional chart (bar/line/pie/scatter) built from the computed rows and saved on the message as `charts`.
+- Frontend: `answer-chart.tsx` / `answer-chart-data.ts` draw the charts in SVG (no new libraries) with a spoken summary, the numbers table and a CSV download (formula-safe). Sources show sheet and rows. File pickers accept spreadsheets.
+- Lapi Agent's answer workflow no longer opens its phase panel by itself; a slim status line shows while working.
+- Caddy sends `Cache-Control: no-cache` for pages (not `/_next/static` or `/api`), so browsers pick up a new release on the next visit instead of an older cached page.
+
+## v26.1.16.25 - 29 October 2026
+
+Roomier, easier-to-read chat
+
+- `chat-design.css` (imported by `agent-v2-chat.tsx`, so it styles Lapi Agent and the Dashboard chat): 768 px centred reading column; question bubbles; answers without cards in a serif reading stack at 17.5 px / 1.72 (16.5 px on phones); citation pills; code styling; rounded composer with focus ring and orange send button (`--text-input` 16 px keeps the command highlight aligned); calm serif welcome instead of the gradient banner; fade-in for new exchanges; reduced-motion fallbacks.
+- Live status line while an answer has no text yet (`chat-phase.ts` `answerPhase`): Thinking → Understanding your question → Searching your knowledge → Writing the answer → Checking the answer against its sources; the empty cursor and token line are hidden meanwhile.
+- `AgentAnswerText` renders `- ` / `* ` / `• ` bullets and `1. ` numbered items as list items and blank lines as small gaps.
+- Lapi Agent's Context panel shows only at 1500 px and wider (was 1200 px). Phones hide the floating Ask shortcut while the Dashboard chat is open.
+- The enterprise-app-hardening skill (all work from v26.1.16.13 on: roles, model Defaults, company sign-in, Quick start, tour voice-over and versions, chat design, deploy routine, pitfalls) is now in the repo at `lapi_docs/skills/`.
+
+## v26.1.16.24 - 29 October 2026
+
+Voice-over and phone and computer versions of the tour
+
+- Two versions: `SCENES` (computer) and `MOBILE_SCENES` (phone), same scene ids and timing; `useDevice` picks by `MOBILE_QUERY` (max-width 640px) and follows resizing. The phone Connect scene shows Tap Add, photo or files, merge pages.
+
+- `walkthrough.tsx` `useNarration`: the browser's speech synthesis speaks each scene's caption when the scene starts (no external service or keys). The timeline holds at the end of a scene until its line has ended (safety limit: scene length + 8 s). Pause cancels speech; resuming with the voice on restarts the scene so words and pictures match.
+- Voice on / off control (`localStorage` `lapi:tour-voice`). A speech `not-allowed` error (no user gesture yet, e.g. the automatic first-login tour) shows "Turn on voice", which restarts the scene with narration.
+- `walkthrough-data.ts`: captions rewritten as voice-over lines (`wordsPerSecond` keeps each within its scene; tested at 2.7 words/s or less), `pickVoice` prefers natural English voices. `TOUR_VERSION` 2 (frontend and `walkthrough.py`), so everyone sees the narrated tour once.
+
+## v26.1.16.23 - 29 October 2026
+
+Merge files, extraction workflow and Review from Quick start
+
+- Quick start New dataset: name and optional description (`POST /api/datasets` `description`).
+- Merge before reading: with 2–20 files, Quick start offers "Merge into one document" or "Keep as separate documents" (photos merge by default; `merge_files=true` on `/api/documents/upload`). Lapi Agent `/Upload` without an extraction step offers the same choice (`extraction_mode=merge` on the plan upload call, which already stitched files). Merged documents are named `merged-<first file>-<n>-files`.
+- Extracting: a workflow list from the extraction's real status (`extractionStages` in `quick-start-flow.ts`). Results stay in the popup with Finish and Review; Review dispatches `lapi:open-review` (`OPEN_REVIEW_EVENT`), which `page.tsx` handles with `openReview(id)`.
+- Fields step: "Add fields yourself" next to "Suggest fields", for when the model cannot draft them.
+
+## v26.1.16.22 - 29 October 2026
+
+Contributor datasets use the workspace Default models
+
+- `POST /api/datasets/{id}/migrate-settings` gives a new dataset the workspace Default models (empty mappings) when Chat, Extraction and Embedding Defaults are set. Before, it imported the legacy settings as models owned by the caller; for a Contributor those private copies clashed with the Default embedding model ("Datasets use the workspace Default embedding model…"). Without Defaults, non-administrators get 409 asking an administrator to choose them.
+- `PUT /api/datasets/{id}/models` and `POST /api/datasets/{id}/local-models` are `admin` again: administrators set the Defaults and do all mapping. Datasets report `chat_choices` (enabled mapped chat models plus the workspace Default chat model), which the chat model pickers use.
+- Quick start hides the app-wide "Processing in background" panel while it is open (`quick-start.css`).
+- Quick start between 640 and 900 px wide (tablets): its one grid row may now shrink, so the body scrolls and the footer stays visible; before, content past the dialog's max height was clipped. New Enlarge / Smaller button (remembered in `localStorage` as `lapi:quick-start-enlarged`; hidden on phones, where it is already full screen).
+
+## v26.1.16.21 - 29 October 2026
+
+Contributor role from Keycloak
+
+- **`lapi-contributor`** (Keycloak realm role, `LAPI_KEYCLOAK_CONTRIBUTOR_ROLE`): synced at every sign-in and 5-minute re-check into `workspace_contributor_tbl` and the OpenFGA relation `lapi:workspace#contributor`. Contributors are Owner on every dataset (`dataset_access.manages_datasets`) and pass the new `contributor` route policy: creating, deleting and restoring datasets, dataset status and models, assigning documents, dataset onboarding. Workspace management stays `admin`.
+- Screens: dataset creation, deletion and model mapping show for contributors; the Access map and Users list label them "Contributor"; `auth/me` returns `is_contributor`.
+- To let everyone play around: add `lapi-contributor` to the realm's default roles in Keycloak (`lapi_docs/company-sign-in.md`).
+
+## v26.1.16.20 - 28 October 2026
+
+Quick start and company sign-in
+
+- **Quick start** (`quick-start.tsx`, `quick-start-flow.ts`): one guided workflow, full screen on phones: choose a dataset (administrators can create one with the workspace Default models), add documents (camera or files, up to 10; PDF, Word, text, JSON, images) with consent to process them, live reading progress per file, a first question with suggested questions, the answer and its sources, then next actions (keep asking, add more, share with the team). Viewers choose a dataset and ask. It is the primary next step for everyone (`setup-guide.ts`) and the phone tab bar's Add button.
+- **AI-drafted extraction prompts** (`prompt_suggest.py`, `POST /api/templates/suggest`, Editor): the dataset's extraction model reads the start of the ready documents and proposes 4–10 fields (key, label, type, one-line instruction) plus a prompt name; people edit them, or send a requested change with the current fields to have them rewritten. The fields become a strict, nullable JSON Schema template and an ordinary extraction. Needs the same consent as extraction for external models.
+- **Quick start** now offers "Ask a question" or "Pull out data" after the documents are read, asks for consent before every AI step (reading documents, answering, extracting), and uses Lapi's look (the sign-in page's blended band and orange primary button).
+- **Quick start everywhere**: a permanent launcher at the top of the Dashboard (`workspace-assist.tsx`, `openQuickStart()` event for other screens); on screens 900 px and wider it is a two-column panel with a step rail, on phones a full-screen sheet.
+- **Company sign-in providers**: `keycloak_identity_providers` (Terraform) lists Keycloak identity providers (alias → label); Lapi shows one button per provider that passes `kc_idp_hint`, plus "Use a Keycloak account instead". Microsoft, Google and GitHub have their logos. Guide: `lapi_docs/company-sign-in.md`.
+- `POST /api/dataset-chat/messages` returns 502 with the reason when the chat model fails, instead of 500.
+
+## v26.1.16.19 - 28 October 2026
+
+Hosted Keycloak starts
+
+- Fix (`keycloak_bootstrap.py`): the platform creates the scratch sub-path `keycloak-secrets` as root, so the api may not change its mode; that `PermissionError` stopped the secrets from being written and Keycloak waited. The folder mode is now best-effort; the secret files stay owner-only.
+
+## v26.1.16.18 - 28 October 2026
+
+Safer sign-in, set-up questions, phones and shortcuts
+
+- **Sessions** (`sessions.py`): 30-minute idle timeout (`LAPI_SESSION_IDLE_MINUTES`) besides the 12-hour limit; `sessions_tbl` gains last activity, address, browser, Keycloak session id and encrypted Keycloak tokens. My sessions (`/api/me/sessions`), sign out others, and administrators' "Sign out everywhere". With HTTPS the cookie is `__Host-lapi_session` (everyone signs in once more after this release).
+- **Sign-in limits** (`sign_in_limits.py`, `sign_in_attempt_tbl`): 5 failures per username or 20 per address in 15 minutes lock for 15 minutes, kept in the database with hashed keys; success clears only the username. The client address comes from Caddy's X-Forwarded-For only for requests from this instance. Unknown usernames take the same time as known ones.
+- **Authenticator codes** (`totp.py`, `user_totp_tbl`): TOTP for password accounts (break-glass administrators), single-use codes, administrator reset. Password sign-in to an administrator account while Keycloak is on is logged as a break-glass warning.
+- **Keycloak**: sessions re-checked every 5 minutes with the refresh token (disabled or signed-out people end, roles and teams follow); back-channel logout `POST /api/auth/keycloak/backchannel-logout`; `id_token_hint` on sign-out; `azp` checked; administrators can be required to have used a second factor (`LAPI_KEYCLOAK_REQUIRE_ADMIN_MFA`, AMR).
+- **Hosted Keycloak on OCI** (off: `keycloak_hosted = false`): Keycloak image with the Oracle driver (`lapi_deploy/keycloak`), realm with administrator MFA, brute-force lockout and password policy, `sso.<ip>.sslip.io` through Caddy, `KEYCLOAK` database user created by the api from a Vault secret (`keycloak_bootstrap.py`), PROXY protocol v2 on the load balancer so Lapi sees real addresses.
+- **Set-up questions** (`preferences.py`, `setup-guide.ts`, `workspace-assist.tsx`): goals and knowledge sources after the tour, a first step chosen by access level, a "Your next steps" Dashboard card; Add knowledge can open straight into a connector guide (`#Add knowledge/<provider>`).
+- **Phones and shortcuts** (`mobile.css`, `shortcuts.ts`): bottom tab bar, floating Ask, 44 px targets, full-screen sheets; `?`, `/`, `g d`/`g a`/`g k`/`g s`/`g u`, `n`, `Esc`.
+
+## v26.1.16.17 - 28 October 2026
+
+Dataset roles, teams, Auditor and a 1-minute tour
+
+- **Dataset levels.** Grants carry a level: Viewer (read and chat), Editor (also upload, reindex, delete documents, prompts, extractions, reviews, connectors, retry or cancel others' jobs) or Owner (also rename, instructions, prompt guide and members). Model mappings, activation and deletion stay administrator-only. The upgrade adds `user_dataset_tbl.access_level` and sets existing grants to `editor`, which is what they could already do.
+- **Teams.** New tables `team_tbl`, `team_member_tbl` and `team_dataset_tbl`. Keycloak groups (a `groups` claim from the Group Membership mapper) become teams at each sign-in; local teams are managed in the Access map (`/api/teams`). A person gets the highest of their own and their teams' levels.
+- **Owners share datasets** from a Members tab in Manage dataset (`GET`/`PUT /api/datasets/{id}/members`).
+- **Auditor** (`workspace_role_tbl`, or Keycloak role `lapi-auditor`): reads Users & passwords and the Access map, no dataset content, no changes.
+- **OpenFGA model** now has `dataset` owner ⊃ editor ⊃ viewer, `team#member` grants and `lapi:workspace auditor`; the Access map compares every level with OpenFGA's answer.
+- **Route policy.** `route_policy.py` lists every API route and method with who may call it (public, signed in, viewer, editor, owner, audit, admin). Sign-in enforces administrator and auditor routes for every request; dataset levels are enforced by the routes. An unclassified route is refused, and a test fails if any route is missing or stale. This replaces the old path-prefix rule.
+- **Product tour.** A 60-second animated walkthrough (Connect, Unify, Ask, Extract and review, Secure by design) opens once on the Dashboard after a person's first sign-in, remembered on the server (`/api/me/walkthrough`), and is in About as "Watch the 1-minute tour".
+- Local Keycloak demo (`lapi_local_use/keycloak-demo`) with test users for administrator, user-in-a-group and auditor.
+
+## v26.1.16.16 - 28 October 2026
+
+HTTPS certificate saved for updates
+
+- Caddy now runs as uid 10001 (the api's user). It keeps its files owner-only, so while it ran as root the api could not read them and saved nothing; the folder scan also skipped unreadable folders silently. `tls_state` now logs a warning for a folder it cannot read.
+
+## v26.1.16.15 - 28 October 2026
+
+HTTPS certificate kept across updates
+
+- Fix: `tls_state.keep` compared the folder with itself when its loop started, so a certificate Caddy obtained before then (the first one, in practice) was never saved. It now compares with what was restored from the control bucket.
+
+## v26.1.16.14 - 28 October 2026
+
+Lapi over HTTPS
+
+- On OCI, a Caddy container in the container instance serves Lapi at `https://lapi.<load balancer IP>.sslip.io` (sslip.io turns the IP into a name, so no domain or DNS is needed) with a Let's Encrypt certificate it renews itself. The load balancer passes ports 80 and 443 straight through; port 80 redirects to HTTPS. Set `https = false` in Terraform to go back to plain HTTP, or `https_hostname` to use your own domain.
+- The certificate survives deployments: the api saves Caddy's data folder to the control bucket every five minutes when it changes (`tls_state.py`) and restores it before Caddy starts, because Let's Encrypt issues only five certificates a week for one name.
+- `COOKIE_SECURE` is on with HTTPS, and `public_url` (and the Keycloak redirect URI) default to the HTTPS address.
+
+## v26.1.16.13 - 28 October 2026
+
+Redesigned sign-in page
+
+- One blended background (deep blue, indigo, rose and peach, with see-through glows and a faint grid) now runs behind the whole sign-in page instead of a white form beside a blue panel.
+- The Connect · Unify · Ask diagram (`lapi-banner.tsx`) is unchanged and sits directly on the background under a "Connect. Unify. Ask." headline; the three feature notes under it are removed.
+- The sign-in card is frosted glass (blur and a darker tint for readable white text), with an orange Sign in button; Keycloak, administrator sign-in, password reveal, errors, autofill and keyboard focus are restyled for it. The card stays first in reading order and above the diagram on narrow screens; the diagram is hidden below 560 px as before.
+
 ## v26.1.16.12 - 28 October 2026
 
 Text-only files are indexed as their text

@@ -4,7 +4,7 @@ import json
 import time
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from .. import core, dataset_models as routing
+from .. import core, dataset_access, dataset_models as routing
 from . import agent_workspace as workspace
 from ..admin_documents import lifecycle_guard
 
@@ -40,9 +40,10 @@ def install(app, auth, main):
                 raise HTTPException(409,'The previous extraction changed. Reload before re-extracting.')
             saved=core.store.json(source.ref)
             dataset,docs=routing.documents_scope(owner,source.parent_id,saved['document_ids'])
+            dataset_access.require_level(owner,dataset.id,'editor')
             template=routing.owned(body.template_id,owner,'template')
             if template.parent_id and template.parent_id!=dataset.id:
-                raise HTTPException(400,'Choose a prompt template belonging to the selected dataset.')
+                raise HTTPException(400,'Choose a prompt template belonging to the selected collection.')
             snapshot=routing.execution_snapshot(dataset,'extraction')
             main.external_check(body.allow_external,cfg=snapshot['settings'])
             if any(doc.status!='ready' for doc in docs):
