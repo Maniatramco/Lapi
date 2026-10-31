@@ -17,7 +17,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from pydantic import ValidationError
 from .. import core, dataset_models as routing, providers, runtime_config
-from . import agent_model, agent_context, token_usage, answer_check
+from . import agent_model, agent_context, token_usage, answer_check, answer_support
 from .agent_progress import AnswerProgress
 from .agent_tools_v2 import AgentTools, definitions, envelope, PROPOSALS, READS
 
@@ -303,13 +303,28 @@ class AgenticChat:
             output = self.call(messages, [], 'final_answer')
         return output.get('text') or ''
 
+    def checked(self, answer):
+        """Citation and value checks, then (with a Decisions Default) whether each cited
+        sentence is supported by the sources it cites. The Decisions status is saved."""
+        problems = answer_check.check(answer, self.tools.sources)
+        if not self.decisions:
+            return problems
+        with self.progress.step('Checking the sources support the answer'):
+            more, status = answer_support.agentic_problems(answer, self.tools.sources, {(p['start'], p['end']) for p in problems},
+                                                           getattr(self.tools.body, 'allow_external', True))
+        self.validation['answer_support'] = status
+        return sorted(problems + more, key=lambda p: p['start'])
+
     def run(self, history, text, question=None, preload=()):
         messages = self.system() + history + [{'role': 'user', 'content': text}]
         messages += self.prefetch(question or text, preload)
         answer = self.loop(messages, self.max_steps)
         if self.ended: return self.ended_answer()
         answer, follow_ups = split_follow_ups(answer_check.normalize(answer, self.tools.sources))
-        problems = answer_check.check(answer, self.tools.sources)
+        self.decisions = answer_support.enabled()
+        if not self.decisions:
+            self.validation['answer_support'] = {'status': 'not_configured'}
+        problems = self.checked(answer)
         self.validation['attempts'].append({'reason': problems[0]['reason'] if problems else 'passed', 'problems': len(problems)})
         if problems:
             messages += [{'role': 'assistant', 'content': answer}, {'role': 'user', 'content': answer_check.feedback(problems)}]
@@ -322,7 +337,7 @@ class AgenticChat:
             repaired, more = split_follow_ups(answer_check.normalize(repaired or '', self.tools.sources))
             follow_ups = more or follow_ups
             answer = repaired or answer
-            problems = answer_check.check(answer, self.tools.sources)
+            problems = self.checked(answer)
             self.validation['attempts'].append({'reason': problems[0]['reason'] if problems else 'passed', 'problems': len(problems)})
             if problems:
                 answer, removed = answer_check.remove(answer, problems)

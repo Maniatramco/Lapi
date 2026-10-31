@@ -1,6 +1,16 @@
 {
-  "version": "26.1.16.47",
+  "version": "26.1.16.48",
   "releases": [
+    {
+      "version": "26.1.16.48",
+      "date": "2026-10-31",
+      "title": "Decisions checks Lapi Agent answers too",
+      "changes": [
+        "The Lapi Agent's chat now checks every cited sentence with Decisions when a Decisions Default is set. Before, only the Dashboard chat and the Agent's other chat path did, so live Agent answers were never checked. Sentences Decisions rejects get one rewrite, then are removed, and the answer says how many were removed.",
+        "Set-up and Help chat: when Decisions is confident an answer matches none of the choices, such as \"hi\", Lapi asks again in its own words instead of passing the answer to the chat model.",
+        "Asking again in the set-up and Help chat now looks like a normal Lapi message, not an orange error."
+      ]
+    },
     {
       "version": "26.1.16.47",
       "date": "2026-10-31",

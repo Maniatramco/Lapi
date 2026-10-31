@@ -124,10 +124,12 @@ def check(answer, sources, weak_score=None):
 def feedback(problems):
     lines = []
     for p in problems[:12]:
-        what = {'uncited_claim': 'has no citation',
-                'unknown_citation': 'cites sources that were not read this turn: ' + str(p['detail']),
-                'unsupported_value': 'states values not found in its cited sources: ' + ', '.join(map(str, p['detail'] or [])),
-                'weak_support': 'cites only weakly matching sources'}[p['reason']]
+        # Built per reason: `detail` is a list for some reasons and a number for others.
+        what = {'uncited_claim': lambda: 'has no citation',
+                'unknown_citation': lambda: 'cites sources that were not read this turn: ' + str(p['detail']),
+                'unsupported_value': lambda: 'states values not found in its cited sources: ' + ', '.join(map(str, p['detail'] or [])),
+                'weak_support': lambda: 'cites only weakly matching sources',
+                'not_supported': lambda: 'is not supported by the sources it cites'}[p['reason']]()
         lines.append('- "' + p['sentence'][:200] + '" ' + what)
     return ('Your answer failed the citation check:\n' + '\n'.join(lines) +
             '\nRewrite the whole answer. Cite every factual sentence with [n] from sources read in this turn, use only values those sources contain, '
