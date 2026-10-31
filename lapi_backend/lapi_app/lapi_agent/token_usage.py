@@ -40,7 +40,7 @@ _stage = ContextVar('lapi_token_usage_stage', default=None)
 _pending = ContextVar('lapi_token_usage_pending', default=None)
 
 STAGES = ('prefetch_embedding', 'tool_step', 'final_answer', 'repair', 'optimize',
-          'extraction', 'reindex', 'memory', 'chat')
+          'extraction', 'reindex', 'memory', 'chat', 'decisions')
 EMBEDDING_STAGES = ('prefetch_embedding', 'reindex')
 SCOPE_KEYS = ('owner_id', 'dataset_id', 'conversation_id', 'message_id', 'job_id')
 COUNT_KEYS = ('input_tokens', 'cached_input_tokens', 'cache_write_tokens', 'output_tokens', 'reasoning_tokens')

@@ -13,6 +13,7 @@ from . import parameters as model_parameters
 from .parameters import validate_parameters, validate_stage_parameters
 from .validation import temporary_credentials
 from .catalog import choices
+from . import decisions
 from .. import runtime_config
 
 
@@ -79,8 +80,9 @@ OCR_PROVIDERS = 'OCR works with OpenAI (api.openai.com) or Google Gemini API con
 
 
 def stage_use(use):
-    """OCR runs at the Extraction stage with Extraction's parameters."""
-    return 'extraction' if use == 'ocr' else use
+    """OCR runs at the Extraction stage with Extraction's parameters. Decisions takes no
+    generation parameters; its connection is validated like a Chat connection."""
+    return 'extraction' if use == 'ocr' else 'chat' if use == 'decisions' else use
 
 
 def effective_snapshot():
@@ -108,11 +110,11 @@ class ConnectionInput(BaseModel):
 class RegistrationInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=120)
-    category: Literal['embedding', 'chat', 'extraction', 'ocr']
+    category: Literal['embedding', 'chat', 'extraction', 'ocr', 'decisions']
     # Everything this model is used for; `category` is the one the test and parameters
     # follow. Chat, Extraction and OCR can share one model; Embedding stays on its own
     # (the form saves a separate embedding registration of the same model).
-    capabilities: list[Literal['chat', 'extraction', 'embedding', 'ocr']] | None = Field(default=None, min_length=1, max_length=3)
+    capabilities: list[Literal['chat', 'extraction', 'embedding', 'ocr', 'decisions']] | None = Field(default=None, min_length=1, max_length=3)
     provider_model: str = Field(min_length=1, max_length=200)
     connection: ConnectionInput
     timeout: int = Field(default=runtime_config.get('LAPI_MODEL_REGISTRATION_TIMEOUT'), ge=5, le=1800)
@@ -169,10 +171,14 @@ def prepare(body, owner, existing=None):
             raise ConnectionError('Use for must include the model category.')
         if 'embedding' in uses and len(uses) > 1:
             raise ConnectionError('Embedding is registered on its own. Save Chat, Extraction and OCR as one model, and Embedding as another.')
+        if 'decisions' in uses and len(uses) > 1:
+            raise ConnectionError(decisions.ALONE)
         if existing:
             md, profile, snapshot, old = previous(existing)
             if body.capabilities is None:
                 uses = md['capabilities']  # A form that does not send uses keeps the saved ones.
+            if ('decisions' in uses) != ('decisions' in md['capabilities']):
+                raise ConnectionError('A Decisions model cannot become a Chat, Extraction, OCR or Embedding model, or the reverse. Register another model instead.')
             if body.category not in uses or ('embedding' in uses) != ('embedding' in md['capabilities']):
                 raise ConnectionError('An Embedding model cannot become a Chat, Extraction or OCR model, or the reverse. Register another model instead.')
             unchanged_destination = old and all(old.get(k) == c.get(k) for k in ('protocol', 'auth_mode', 'endpoint'))
@@ -217,6 +223,8 @@ def prepare(body, owner, existing=None):
             from . import cloud_ocr
             if not cloud_ocr.provider({'settings': cfg, 'provider_model': body.provider_model.strip()}):
                 raise ConnectionError(OCR_PROVIDERS)
+        if 'decisions' in uses and not decisions.openai_connection(cfg):
+            raise ConnectionError(decisions.PROVIDERS)
         return cfg, secret, uses
     except ConnectionError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -324,7 +332,7 @@ def install_routes(app, auth):
         return choices()
 
     @app.get('/api/model-registrations/parameter-schema')
-    def parameter_schema(protocol: str, category: Literal['embedding', 'chat', 'extraction', 'ocr'], chat_format: str = 'generic',
+    def parameter_schema(protocol: str, category: Literal['embedding', 'chat', 'extraction', 'ocr', 'decisions'], chat_format: str = 'generic',
             embedding_format: str = 'titan', model: str = '', owner=Depends(auth)):
         if protocol not in ConnectionInput.model_fields['protocol'].annotation.__args__:
             raise HTTPException(422, 'Unknown model protocol.')
@@ -366,6 +374,8 @@ def install_routes(app, auth):
             try:
                 if body.category == 'ocr':
                     result = probe_ocr(cfg, body.provider_model.strip())
+                elif body.category == 'decisions':
+                    result = decisions.probe(cfg, body.provider_model.strip())
                 elif body.category == 'chat':
                     with model_parameters.use_stage('tool_step'):
                         result = probe_agent(snapshot['settings'])

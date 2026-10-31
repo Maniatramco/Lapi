@@ -2,6 +2,18 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.47 - 31 October 2026
+
+Answers checked against their sources (OpenAI Decisions API)
+
+- `lapi_models/decisions.py`: client for `POST /v1/decisions` through the pinned connection (`ModelConnection.post`), with typed answer checks (question type, offered choice, refusal), a `decisions` token-usage stage and `DecisionsError`. `snapshot()` resolves the workspace Decisions Default only when it is enabled, tested and an OpenAI (api.openai.com) connection. `probe()` asks two known predicates for Test connection.
+- Model Registration: `decisions` use for the OpenAI provider only, registered on its own (like Embedding); no chat API, output limit or sampling parameters. Workspace Default role `decisions` (`decisions_model_id`, added to older databases by `upgrade_legacy`), and `DELETE /api/workspace/defaults/decisions` (administrators) to stop using it.
+- `lapi_agent/answer_support.py`: after citation validation, each cited sentence becomes one predicate ("supported by sources [n]?") with the cited evidence as data. Below `LAPI_DECISIONS_SUPPORT_PERCENT` the answer fails validation as `unsupported_claims`, gets one repair from the same evidence, then is refused. Status `not_configured`, `skipped`, `unavailable`, `passed` or `unsupported` is saved as `answer_support` in the trace; refused questions count as unchecked. Used by the Lapi Agent's Chat Agent and Dashboard Knowledge Chat; the progress step appears only when the check runs.
+- `dataset_chat_general.knowledge_check`: with a Decisions Default, Dashboard chat asks whether a request needs knowledge before a direct answer; at or above `LAPI_DECISIONS_KNOWLEDGE_PERCENT` it goes through hybrid retrieval, reranking and validation. It can never turn a knowledge request into a direct answer. Saved as `request_route.routing_check`.
+- `setup_assist.decide`: yes/no/option stages (`team`, `consent`, `fields`, `help`, `choose`) use a Decisions choice at or above `LAPI_DECISIONS_CHOICE_PERCENT`; otherwise the chat model or the screen's rules, as before.
+- `runtime.toml` `[decisions]`: timeout, claims per answer and the three thresholds (percent).
+- Tests: `test_decisions.py` (registration, probe, Default, clear, admin-only, refusals, column upgrade), `test_decisions_chat.py` (support check pass/repair/refuse/unavailable/not configured/no consent, routing, set-up), and a Model Registration unit test.
+
 ## v26.1.16.46 - 31 October 2026
 
 Lapi sets you up in a chat

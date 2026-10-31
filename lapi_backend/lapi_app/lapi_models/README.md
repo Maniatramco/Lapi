@@ -192,3 +192,29 @@ the approved local service.
 Do not copy dataset/storage logic into provider implementations. Do not add
 an arbitrary endpoint, insecure transport, implicit credential reuse or
 automatic provider fallback to make a test pass.
+
+## OpenAI Decisions API
+
+`decisions.py` calls `POST /v1/decisions` (OpenAI, `gpt-6-luna`) through the pinned
+connection. Decisions returns typed answers: a predicate's probability, a choice
+with its confidence, or a score. Any question can come back as a refusal. Lapi
+uses it only to judge, never to write text.
+
+Decisions is a model use of its own in Model Registration, for `api.openai.com`
+connections only, registered without other uses. Test connection asks two
+predicates with known answers. The workspace Decisions Default is optional and
+can be cleared with `DELETE /api/workspace/defaults/decisions`. Without it, every
+caller keeps its previous behaviour.
+
+With the Default set:
+
+- `lapi_agent/answer_support.py` checks each cited sentence of a chat answer
+  against the sources it cites, after citation validation. Unsupported answers
+  get one repair from the same evidence and are refused if still unsupported.
+- `dataset_chat_general.knowledge_check` can send a Dashboard chat request to
+  knowledge lookup before a direct answer. It never skips lookup.
+- `setup_assist.decide` reads yes, no and option answers in the set-up chat.
+
+Thresholds, the timeout and the number of sentences checked per answer are in
+`runtime.toml` under `[decisions]`. Each result records what actually ran:
+`not_configured`, `skipped`, `unavailable`, `passed` or `unsupported`.

@@ -8,7 +8,7 @@ export const PAGE_INTROS:Record<string,Intro>={
  'Prompt templates':{group:'Onboard',step:'Step 2 of 4',title:'Prompts',text:'Save extraction templates that define which fields to pull from documents.'},
  'Extract Data':{group:'Onboard',step:'Step 3 of 4',title:'Extract',text:'Run a saved prompt over indexed documents and compare the extracted fields side by side.'},
  'Extract':{group:'Onboard',step:'Step 4 of 4',title:'Review',text:'Check extracted fields against the source before they are trusted in answers and exports.'},
- 'Model Registration':{group:'Settings',title:'Model registration',text:'Register chat, extraction, embedding and OCR models and test their connections.'},
+ 'Model Registration':{group:'Settings',title:'Model registration',text:'Register chat, extraction, embedding, OCR and Decisions models and test their connections.'},
  'Model Mapping':{group:'Settings',title:'Model mapping',text:'Choose which models each collection uses for embedding, chat, extraction and OCR.'},
  'Enabled models':{group:'Settings',title:'Enabled models',text:'Turn registered models on or off for chat and new work, from a computer or a phone.'},
  'Users & passwords':{group:'Settings',title:'Users & passwords',text:'Manage people, roles and collection access, and change your own password.'},

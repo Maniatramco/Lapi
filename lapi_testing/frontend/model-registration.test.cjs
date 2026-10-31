@@ -59,3 +59,24 @@ test('direct Claude resets an embedding category to Chat, masks its key and send
  s.field('registration-workspace').props.onChange({target:{value:'wrkspc_changed'}});s.render();
  assert.equal(s.button('Save Model').props.disabled,true);
 });
+
+test('Decisions is an OpenAI use of its own: it suggests gpt-6-luna, hides chat-only fields and tests as decisions',async()=>{
+ catalog.find(p=>p.id==='openai').categories=['chat','extraction','embedding','ocr','decisions'];
+ try{
+  const s=await screen();s.choose('openai');
+  const use=value=>s.all().find(n=>n.type==='label'&&n.key===value);
+  assert.ok(use('decisions'));
+  const box=value=>use(value).props.children.find(n=>n&&n.type==='input');
+  box('decisions').props.onChange({target:{checked:true}});s.render();
+  assert.equal(box('decisions').props.checked,true);assert.equal(box('chat').props.checked,false);
+  assert.equal(s.field('registration-model').props.value,'gpt-6-luna');
+  assert.equal(s.field('registration-output-limit'),undefined);assert.equal(s.field('registration-chat-api'),undefined);
+  s.field('credential-api_key').props.onChange({target:{value:'synthetic-key'}});s.render();
+  s.button('Test Connection').props.onClick({currentTarget:{form:{reportValidity:()=>true}}});await flush();s.render();
+  const sent=s.calls.find(c=>c[0]==='/model-registrations/test')[2];
+  assert.equal(sent.category,'decisions');assert.deepEqual(sent.capabilities,['decisions']);assert.deepEqual(sent.test_stages,[]);
+  // Ticking Chat again leaves Decisions: they are separate registrations.
+  box('chat').props.onChange({target:{checked:true}});s.render();
+  assert.equal(box('decisions').props.checked,false);assert.equal(box('chat').props.checked,true);
+ }finally{catalog.find(p=>p.id==='openai').categories=['chat','extraction','embedding'];}
+});

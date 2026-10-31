@@ -1,8 +1,8 @@
 /** Enabled models: which registered models are offered for new work, and why some must stay on. */
 type Entity=Record<string,any>;
 
-export const ROLE_NAMES:Record<string,string>={chat_model_id:'Chat',extraction_model_id:'Extraction',embedding_model_id:'Embedding',ocr_model_id:'OCR'};
-const USE_NAMES:Record<string,string>={chat:'Chat',extraction:'Extraction',embedding:'Embedding',ocr:'OCR'};
+export const ROLE_NAMES:Record<string,string>={chat_model_id:'Chat',extraction_model_id:'Extraction',embedding_model_id:'Embedding',ocr_model_id:'OCR',decisions_model_id:'Decisions'};
+const USE_NAMES:Record<string,string>={chat:'Chat',extraction:'Extraction',embedding:'Embedding',ocr:'OCR',decisions:'Decisions'};
 
 /** The workspace Default roles this model holds; a Default cannot be switched off. */
 export function defaultRoles(model:Entity,defaults:Entity|null):string[]{

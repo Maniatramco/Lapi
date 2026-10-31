@@ -4,7 +4,7 @@ No application read tools, mutations, history or iterative tool selection.
 import json,os,re
 from fastapi import HTTPException
 from .. import core, ollama_provider, providers, runtime_config
-from . import agent_model, chat_policy, agent_context, token_usage
+from . import agent_model, chat_policy, agent_context, token_usage, answer_support
 from .chat_knowledge import PublishedKnowledge, assemble
 from .agent_tools import matches_result_filter
 
@@ -250,16 +250,22 @@ class ChatAgent:
             messages=[instruction,{'role':'user','content':'CURRENT request: '+body.text+'\nPublished vector evidence:\n'+json.dumps(model_evidence,ensure_ascii=False)}]
             # Validate the complete answer before exposing any generated text.
             output=complete_answer(messages,evidence['records'])
-        calls=1;attempts=[]
+        calls=1;attempts=[];support={'status':'not_configured'};checking=answer_support.enabled()
         for attempt in range(2):
             if output.get('calls'):raise HTTPException(502,'Chat Agent returned an unexpected tool call. Retry the knowledge question.')
             with self.progress.step('Validating answer'):
                 answer=chat_policy.normalize_citations(output.get('text',''),evidence['records'])
                 problem=chat_policy.answer_problem(answer,evidence['records'],expected_count)
+            # With a Decisions Default, cited sentences must also be supported by their sources.
+            if not problem and checking:
+                with self.progress.step('Checking the sources support the answer'):
+                    support=answer_support.check(answer,evidence['records'],self.body.allow_external)
+                if support['status']=='unsupported':problem='unsupported_claims'
             attempts.append({'reason':problem or 'passed','answer_characters':len(answer)})
             if not problem:break
             if attempt==0:
-                correction={'role':'system','content':'The previous draft failed validation: '+problem+
+                correction={'role':'system','content':answer_support.correction(support) if problem=='unsupported_claims' else
+                    'The previous draft failed validation: '+problem+
                     '. Produce a non-empty concise answer to the CURRENT request from the SAME evidence. '
                     'Use only valid citation_index numbers in [n] form. Do not claim missing fields are complete. '
                     'For an exact count, include the numeric count from verified_catalog_facts. No tools. /no_think'}
@@ -267,6 +273,7 @@ class ChatAgent:
                     output=complete_answer(messages+[correction],evidence['records'])
                 calls+=1
         evidence['answer_validation']={'attempts':attempts,'reason':problem,'repaired':calls>1}
+        evidence['answer_support']=support
         evidence['answer_check']='failed' if problem else 'passed'
         if problem:
             answer=chat_policy.validation_message(problem)

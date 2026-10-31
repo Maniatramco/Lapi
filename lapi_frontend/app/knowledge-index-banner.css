@@ -11,6 +11,7 @@
 @media(prefers-reduced-motion:reduce){.knowledge-index-spin,.knowledge-index-track>span{animation:none;transition:none}}
 .model-default-cell{display:flex;flex-direction:column;gap:4px}
 .model-default-cell label{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;font-size:var(--text-small)}
+.model-default-cell .model-default-stop{align-self:flex-start;white-space:nowrap}
 .model-chip.is-default{background:#2563eb;color:#fff;border-color:#2563eb}
 .index-rebuild-dialog{max-width:520px}
 .index-rebuild-dialog ul{margin:8px 0 12px;padding-left:18px}
