@@ -1,6 +1,14 @@
 {
-  "version": "26.1.16.54",
+  "version": "26.1.16.55",
   "releases": [
+    {
+      "version": "26.1.16.55",
+      "date": "2026-10-31",
+      "title": "Reading a document for fields asks first",
+      "changes": [
+        "The template helper's \"From the document\" and the knowledge index Retry now show the same external-processing approval as uploads and re-extractions before any document text leaves Lapi, and say so when you decline."
+      ]
+    },
     {
       "version": "26.1.16.54",
       "date": "2026-10-31",

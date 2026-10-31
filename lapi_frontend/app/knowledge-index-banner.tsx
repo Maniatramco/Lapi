@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react";
+import { useAgentConsent } from "./agent-consent";
 import "./knowledge-index-banner.css";
 
 type Entity = Record<string, any>;
@@ -26,9 +27,18 @@ export function KnowledgeIndexBanner({ api, isAdmin, revision, onChanged }: { ap
   const total = Number(status.total) || 0, indexed = Number(status.indexed) || 0;
   const percent = total ? Math.round(indexed * 100 / total) : 0;
   const failures: Entity[] = status.failures || [];
+  const consent = useAgentConsent(api);
   const retry = async () => {
     setRetrying(true); setError("");
-    try { await api("/workspace/knowledge-index/retry", "POST", { allow_external: true }); await load(); onChanged(); }
+    try {
+      // Reindexing sends document text to the Default embedding model, which may be outside Lapi: ask first.
+      const defaults = await api("/workspace/defaults", "GET", undefined, undefined, true);
+      const model = defaults?.embedding_model_id;
+      if (!model) { setError("Choose a Default embedding model first."); return; }
+      const approval = await consent.request({ roles: ["embedding"], model_ids: { embedding: model } });
+      if (!approval) { setError("Reindexing was not queued because external processing was not approved."); return; }
+      await api("/workspace/knowledge-index/retry", "POST", { allow_external: approval.required }); await load(); onChanged();
+    }
     catch (e) { setError(e instanceof Error ? e.message : "Retry could not be queued."); }
     finally { setRetrying(false); }
   };
@@ -42,5 +52,6 @@ export function KnowledgeIndexBanner({ api, isAdmin, revision, onChanged }: { ap
       {isAdmin && failures.length > 0 && <button className="btn" type="button" disabled={retrying} onClick={retry} title="Queue reindexing again. Document text is sent to the Default embedding model."><RotateCcw size={14} aria-hidden="true" />{retrying ? "Retrying…" : "Retry"}</button>}
       {error && <p className="field-error" role="alert">{error}</p>}
     </div>
+    {consent.popup}
   </section>;
 }

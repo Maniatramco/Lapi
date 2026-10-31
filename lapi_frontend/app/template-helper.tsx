@@ -3,6 +3,7 @@ import {useState} from 'react';
 import {Plus,Wand2,X} from 'lucide-react';
 import {fieldsToSchema,type Field} from './quick-start-flow';
 import {applyChange,fieldList,suggestFields} from './setup-chat-script';
+import {useAgentConsent} from './agent-consent';
 import './template-helper.css';
 
 type Entity=Record<string,any>;
@@ -16,8 +17,13 @@ export function TemplateHelper({api,datasetId,documentIds,collectionType='',onCr
  const [busy,setBusy]=useState(''),[error,setError]=useState('');
  const run=async(label:string,work:()=>Promise<void>)=>{setBusy(label);setError('');try{await work();}catch(e){setError(e instanceof Error?e.message:'That did not work. Try again.');}finally{setBusy('');}};
  const fromWords=()=>{const made=suggestFields(words,collectionType);if(!made.fields.length){setError('Say what you want, for example: invoice number, vendor and total.');return;}setError('');setName(made.name);setFields(made.fields);};
+ const consent=useAgentConsent(api);
  const fromDocument=()=>run('Reading the document…',async()=>{
-  const made=await api('/templates/suggest','POST',{dataset_id:datasetId,document_ids:documentIds.slice(0,5),allow_external:true,...(words.trim()?{request:words.trim()}:{})});
+  // Reading the document sends its text to the collection's extraction model, which may be
+  // outside Lapi: ask first, the way the upload and re-extraction workflows do.
+  const approval=await consent.request({dataset_id:datasetId,roles:['extraction']});
+  if(!approval){setError('The document was not sent because external processing was not approved. Describe the fields in words instead, or approve to read the document.');return;}
+  const made=await api('/templates/suggest','POST',{dataset_id:datasetId,document_ids:documentIds.slice(0,5),allow_external:approval.required,...(words.trim()?{request:words.trim()}:{})});
   setName(made.name||'Extraction');setFields(made.fields||[]);
  });
  const save=()=>run('Saving…',async()=>{
@@ -42,5 +48,6 @@ export function TemplateHelper({api,datasetId,documentIds,collectionType='',onCr
   </>}
   {busy&&busy!=='Saving…'&&<p className="small muted" role="status">{busy}</p>}
   {error&&<p className="small template-helper-error" role="alert">{error}</p>}
+  {consent.popup}
  </div>;
 }

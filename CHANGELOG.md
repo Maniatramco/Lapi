@@ -2,6 +2,14 @@
 
 The application version and in-app feature history are maintained in `lapi_frontend/app/application-version.json`. The About screen and footer read that same file. Entries describe included code; live deployment is recorded separately.
 
+## v26.1.16.55 - 31 October 2026
+
+Reading a document for fields asks first (UX review item H5)
+
+- `template-helper.tsx`: "From the document" requests consent for the collection's extraction role through `useAgentConsent` before `POST /templates/suggest`, passes `allow_external` only as approved, and explains when nothing was sent because approval was declined.
+- `knowledge-index-banner.tsx`: Retry reads the Default embedding model from `/workspace/defaults`, requests consent for the embedding role with that model, and queues the reindex with the approval given; without a Default it says to choose one first.
+- Test: `template-helper-consent.test.cjs` (declined sends nothing and explains; approved sends with `allow_external: true`; a local model sends with `false`).
+
 ## v26.1.16.54 - 31 October 2026
 
 Review saves without locking (UX review item H4)
